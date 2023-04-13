@@ -120,12 +120,19 @@ var PrecompiledContractsBLS = map[common.Address]contract.StatefulPrecompiledCon
 	common.BytesToAddress([]byte{18}): newWrappedPrecompiledContract(&bls12381MapG2{}),
 }
 
+// PrecompiledContractsIBCgo contains the set of pre-compiled Ethereum
+// contracts provide cosmos interection with low gas commission.
+var PrecompiledContractsIBCgo = map[common.Address]contract.StatefulPrecompiledContract{
+	common.BytesToAddress([]byte{100}): newWrappedPrecompiledContract(&addOne{}),
+}
+
 var (
 	PrecompiledAddressesBerlin    []common.Address
 	PrecompiledAddressesIstanbul  []common.Address
 	PrecompiledAddressesByzantium []common.Address
 	PrecompiledAddressesHomestead []common.Address
 	PrecompiledAddressesBLS       []common.Address
+	PrecompiledAddressesIBCgo     []common.Address
 	PrecompileAllNativeAddresses  map[common.Address]struct{}
 )
 
@@ -145,6 +152,9 @@ func init() {
 	for k := range PrecompiledContractsBLS {
 		PrecompiledAddressesBLS = append(PrecompiledAddressesBLS, k)
 	}
+	for k := range PrecompiledContractsIBCgo {
+		PrecompiledAddressesIBCgo = append(PrecompiledAddressesIBCgo, k)
+	}
 
 	// Set of all native precompile addresses that are in use
 	// Note: this will repeat some addresses, but this is cheap and makes the code clearer.
@@ -153,6 +163,7 @@ func init() {
 	addrsList = append(addrsList, PrecompiledAddressesIstanbul...)
 	addrsList = append(addrsList, PrecompiledAddressesBerlin...)
 	addrsList = append(addrsList, PrecompiledAddressesBLS...)
+	addrsList = append(addrsList, PrecompiledAddressesIBCgo...)
 	for _, k := range addrsList {
 		PrecompileAllNativeAddresses[k] = struct{}{}
 	}
@@ -1089,4 +1100,17 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 
 	// Encode the G2 point to 256 bytes
 	return g.EncodePoint(r), nil
+}
+
+// addOne implements add one to input and return it to output
+type addOne struct{}
+
+// RequiredGas returns the gas required to execute the pre-compiled contract.
+func (c *addOne) RequiredGas(input []byte) uint64 {
+	return 10
+}
+
+func (c *addOne) Run(input []byte) ([]byte, error) {
+	a := new(big.Int).SetBytes(getData(input, 0, 32)).Uint64()
+	return common.LeftPadBytes(big.NewInt(int64(a+1)).Bytes(), 32), nil
 }
