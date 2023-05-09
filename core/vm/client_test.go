@@ -2,6 +2,7 @@ package vm
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -26,12 +27,14 @@ func (suite *KeeperTestSuite) TestCreateClient() {
 		clientState    exported.ClientState
 		consensusState exported.ConsensusState
 		expPass        bool
+		nextClientSeq  uint64
 	}{
 		{
 			"success: 07-tendermint client type supported",
 			ibctm.NewClientState(testChainID, ibctm.DefaultTrustLevel, trustingPeriod, ubdPeriod, maxClockDrift, testClientHeight, commitmenttypes.GetSDKSpecs(), ibctesting.UpgradePath),
 			suite.consensusState,
 			true,
+			3454,
 		},
 	}
 
@@ -55,6 +58,10 @@ func (suite *KeeperTestSuite) TestCreateClient() {
 		clientStateByte, err := clientState.Marshal()
 
 		suite.Require().NoError(err)
+
+		b := make([]byte, 8)
+		binary.BigEndian.PutUint64(b, tc.nextClientSeq)
+		vmenv.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte("nextClientSeq")), b)
 
 		// 8 byte             - clientStateLen
 		clientStateLen := make([]byte, 8)
@@ -81,7 +88,12 @@ func (suite *KeeperTestSuite) TestCreateClient() {
 
 		output, err := test_precompiles.Run(vmenv, input)
 		suite.Require().NoError(err)
-		suite.Equal(string(output), fmt.Sprintf("%s-%d", tc.clientState.ClientType(), 0), "clientID bad formatting")
+
+		b = vmenv.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte("nextClientSeq")))
+		nextClientSeq := binary.BigEndian.Uint64(b)
+		suite.Equal(tc.nextClientSeq+1, nextClientSeq, "clientID bad formatting")
+
+		suite.Equal(fmt.Sprintf("%s-%d", tc.clientState.ClientType(), tc.nextClientSeq), string(output), "clientID bad formatting")
 	}
 }
 
@@ -267,6 +279,20 @@ func (suite *KeeperTestSuite) TestUpdateClientTendermint() {
 
 			if tc.expPass {
 				suite.Require().NoError(err, err)
+
+				consensusStatePath := fmt.Sprintf("clients/%s/consensusStates/%s", path.EndpointA.ClientID, updateHeader.GetHeight())
+				byte := vmenv.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(consensusStatePath)))
+
+				consensusStateActual := &ibctm.ConsensusState{}
+				err := consensusStateActual.Unmarshal(byte)
+				suite.Require().NoError(err, err)
+
+				consensusStateExpected := &ibctm.ConsensusState{
+					Timestamp:          updateHeader.GetTime(),
+					Root:               commitmenttypes.NewMerkleRoot(updateHeader.Header.GetAppHash()),
+					NextValidatorsHash: updateHeader.Header.NextValidatorsHash,
+				}
+				suite.Equal(consensusStateExpected, consensusStateActual)
 			} else {
 				suite.Require().Error(err)
 			}
@@ -278,7 +304,6 @@ func (suite *KeeperTestSuite) TestUpgradeClient() {
 	var (
 		path                                        *ibctesting.Path
 		upgradedClient                              exported.ClientState
-		upgradedConsState                           exported.ConsensusState
 		lastHeight                                  exported.Height
 		proofUpgradedClient, proofUpgradedConsState []byte
 	)
@@ -370,10 +395,6 @@ func (suite *KeeperTestSuite) TestUpgradeClient() {
 				lastHeight = clienttypes.NewHeight(1, uint64(suite.chainB.GetContext().BlockHeight()+1))
 
 				// change upgradedClient client-specified parameters
-				tmClient := upgradedClient.(*ibctm.ClientState)
-				tmClient.ChainId = "wrongchainID"
-				upgradedClient = tmClient
-
 				suite.coordinator.CommitBlock(suite.chainB)
 				err := path.EndpointA.UpdateClient()
 				suite.Require().NoError(err)
@@ -402,33 +423,51 @@ func (suite *KeeperTestSuite) TestUpgradeClient() {
 		upgradedClient = ibctm.NewClientState(newChainID, ibctm.DefaultTrustLevel, trustingPeriod, ubdPeriod+trustingPeriod, maxClockDrift, clienttypes.NewHeight(revisionNumber+1, clientState.GetLatestHeight().GetRevisionHeight()+1), commitmenttypes.GetSDKSpecs(), ibctesting.UpgradePath)
 		upgradedClient = upgradedClient.ZeroCustomFields()
 
-		upgradedConsState = &ibctm.ConsensusState{
+		suite.chainB.GetConsensusState(newChainID, )
+		upgradedConsState := &ibctm.ConsensusState{
 			NextValidatorsHash: []byte("nextValsHash"),
+			Root:               
 		}
+		
+		fmt.Println(upgradedConsState.Root)
 
 		tc.setup()
 
-		clientStateByte, _ := upgradedClient.(*ibctm.ClientState).Marshal()
+		// clientStateB, _ := upgradedClient.(*ibctm.ClientState)
+		clientStateB := clientState
+		clientStateByte, err := clientStateB.Marshal()
+		suite.Require().NoError(err)
 		clientStatePath := fmt.Sprintf("clients/%s/clientState", clientState.ChainId)
 		vmenv.StateDB.SetPrecompileState(
 			common.BytesToAddress([]byte(clientStatePath)),
 			clientStateByte,
 		)
-		consStateByte, _ := upgradedConsState.(*ibctm.ConsensusState).Marshal()
-		consensusStatePath := fmt.Sprintf("clients/%s/consensusStates/%s", clientState.ChainId, lastHeight)
+		consStateByte, _ := upgradedConsState.Marshal()
+		consensusStatePath := fmt.Sprintf("clients/%s/consensusStates/%s", clientState.ChainId, clientState.GetLatestHeight())
 		vmenv.StateDB.SetPrecompileState(
 			common.BytesToAddress([]byte(consensusStatePath)),
 			consStateByte,
 		)
 
+		fmt.Println("consensusStatePath")
+		fmt.Println(consensusStatePath)
+
 		var input []byte
 
-		ClientIDByte := []byte(path.EndpointA.ClientID)
+		ClientIDByte := []byte(clientState.ChainId)
 		ClientIDByteLen := make([]byte, 8)
 		binary.BigEndian.PutUint64(ClientIDByteLen, uint64(len(ClientIDByte)))
 
 		input = append(input, ClientIDByteLen...)
 		input = append(input, ClientIDByte...)
+
+		upgradePathlen := make([]byte, 8)
+		upgradePathByte, err := json.Marshal(clientStateB.UpgradePath)
+		binary.BigEndian.PutUint64(upgradePathlen, uint64(len(upgradePathByte)))
+		suite.Require().NoError(err)
+
+		input = append(input, upgradePathlen...)
+		input = append(input, upgradePathByte...)
 
 		upgradedClientByte, err := upgradedClient.(*ibctm.ClientState).Marshal()
 		suite.Require().NoError(err)
@@ -438,7 +477,7 @@ func (suite *KeeperTestSuite) TestUpgradeClient() {
 		input = append(input, upgradedClientLen...)
 		input = append(input, upgradedClientByte...)
 
-		upgradedConsStateByte, err := upgradedConsState.(*ibctm.ConsensusState).Marshal()
+		upgradedConsStateByte, err := upgradedConsState.Marshal()
 		suite.Require().NoError(err)
 		upgradedConsStateLen := make([]byte, 8)
 		binary.BigEndian.PutUint64(upgradedConsStateLen, uint64(len(upgradedConsStateByte)))

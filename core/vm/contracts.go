@@ -29,6 +29,7 @@ package vm
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -1268,7 +1269,9 @@ func (c *upgradeClient) Run(accessibleState contract.AccessibleState, input []by
 	/*
 		input
 		8 byte                   - clientIDLen
-		clientIDLen byte         - clientID
+		clientIDLenbyte          - clientID
+		8 byte        			 - UpgradePathLen
+		UpgradePathLen           - UpgradePath
 		8 byte                   - upgradedClientLen
 		upgradedClientLen byte   - upgradedClientByte
 		8 byte                   - upgradedConsStateLen
@@ -1286,6 +1289,16 @@ func (c *upgradeClient) Run(accessibleState contract.AccessibleState, input []by
 	clientID := string(getData(input, carriage, clientIDLen))
 	carriage = carriage + clientIDLen
 
+	// UpgradePath
+	upgradePathLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	upgradePath := &[]string{}
+	err := json.Unmarshal(getData(input, carriage, upgradePathLen), upgradePath)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshalling upgradePath: %w", err)
+	}
+	carriage = carriage + upgradePathLen
+
 	//upgradedClientByte
 	upgradedClientLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
 	carriage = carriage + 8
@@ -1293,7 +1306,7 @@ func (c *upgradeClient) Run(accessibleState contract.AccessibleState, input []by
 	carriage = carriage + upgradedClientLen
 
 	upgradedClient := &ibctm.ClientState{}
-	err := upgradedClient.Unmarshal(upgradedClientByte)
+	err = upgradedClient.Unmarshal(upgradedClientByte)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshalling upgraded client: %w", err)
 	}
@@ -1335,6 +1348,14 @@ func (c *upgradeClient) Run(accessibleState contract.AccessibleState, input []by
 		return nil, fmt.Errorf("error unmarshalling consensus state file: %w", err)
 	}
 
+	fmt.Println("consensusStatePath test")
+	fmt.Println(consensusStatePath)
+
+	clientState.UpgradePath = *upgradePath
+	if len(clientState.UpgradePath) == 0 {
+		return nil, errors.New("cannot upgrade client, no upgrade path set")
+	}
+
 	// last height of current counterparty chain must be client's latest height
 	lastHeight := clientState.GetLatestHeight()
 
@@ -1373,8 +1394,13 @@ func (c *upgradeClient) Run(accessibleState contract.AccessibleState, input []by
 	// construct clientState Merkle path
 	upgradeClientPath := commitmenttypes.NewMerklePath(clientPath...)
 
+	fmt.Println("root")
+	fmt.Println(consensusState.GetRoot())
+	fmt.Println("fueld root")
+	fmt.Println(consensusState.Root)
+	
 	if err := merkleProofClient.VerifyMembership(clientState.ProofSpecs, consensusState.GetRoot(), upgradeClientPath, bz); err != nil {
-		return nil, fmt.Errorf("client state proof failed. Path: %s", upgradeClientPath.Pretty())
+		return nil, fmt.Errorf("client state proof failed. Path: %s, err: %v", upgradeClientPath.Pretty(), err)
 	}
 
 	// Verify consensus state proof

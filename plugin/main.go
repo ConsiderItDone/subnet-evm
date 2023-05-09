@@ -12,6 +12,6 @@ import (
 )
 
 func main() {
-	versionString := fmt.Sprintf("Subnet-EVM/%s [AvalancheGo=%s, rpcchainvm=%d]", evm.Version, version.Current, version.RPCChainVMProtocol)
+	versionString := fmt.Sprintf("Subnet-EVM_ibc/%s [AvalancheGo=%s, rpcchainvm=%d]", evm.Version, version.Current, version.RPCChainVMProtocol)
 	runner.Run(versionString)
 }
