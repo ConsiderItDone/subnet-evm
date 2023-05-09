@@ -8,10 +8,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ava-labs/subnet-evm/core"
-	"github.com/ava-labs/subnet-evm/eth"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/cast"
+
+	"github.com/ava-labs/subnet-evm/core"
+	"github.com/ava-labs/subnet-evm/eth"
 )
 
 const (
@@ -86,6 +87,7 @@ type Config struct {
 	// Subnet EVM APIs
 	SnowmanAPIEnabled bool   `json:"snowman-api-enabled"`
 	WarpAPIEnabled    bool   `json:"warp-api-enabled"`
+	IbcAPIEnabled     bool   `json:"ibc-api-enabled"`
 	AdminAPIEnabled   bool   `json:"admin-api-enabled"`
 	AdminAPIDir       string `json:"admin-api-dir"`
 
