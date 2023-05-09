@@ -423,12 +423,10 @@ func (suite *KeeperTestSuite) TestUpgradeClient() {
 		upgradedClient = ibctm.NewClientState(newChainID, ibctm.DefaultTrustLevel, trustingPeriod, ubdPeriod+trustingPeriod, maxClockDrift, clienttypes.NewHeight(revisionNumber+1, clientState.GetLatestHeight().GetRevisionHeight()+1), commitmenttypes.GetSDKSpecs(), ibctesting.UpgradePath)
 		upgradedClient = upgradedClient.ZeroCustomFields()
 
-		suite.chainB.GetConsensusState(newChainID, )
 		upgradedConsState := &ibctm.ConsensusState{
 			NextValidatorsHash: []byte("nextValsHash"),
-			Root:               
+			Root:               commitmenttypes.NewMerkleRoot([]byte("hash")),
 		}
-		
 		fmt.Println(upgradedConsState.Root)
 
 		tc.setup()
