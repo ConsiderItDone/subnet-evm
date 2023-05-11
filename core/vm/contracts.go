@@ -29,17 +29,18 @@ package vm
 import (
 	"crypto/sha256"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/cosmos/cosmos-sdk/codec"
+	"github.com/cosmos/cosmos-sdk/std"
 	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
 	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
 	ibctm "github.com/cosmos/ibc-go/v7/modules/light-clients/07-tendermint"
 
 	cosmostypes "github.com/cosmos/cosmos-sdk/codec/types"
+	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
 
 	"github.com/ava-labs/subnet-evm/params"
 	"github.com/ava-labs/subnet-evm/precompile/contract"
@@ -1282,23 +1283,18 @@ func (c *upgradeClient) Run(accessibleState contract.AccessibleState, input []by
 		proofUpgradeConsStateLen - proofUpgradeConsStateByte
 	*/
 
+	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+
+	std.RegisterInterfaces(interfaceRegistry)
+	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
+
 	// clientId
 	carriage := uint64(0)
 	clientIDLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
 	carriage = carriage + 8
 	clientID := string(getData(input, carriage, clientIDLen))
 	carriage = carriage + clientIDLen
-
-	// UpgradePath
-	upgradePathLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
-	carriage = carriage + 8
-	upgradePath := &[]string{}
-	err := json.Unmarshal(getData(input, carriage, upgradePathLen), upgradePath)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshalling upgradePath: %w", err)
-	}
-	carriage = carriage + upgradePathLen
-
 	//upgradedClientByte
 	upgradedClientLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
 	carriage = carriage + 8
@@ -1306,7 +1302,7 @@ func (c *upgradeClient) Run(accessibleState contract.AccessibleState, input []by
 	carriage = carriage + upgradedClientLen
 
 	upgradedClient := &ibctm.ClientState{}
-	err = upgradedClient.Unmarshal(upgradedClientByte)
+	err := upgradedClient.Unmarshal(upgradedClientByte)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshalling upgraded client: %w", err)
 	}
@@ -1336,22 +1332,19 @@ func (c *upgradeClient) Run(accessibleState contract.AccessibleState, input []by
 
 	clientStatePath := fmt.Sprintf("clients/%s/clientState", clientID)
 	clientStateByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(clientStatePath)))
-	var clientState ibctm.ClientState
-	if err := clientState.Unmarshal(clientStateByte); err != nil {
-		return nil, fmt.Errorf("error unmarshalling client state file: %w", err)
+	clientStateExp := clienttypes.MustUnmarshalClientState(marshaler, clientStateByte)
+	clientState, ok := clientStateExp.(*ibctm.ClientState)
+	if !ok {
+		return nil, fmt.Errorf("error unmarshalling client state file")
 	}
-
 	consensusStatePath := fmt.Sprintf("clients/%s/consensusStates/%s", clientID, clientState.GetLatestHeight())
 	consensusStateByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(consensusStatePath)))
-	var consensusState ibctm.ConsensusState
-	if err := consensusState.Unmarshal(consensusStateByte); err != nil {
-		return nil, fmt.Errorf("error unmarshalling consensus state file: %w", err)
+	consensusStateExp := clienttypes.MustUnmarshalConsensusState(marshaler, consensusStateByte)
+	consensusState, ok := consensusStateExp.(*ibctm.ConsensusState)
+	if !ok {
+		return nil, fmt.Errorf("error unmarshalling consensus state file")
 	}
 
-	fmt.Println("consensusStatePath test")
-	fmt.Println(consensusStatePath)
-
-	clientState.UpgradePath = *upgradePath
 	if len(clientState.UpgradePath) == 0 {
 		return nil, errors.New("cannot upgrade client, no upgrade path set")
 	}
@@ -1363,9 +1356,6 @@ func (c *upgradeClient) Run(accessibleState contract.AccessibleState, input []by
 		return nil, fmt.Errorf("upgraded client height %s must be at greater than current client height %s", upgradedClient.GetLatestHeight(), lastHeight)
 	}
 
-	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
-	marshaler := codec.NewProtoCodec(interfaceRegistry)
-
 	// unmarshal proofs
 	var merkleProofClient, merkleProofConsState commitmenttypes.MerkleProof
 	if err := marshaler.Unmarshal(proofUpgradeClientByte, &merkleProofClient); err != nil {
@@ -1376,7 +1366,8 @@ func (c *upgradeClient) Run(accessibleState contract.AccessibleState, input []by
 	}
 
 	// Verify client proof
-	bz, err := upgradedClient.Marshal()
+	client := upgradedClient.ZeroCustomFields()
+	bz, err := marshaler.MarshalInterface(client)
 	if err != nil {
 		return nil, fmt.Errorf("could not marshal client state: %v", err)
 	}
@@ -1394,11 +1385,6 @@ func (c *upgradeClient) Run(accessibleState contract.AccessibleState, input []by
 	// construct clientState Merkle path
 	upgradeClientPath := commitmenttypes.NewMerklePath(clientPath...)
 
-	fmt.Println("root")
-	fmt.Println(consensusState.GetRoot())
-	fmt.Println("fueld root")
-	fmt.Println(consensusState.Root)
-	
 	if err := merkleProofClient.VerifyMembership(clientState.ProofSpecs, consensusState.GetRoot(), upgradeClientPath, bz); err != nil {
 		return nil, fmt.Errorf("client state proof failed. Path: %s, err: %v", upgradeClientPath.Pretty(), err)
 	}
