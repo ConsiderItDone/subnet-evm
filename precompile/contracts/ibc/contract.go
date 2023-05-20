@@ -492,8 +492,7 @@ func ConnOpenInit(accessibleState contract.AccessibleState, caller common.Addres
 
 	// connection defines chain A's ConnectionEnd
 	connection := connectiontypes.NewConnectionEnd(connectiontypes.INIT, clientID, *counterparty, connectiontypes.ExportedVersionsToProto(versions), delayPeriod)
-	
-	
+
 	connectionByte, err := marshaler.Marshal(&connection)
 	if err != nil {
 		return nil, 0, fmt.Errorf("connection marshaler error: %w", err)
@@ -747,7 +746,7 @@ func ConnOpenConfirm(accessibleState contract.AccessibleState, caller common.Add
 	proofHeightbyte := getData(input, carriage, proofHeightLen)
 
 	proofHeight := &clienttypes.Height{}
-	err = proofHeight.Unmarshal(proofHeightbyte)
+	err = marshaler.Unmarshal(proofHeightbyte, proofHeight)
 	if err != nil {
 		return nil, 0, fmt.Errorf("error unmarshalling proofHeight: %w", err)
 	}
@@ -756,33 +755,39 @@ func ConnOpenConfirm(accessibleState contract.AccessibleState, caller common.Add
 
 	exist := accessibleState.GetStateDB().Exist(common.BytesToAddress([]byte(connectionsPath)))
 	if !exist {
-		return nil, 0, fmt.Errorf("cannot find connection with path: %s, err: %w", connectionsPath, err)
+		return nil, 0, fmt.Errorf("cannot find connection with path: %s", connectionsPath)
 	}
 
 	connectionByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(connectionsPath)))
 	connection := &connectiontypes.ConnectionEnd{}
-	marshaler.UnmarshalInterface(connectionByte, connection)
+	marshaler.MustUnmarshal(connectionByte, connection)
+
+	// Check that connection state on ChainB is on state: TRYOPEN
+	if connection.State != connectiontypes.TRYOPEN {
+		return nil, 0, fmt.Errorf("connection state is not TRYOPEN (got %s), err: %w", connection.State.String(), connectiontypes.ErrInvalidConnectionState)
+	}
 
 	// prefix := k.GetCommitmentPrefix()
-	expectedCounterparty := connectiontypes.NewCounterparty(connection.ClientId, connectionID, commitmenttypes.NewMerklePrefix([]byte("что ты такое?")))
+	expectedCounterparty := connectiontypes.NewCounterparty(connection.ClientId, connectionID, commitmenttypes.NewMerklePrefix([]byte("ibc")))
 	expectedConnection := connectiontypes.NewConnectionEnd(connectiontypes.OPEN, connection.Counterparty.ClientId, expectedCounterparty, connection.Versions, connection.DelayPeriod)
 
 	clientID := connection.GetClientID()
 
 	clientStatePath := fmt.Sprintf("clients/%s/clientState", clientID)
 	clientStateByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(clientStatePath)))
-	clientStateExp := clienttypes.MustUnmarshalClientState(marshaler, clientStateByte)
-	clientState, ok := clientStateExp.(*ibctm.ClientState)
-	if !ok {
-		return nil, 0, fmt.Errorf("error unmarshalling client state file")
+	clientStateExp, err := clienttypes.UnmarshalClientState(marshaler, clientStateByte)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error unmarshalling client state file, err: %w", err)
 	}
+	clientState := clientStateExp.(*ibctm.ClientState)
+
 	consensusStatePath := fmt.Sprintf("clients/%s/consensusStates/%s", clientID, clientState.GetLatestHeight())
 	consensusStateByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(consensusStatePath)))
-	consensusStateExp := clienttypes.MustUnmarshalConsensusState(marshaler, consensusStateByte)
-	consensusState, ok := consensusStateExp.(*ibctm.ConsensusState)
-	if !ok {
-		return nil, 0, fmt.Errorf("error unmarshalling consensus state file")
+	consensusStateExp, err := clienttypes.UnmarshalConsensusState(marshaler, consensusStateByte)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error unmarshalling consensus state file, err: %w", err)
 	}
+	consensusState := consensusStateExp.(*ibctm.ConsensusState)
 
 	merklePath := commitmenttypes.NewMerklePath(hosttypes.ConnectionPath(connectionID))
 	merklePath, err = commitmenttypes.ApplyPrefix(connection.GetCounterparty().GetPrefix(), merklePath)
@@ -795,7 +800,7 @@ func ConnOpenConfirm(accessibleState contract.AccessibleState, caller common.Add
 		return nil, 0, err
 	}
 
-	if clientState.GetLatestHeight().LT(proofHeight) {
+	if clientState.GetLatestHeight().LT(*proofHeight) {
 		return nil, 0, fmt.Errorf("client state height < proof height (%d < %d), please ensure the client has been updated", clientState.GetLatestHeight(), proofHeight)
 	}
 
@@ -808,7 +813,7 @@ func ConnOpenConfirm(accessibleState contract.AccessibleState, caller common.Add
 	// Update ChainB's connection to Open
 	connection.State = connectiontypes.OPEN
 
-	connectionByte, err = marshaler.MarshalInterface(connection)
+	connectionByte, err = marshaler.Marshal(connection)
 	if err != nil {
 		return nil, 0, errors.New("connection marshaler error")
 	}
