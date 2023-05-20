@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ava-labs/subnet-evm/core/rawdb"
 	"github.com/ava-labs/subnet-evm/core/state"
@@ -36,29 +37,15 @@ func (suite *KeeperTestSuite) TestConnOpenInit() {
 	}{
 		{"success", func() {
 		}, true},
-		// {"success with empty counterparty identifier", func() {
-		// 	emptyConnBID = true
-		// }, true},
-		// {"success with non empty version", func() {
-		// 	version = connectiontypes.ExportedVersionsToProto(connectiontypes.GetCompatibleVersions())[0]
-		// }, true},
-		// {"success with non zero delayPeriod", func() {
-		// 	delayPeriod = uint64(time.Hour.Nanoseconds())
-		// }, true},
-
-		// {"invalid version", func() {
-		// 	version = &connectiontypes.Version{}
-		// }, false},
-		// {
-		// 	msg:     "unauthorized client",
-		// 	expPass: false,
-		// 	malleate: func() {
-		// 		// remove client from allowed list
-		// 		params := suite.chainA.App.GetIBCKeeper().ClientKeeper.GetParams(suite.chainA.GetContext())
-		// 		params.AllowedClients = []string{}
-		// 		suite.chainA.App.GetIBCKeeper().ClientKeeper.SetParams(suite.chainA.GetContext(), params)
-		// 	},
-		// },
+		{"success with empty counterparty identifier", func() {
+			emptyConnBID = true
+		}, true},
+		{"success with non empty version", func() {
+			version = connectiontypes.ExportedVersionsToProto(connectiontypes.GetCompatibleVersions())[0]
+		}, true},
+		{"success with non zero delayPeriod", func() {
+			delayPeriod = uint64(time.Hour.Nanoseconds())
+		}, true},
 	}
 
 	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
