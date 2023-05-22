@@ -923,7 +923,7 @@ func ConnOpenConfirm(accessibleState contract.AccessibleState, caller common.Add
 	expectedCounterparty := connectiontypes.NewCounterparty(connection.ClientId, connectionID, commitmenttypes.NewMerklePrefix([]byte("ibc")))
 	expectedConnection := connectiontypes.NewConnectionEnd(connectiontypes.OPEN, connection.Counterparty.ClientId, expectedCounterparty, connection.Versions, connection.DelayPeriod)
 
-	err = connectionVerefication(*connection, expectedConnection, proofHeight, accessibleState, marshaler, connectionID, proofAckbyte)
+	err = connectionVerefication(*connection, expectedConnection, *proofHeight, accessibleState, marshaler, connectionID, proofAckbyte)
 	if err != nil {
 		return nil, 0, err
 	}
