@@ -581,8 +581,6 @@ func ConnOpenTry(accessibleState contract.AccessibleState, caller common.Address
 	clientStateByte := getData(input, carriage, clientStateLen)
 	carriage = carriage + clientStateLen
 
-	// clientState := &ibctm.ClientState{}
-	// err = clientState.Unmarshal(clientStateByte)
 	clientStateExp, err := clienttypes.UnmarshalClientState(marshaler, clientStateByte)
 	clientState := clientStateExp.(*ibctm.ClientState)
 	if err != nil {
@@ -667,7 +665,7 @@ func ConnOpenTry(accessibleState contract.AccessibleState, caller common.Address
 	// connection defines chain B's ConnectionEnd
 	connection := connectiontypes.NewConnectionEnd(connectiontypes.TRYOPEN, clientID, *counterparty, []*connectiontypes.Version{version}, delayPeriod)
 
-	err = clientVerefication(connection, clientState, *proofHeight, accessibleState, marshaler, connectionID, proofClientbyte)
+	err = clientVerefication(connection, clientState, *proofHeight, accessibleState, marshaler, proofClientbyte)
 	if err != nil {
 		return nil, 0, fmt.Errorf("Error clientVerefication err: %w", err)
 	}
@@ -676,8 +674,6 @@ func ConnOpenTry(accessibleState contract.AccessibleState, caller common.Address
 		return nil, 0, fmt.Errorf("Error connectionVerefication err: %w", err)
 	}
 
-	// не могу проверить consensusStateVerefication, так как expectedConsensusState это стейт моего блокчейна
-	// в солидити просто пропустили это
 	// err = consensusStateVerefication(connection, expectedConsensusState, proofHeight, accessibleState, marshaler, connectionID, proofClientbyte)
 	// if err != nil {
 	// 	return nil, 0, err
@@ -701,152 +697,181 @@ func ConnOpenTry(accessibleState contract.AccessibleState, caller common.Address
 	return []byte(connectionID), connOpenTryGas, nil
 }
 
-// func ConnOpenAck(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
-// 	/*
-// 		input
-// 		8 byte                       - connectionIDLen
-// 		connectionIDbyte             - connectionID
-// 		8 byte                       - clientStateLen
-// 		clientStatebyte              - clientState
-// 		8 byte                       - versionLen
-// 		versionbyte                  - Version
-// 		8 byte                       - counterpartyConnectionIDLen
-// 		counterpartyConnectionIDbyte - counterpartyConnectionID
-// 		8 byte                       - proofTryLen
-// 		proofTrybyte                 - []byte
-// 		8 byte                       - proofClientLen
-// 		proofClientbyte              - []byte
-// 		8 byte                       - proofConsensusLen
-// 		proofConsensusbyte           - []byte
-// 		8 byte                       - proofHeightLen
-// 		proofHeightbyte              - exported.Height
-// 		8 byte                       - consensusHeightLen
-// 		consensusHeightbyte          - exported.Height
-// 	*/
-// 	if remainingGas, err = contract.DeductGas(suppliedGas, upgradeClientGas); err != nil {
-// 		return nil, 0, err
-// 	}
-// 	if readOnly {
-// 		return nil, remainingGas, vmerrs.ErrWriteProtection
-// 	}
-// 	// no input provided for this function
+func ConnOpenAck(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+	/*
+		input
+		8 byte                       - connectionIDLen
+		connectionIDbyte             - connectionID
+		8 byte                       - clientStateLen
+		clientStatebyte              - clientState
+		8 byte                       - versionLen
+		versionbyte                  - Version
+		8 byte                       - counterpartyConnectionIDLen
+		counterpartyConnectionIDbyte - counterpartyConnectionID
+		8 byte                       - proofTryLen
+		proofTrybyte                 - []byte
+		8 byte                       - proofClientLen
+		proofClientbyte              - []byte
+		8 byte                       - proofConsensusLen
+		proofConsensusbyte           - []byte
+		8 byte                       - proofHeightLen
+		proofHeightbyte              - exported.Height
+		8 byte                       - consensusHeightLen
+		consensusHeightbyte          - exported.Height
+	*/
+	if remainingGas, err = contract.DeductGas(suppliedGas, upgradeClientGas); err != nil {
+		return nil, 0, err
+	}
+	if readOnly {
+		return nil, remainingGas, vmerrs.ErrWriteProtection
+	}
+	// no input provided for this function
 
-// 	stateDB := accessibleState.GetStateDB()
-// 	// Verify that the caller is in the allow list and therefore has the right to call this function.
-// 	callerStatus := allowlist.GetAllowListStatus(stateDB, ContractAddress, caller)
-// 	if !callerStatus.IsEnabled() {
-// 		return nil, remainingGas, fmt.Errorf("non-enabled cannot call upgradeClient: %s", caller)
-// 	}
+	stateDB := accessibleState.GetStateDB()
+	// Verify that the caller is in the allow list and therefore has the right to call this function.
+	callerStatus := allowlist.GetAllowListStatus(stateDB, ContractAddress, caller)
+	if !callerStatus.IsEnabled() {
+		return nil, remainingGas, fmt.Errorf("non-enabled cannot call upgradeClient: %s", caller)
+	}
 
-// 	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
+	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
 
-// 	std.RegisterInterfaces(interfaceRegistry)
-// 	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
-// 	marshaler := codec.NewProtoCodec(interfaceRegistry)
+	std.RegisterInterfaces(interfaceRegistry)
+	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
 
-// 	carriage := uint64(0)
+	carriage := uint64(0)
 
-// 	//proofClientbyte
-// 	connectionIDLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
-// 	carriage = carriage + 8
-// 	connectionID := string(getData(input, carriage, connectionIDLen))
-// 	carriage = carriage + connectionIDLen
+	//proofClientbyte
+	connectionIDLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	connectionID := string(getData(input, carriage, connectionIDLen))
+	carriage = carriage + connectionIDLen
 
-// 	//proofClientbyte
-// 	clientStateLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
-// 	carriage = carriage + 8
-// 	clientStateByte := getData(input, carriage, clientStateLen)
-// 	carriage = carriage + clientStateLen
+	//clientState
+	clientStateLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	clientStateByte := getData(input, carriage, clientStateLen)
+	carriage = carriage + clientStateLen
 
-// 	clientState := clienttypes.ClientSta
+	clientStateExp, err := clienttypes.UnmarshalClientState(marshaler, clientStateByte)
+	clientState := clientStateExp.(*ibctm.ClientState)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error unmarshalling clientState: %w", err)
+	}
 
-// 	/*
-// 		input
-// 		8 byte                       - clientStateLen
-// 		clientStatebyte              - clientState
-// 		8 byte                       - versionLen
-// 		versionbyte                  - Version
-// 		8 byte                       - counterpartyConnectionIDLen
-// 		counterpartyConnectionIDbyte - counterpartyConnectionID
-// 		8 byte                       - proofTryLen
-// 		proofTrybyte                 - []byte
-// 		8 byte                       - proofClientLen
-// 		proofClientbyte              - []byte
-// 		8 byte                       - proofConsensusLen
-// 		proofConsensusbyte           - []byte
-// 		8 byte                       - proofHeightLen
-// 		proofHeightbyte              - exported.Height
-// 		8 byte                       - consensusHeightLen
-// 		consensusHeightbyte          - exported.Height
-// 	*/
+	//version
+	versionLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	versionByte := getData(input, carriage, versionLen)
+	carriage = carriage + versionLen
 
-// 		// Retrieve connection
-// 		connection, found := k.GetConnection(ctx, connectionID)
-// 		if !found {
-// 			return errorsmod.Wrap(types.ErrConnectionNotFound, connectionID)
-// 		}
+	version := connectiontypes.Version{}
+	err = json.Unmarshal(versionByte, &version)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error unmarshalling counterpartyVersions: %w", err)
+	}
+	
+	// counterpartyConnectionID
+	counterpartyConnectionIDLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	counterpartyConnectionID := string(getData(input, carriage, counterpartyConnectionIDLen))
+	carriage = carriage + counterpartyConnectionIDLen
 
-// 		// verify the previously set connection state
-// 		if connection.State != types.INIT {
-// 			return errorsmod.Wrapf(
-// 				types.ErrInvalidConnectionState,
-// 				"connection state is not INIT (got %s)", connection.State.String(),
-// 			)
-// 		}
 
-// 		// ensure selected version is supported
-// 		if !types.IsSupportedVersion(types.ProtoVersionsToExported(connection.Versions), version) {
-// 			return errorsmod.Wrapf(
-// 				types.ErrInvalidConnectionState,
-// 				"the counterparty selected version %s is not supported by versions selected on INIT", version,
-// 			)
-// 		}
+	//proofTrybyte
+	proofTryLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	proofTry := getData(input, carriage, proofTryLen)
+	carriage = carriage + proofTryLen
 
-// 		// validate client parameters of a chainA client stored on chainB
-// 		if err := k.clientKeeper.ValidateSelfClient(ctx, clientState); err != nil {
-// 			return err
-// 		}
 
-// 		// Retrieve chainA's consensus state at consensusheight
-// 		expectedConsensusState, err := k.clientKeeper.GetSelfConsensusState(ctx, consensusHeight)
-// 		if err != nil {
-// 			return errorsmod.Wrapf(err, "self consensus state not found for height %s", consensusHeight.String())
-// 		}
+	//proofClientbyte
+	proofClientLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	proofClient := getData(input, carriage, proofClientLen)
+	carriage = carriage + proofClientLen
 
-// 		prefix := k.GetCommitmentPrefix()
-// 		expectedCounterparty := types.NewCounterparty(connection.ClientId, connectionID, commitmenttypes.NewMerklePrefix(prefix.Bytes()))
-// 		expectedConnection := types.NewConnectionEnd(types.TRYOPEN, connection.Counterparty.ClientId, expectedCounterparty, []*types.Version{version}, connection.DelayPeriod)
+	//proofClientbyte
+	proofConsensusLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	/* proofConsensus := */ getData(input, carriage, proofConsensusLen)
+	carriage = carriage + proofConsensusLen
 
-// 		// Ensure that ChainB stored expected connectionEnd in its state during ConnOpenTry
-// 		if err := k.VerifyConnectionState(
-// 			ctx, connection, proofHeight, proofTry, counterpartyConnectionID,
-// 			expectedConnection,
-// 		); err != nil {
-// 			return err
-// 		}
+	//proofHeight
+	proofHeightLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	proofHeightbyte := getData(input, carriage, proofHeightLen)
+	carriage = carriage + proofHeightLen
 
-// 		// Check that ChainB stored the clientState provided in the msg
-// 		if err := k.VerifyClientState(ctx, connection, proofHeight, proofClient, clientState); err != nil {
-// 			return err
-// 		}
+	proofHeight := &clienttypes.Height{}
+	err = marshaler.UnmarshalInterface(proofHeightbyte, proofHeight)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error unmarshalling proofHeight: %w", err)
+	}
 
-// 		// Ensure that ChainB has stored the correct ConsensusState for chainA at the consensusHeight
-// 		if err := k.VerifyClientConsensusState(
-// 			ctx, connection, proofHeight, consensusHeight, proofConsensus, expectedConsensusState,
-// 		); err != nil {
-// 			return err
-// 		}
+	//consensusHeight
+	consensusHeightLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	consensusHeightbyte := getData(input, carriage, consensusHeightLen)
 
-// 		k.Logger(ctx).Info("connection state updated", "connection-id", connectionID, "previous-state", types.INIT.String(), "new-state", types.OPEN.String())
+	consensusHeight := &clienttypes.Height{}
+	err = marshaler.UnmarshalInterface(consensusHeightbyte, consensusHeight)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error unmarshalling consensusHeight: %w", err)
+	}
 
-// 		defer telemetry.IncrCounter(1, "ibc", "connection", "open-ack")
 
-// 		// Update connection state to Open
-// 		connection.State = types.OPEN
-// 		connection.Versions = []*types.Version{version}
-// 		connection.Counterparty.ConnectionId = counterpartyConnectionID
-// 		k.SetConnection(ctx, connectionID, connection)
-// }
+	connectionByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(connectionID)))
+	connection := connectiontypes.ConnectionEnd{}
+	err = marshaler.UnmarshalInterface(connectionByte, connection)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error unmarshalling connection id: %s, error: %w", connectionID, err)
+	}
+
+	// verify the previously set connection state
+	if connection.State != connectiontypes.INIT {
+		return nil, 0, fmt.Errorf("connection state is not INIT (got %s), error: %w", connection.State.String(), connectiontypes.ErrInvalidConnectionState)
+	}
+
+	// ensure selected version is supported
+	if !connectiontypes.IsSupportedVersion(connectiontypes.ProtoVersionsToExported(connection.Versions), &version) {
+		return nil, 0, fmt.Errorf("the counterparty selected version %s is not supported by versions selected on INIT, error: %w", version, connectiontypes.ErrInvalidConnectionState)
+	}
+
+	expectedCounterparty := connectiontypes.NewCounterparty(connection.ClientId, connectionID, commitmenttypes.NewMerklePrefix([]byte("ibc")))
+	expectedConnection := connectiontypes.NewConnectionEnd(connectiontypes.TRYOPEN, connection.Counterparty.ClientId, expectedCounterparty, []*connectiontypes.Version{&version}, connection.DelayPeriod)
+
+	if err := connectionVerefication(connection, expectedConnection, proofHeight, accessibleState, marshaler, counterpartyConnectionID, proofTry); err != nil {
+		return nil, 0, err
+	}
+
+	// Check that ChainB stored the clientState provided in the msg
+	if err := clientVerefication(connection, clientState, proofHeight, accessibleState, marshaler, proofClient); err != nil {
+		return nil, 0, err
+	}
+
+	// // Ensure that ChainB has stored the correct ConsensusState for chainA at the consensusHeight
+	// if err := k.VerifyClientConsensusState(
+	// 	ctx, connection, proofHeight, consensusHeight, proofConsensus, expectedConsensusState,
+	// ); err != nil {
+	// 	return err
+	// }
+
+	// Update connection state to Open
+	connection.State = connectiontypes.OPEN
+	connection.Versions = []*connectiontypes.Version{&version}
+	connection.Counterparty.ConnectionId = counterpartyConnectionID
+
+	connectionByte, err = marshaler.Marshal(&connection)
+	if err != nil {
+		return nil, 0, errors.New("connection marshaler error")
+	}
+	connectionsPath := fmt.Sprintf("connections/%s", connectionID)
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
+
+	return nil, 0, nil
+}
 
 func ConnOpenConfirm(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
 	/*
@@ -1024,7 +1049,6 @@ func clientVerefication(
 	proofHeight exported.Height,
 	accessibleState contract.AccessibleState,
 	marshaler *codec.ProtoCodec,
-	connectionID string,
 	proofClientbyte []byte,
 ) error {
 
