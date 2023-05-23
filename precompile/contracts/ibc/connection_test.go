@@ -721,39 +721,40 @@ func (suite *KeeperTestSuite) TestConnOpenAck() {
 			input = append(input, proofTry...)
 
 			proofClientLen := make([]byte, 8)
-			binary.BigEndian.PutUint64(proofTryLen, uint64(len(proofClient)))
+			binary.BigEndian.PutUint64(proofClientLen, uint64(len(proofClient)))
 
 			input = append(input, proofClientLen...)
 			input = append(input, proofClient...)
 
 			proofConsensusLen := make([]byte, 8)
-			binary.BigEndian.PutUint64(proofTryLen, uint64(len(proofConsensus)))
+			binary.BigEndian.PutUint64(proofConsensusLen, uint64(len(proofConsensus)))
 
 			input = append(input, proofConsensusLen...)
 			input = append(input, proofConsensus...)
 
-			proofHeightByte, _ := marshaler.MarshalInterface(&proofHeight)
-			fmt.Println(proofHeightByte)
+			proofHeightByte, _ := marshaler.Marshal(&proofHeight)
 			proofHeightByteLen := make([]byte, 8)
 			binary.BigEndian.PutUint64(proofHeightByteLen, uint64(len(proofHeightByte)))
 
 			input = append(input, proofHeightByteLen...)
 			input = append(input, proofHeightByte...)
 
-			consensusHeightByte, _ := marshaler.MarshalInterface(&consensusHeight)
+			consensusHeightByte, _ := marshaler.Marshal(&consensusHeight)
 			consensusHeightByteLen := make([]byte, 8)
 			binary.BigEndian.PutUint64(consensusHeightByteLen, uint64(len(consensusHeightByte)))
 
 			input = append(input, consensusHeightByteLen...)
 			input = append(input, consensusHeightByte...)
 
-			connection, _ := suite.chainB.App.GetIBCKeeper().ConnectionKeeper.GetConnection(suite.chainB.GetContext(), path.EndpointA.ConnectionID)
-			connectionByte := marshaler.MustMarshal(&connection)
+			connection, _ := suite.chainA.App.GetIBCKeeper().ConnectionKeeper.GetConnection(suite.chainA.GetContext(), path.EndpointA.ConnectionID)
+
+			connectionByte, _ := marshaler.Marshal(&connection)
+
 			connectionsPath := fmt.Sprintf("connections/%s", path.EndpointA.ConnectionID)
 			vmenv.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
 
-			cs, _ := suite.chainB.App.GetIBCKeeper().ClientKeeper.GetClientState(suite.chainB.GetContext(), path.EndpointA.ClientID)
-			cStore := suite.chainB.App.GetIBCKeeper().ClientKeeper.ClientStore(suite.chainB.GetContext(), path.EndpointA.ClientID)
+			cs, _ := suite.chainA.App.GetIBCKeeper().ClientKeeper.GetClientState(suite.chainA.GetContext(), connection.GetClientID())
+			cStore := suite.chainA.App.GetIBCKeeper().ClientKeeper.ClientStore(suite.chainA.GetContext(), connection.GetClientID())
 
 			if cs != nil {
 				clientState := cs.(*ibctm.ClientState)

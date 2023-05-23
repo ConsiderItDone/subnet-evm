@@ -805,7 +805,7 @@ func ConnOpenAck(accessibleState contract.AccessibleState, caller common.Address
 	carriage = carriage + proofHeightLen
 
 	proofHeight := &clienttypes.Height{}
-	err = marshaler.UnmarshalInterface(proofHeightbyte, proofHeight)
+	err = marshaler.Unmarshal(proofHeightbyte, proofHeight)
 	if err != nil {
 		return nil, 0, fmt.Errorf("error unmarshalling proofHeight: %w", err)
 	}
@@ -816,14 +816,15 @@ func ConnOpenAck(accessibleState contract.AccessibleState, caller common.Address
 	consensusHeightbyte := getData(input, carriage, consensusHeightLen)
 
 	consensusHeight := &clienttypes.Height{}
-	err = marshaler.UnmarshalInterface(consensusHeightbyte, consensusHeight)
+	err = marshaler.Unmarshal(consensusHeightbyte, consensusHeight)
 	if err != nil {
 		return nil, 0, fmt.Errorf("error unmarshalling consensusHeight: %w", err)
 	}
 
-	connectionByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(connectionID)))
+	connectionsPath := fmt.Sprintf("connections/%s", connectionID)
+	connectionByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(connectionsPath)))
 	connection := connectiontypes.ConnectionEnd{}
-	err = marshaler.UnmarshalInterface(connectionByte, connection)
+	err = marshaler.Unmarshal(connectionByte, &connection)
 	if err != nil {
 		return nil, 0, fmt.Errorf("error unmarshalling connection id: %s, error: %w", connectionID, err)
 	}
@@ -841,12 +842,12 @@ func ConnOpenAck(accessibleState contract.AccessibleState, caller common.Address
 	expectedCounterparty := connectiontypes.NewCounterparty(connection.ClientId, connectionID, commitmenttypes.NewMerklePrefix([]byte("ibc")))
 	expectedConnection := connectiontypes.NewConnectionEnd(connectiontypes.TRYOPEN, connection.Counterparty.ClientId, expectedCounterparty, []*connectiontypes.Version{&version}, connection.DelayPeriod)
 
-	if err := connectionVerefication(connection, expectedConnection, proofHeight, accessibleState, marshaler, counterpartyConnectionID, proofTry); err != nil {
+	if err := connectionVerefication(connection, expectedConnection, *proofHeight, accessibleState, marshaler, counterpartyConnectionID, proofTry); err != nil {
 		return nil, 0, err
 	}
 
 	// Check that ChainB stored the clientState provided in the msg
-	if err := clientVerefication(connection, clientState, proofHeight, accessibleState, marshaler, proofClient); err != nil {
+	if err := clientVerefication(connection, clientState, *proofHeight, accessibleState, marshaler, proofClient); err != nil {
 		return nil, 0, err
 	}
 
@@ -866,7 +867,7 @@ func ConnOpenAck(accessibleState contract.AccessibleState, caller common.Address
 	if err != nil {
 		return nil, 0, errors.New("connection marshaler error")
 	}
-	connectionsPath := fmt.Sprintf("connections/%s", connectionID)
+	connectionsPath = fmt.Sprintf("connections/%s", connectionID)
 	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
 
 	return nil, 0, nil
