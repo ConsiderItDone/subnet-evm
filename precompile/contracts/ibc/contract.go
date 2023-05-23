@@ -40,12 +40,14 @@ const (
 var (
 	IbcGoPrecompile = createIbcGoPrecompile() // will be initialized by init function
 
-	getCreateClientSignature    = contract.CalculateFunctionSelector("createClient(uint64,bytes,uint64,bytes)")
-	getUpdateClientSignature    = contract.CalculateFunctionSelector("updateClient(uint64,bytes,uint64,bytes)")
-	getUpgradeClientSignature   = contract.CalculateFunctionSelector("upgradeClient(uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes)")
+	getCreateClientSignature  = contract.CalculateFunctionSelector("createClient(uint64,bytes,uint64,bytes)")
+	getUpdateClientSignature  = contract.CalculateFunctionSelector("updateClient(uint64,bytes,uint64,bytes)")
+	getUpgradeClientSignature = contract.CalculateFunctionSelector("upgradeClient(uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes)")
+
 	getConnOpenInitSignature    = contract.CalculateFunctionSelector("connOpenInit(uint64,bytes,uint64,bytes,uint64,bytes)")
 	getConnOpenConfirmSignature = contract.CalculateFunctionSelector("connOpenConfirm(uint64,bytes,uint64,bytes,uint64,bytes)")
 	getConnOpenTrySignature     = contract.CalculateFunctionSelector("connOpenTry(uint64,bytes,uint64,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes)")
+	getConnOpenAckSignature     = contract.CalculateFunctionSelector("connOpenAck(uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes)")
 )
 
 // createClient generates a new client identifier and isolated prefix store for the provided client state.
@@ -767,24 +769,22 @@ func ConnOpenAck(accessibleState contract.AccessibleState, caller common.Address
 	carriage = carriage + versionLen
 
 	version := connectiontypes.Version{}
-	err = json.Unmarshal(versionByte, &version)
+	err = marshaler.Unmarshal(versionByte, &version)
 	if err != nil {
 		return nil, 0, fmt.Errorf("error unmarshalling counterpartyVersions: %w", err)
 	}
-	
+
 	// counterpartyConnectionID
 	counterpartyConnectionIDLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
 	carriage = carriage + 8
 	counterpartyConnectionID := string(getData(input, carriage, counterpartyConnectionIDLen))
 	carriage = carriage + counterpartyConnectionIDLen
 
-
 	//proofTrybyte
 	proofTryLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
 	carriage = carriage + 8
 	proofTry := getData(input, carriage, proofTryLen)
 	carriage = carriage + proofTryLen
-
 
 	//proofClientbyte
 	proofClientLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
@@ -820,7 +820,6 @@ func ConnOpenAck(accessibleState contract.AccessibleState, caller common.Address
 	if err != nil {
 		return nil, 0, fmt.Errorf("error unmarshalling consensusHeight: %w", err)
 	}
-
 
 	connectionByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(connectionID)))
 	connection := connectiontypes.ConnectionEnd{}
@@ -1030,6 +1029,7 @@ func createIbcGoPrecompile() contract.StatefulPrecompiledContract {
 		contract.NewStatefulPrecompileFunction(getUpgradeClientSignature, upgradeClient),
 		contract.NewStatefulPrecompileFunction(getConnOpenInitSignature, ConnOpenInit),
 		contract.NewStatefulPrecompileFunction(getConnOpenTrySignature, ConnOpenTry),
+		contract.NewStatefulPrecompileFunction(getConnOpenAckSignature, ConnOpenAck),
 		contract.NewStatefulPrecompileFunction(getConnOpenConfirmSignature, ConnOpenConfirm),
 	)
 

@@ -431,6 +431,370 @@ func (suite *KeeperTestSuite) TestConnOpenTry() {
 	}
 }
 
+// TestConnOpenAck - Chain A (ID #1) calls TestConnOpenAck to acknowledge (ACK state)
+// the initialization (TRYINIT) of the connection on  Chain B (ID #2).
+func (suite *KeeperTestSuite) TestConnOpenAck() {
+	var (
+		path               *ibctesting.Path
+		consensusHeight    clienttypes.Height
+		version            *connectiontypes.Version
+		counterpartyClient exported.ClientState
+	)
+
+	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+
+	std.RegisterInterfaces(interfaceRegistry)
+	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
+
+	testCases := []struct {
+		msg      string
+		malleate func()
+		expPass  bool
+	}{
+		{"success", func() {
+			err := path.EndpointA.ConnOpenInit()
+			suite.Require().NoError(err)
+
+			err = path.EndpointB.ConnOpenTry()
+			suite.Require().NoError(err)
+
+			// retrieve client state of chainB to pass as counterpartyClient
+			counterpartyClient = suite.chainB.GetClientState(path.EndpointB.ClientID)
+		}, true},
+		{"invalid counterparty client", func() {
+			err := path.EndpointA.ConnOpenInit()
+			suite.Require().NoError(err)
+
+			err = path.EndpointB.ConnOpenTry()
+			suite.Require().NoError(err)
+
+			// retrieve client state of chainB to pass as counterpartyClient
+			counterpartyClient = suite.chainB.GetClientState(path.EndpointB.ClientID)
+
+			// Set an invalid client of chainA on chainB
+			tmClient, ok := counterpartyClient.(*ibctm.ClientState)
+			suite.Require().True(ok)
+			tmClient.ChainId = "wrongchainid"
+
+			suite.chainB.App.GetIBCKeeper().ClientKeeper.SetClientState(suite.chainB.GetContext(), path.EndpointB.ClientID, tmClient)
+		}, false},
+		{"consensus height >= latest height", func() {
+			err := path.EndpointA.ConnOpenInit()
+			suite.Require().NoError(err)
+
+			// retrieve client state of chainB to pass as counterpartyClient
+			counterpartyClient = suite.chainB.GetClientState(path.EndpointB.ClientID)
+
+			err = path.EndpointB.ConnOpenTry()
+			suite.Require().NoError(err)
+
+			consensusHeight = clienttypes.GetSelfHeight(suite.chainA.GetContext())
+		}, false},
+		{"connection not found", func() {
+			// connections are never created
+
+			// retrieve client state of chainB to pass as counterpartyClient
+			counterpartyClient = suite.chainB.GetClientState(path.EndpointB.ClientID)
+		}, false},
+		{"invalid counterparty connection ID", func() {
+			err := path.EndpointA.ConnOpenInit()
+			suite.Require().NoError(err)
+
+			// retrieve client state of chainB to pass as counterpartyClient
+			counterpartyClient = suite.chainB.GetClientState(path.EndpointB.ClientID)
+
+			err = path.EndpointB.ConnOpenTry()
+			suite.Require().NoError(err)
+
+			// modify connB to set counterparty connection identifier to wrong identifier
+			connection, found := suite.chainA.App.GetIBCKeeper().ConnectionKeeper.GetConnection(suite.chainA.GetContext(), path.EndpointA.ConnectionID)
+			suite.Require().True(found)
+
+			connection.Counterparty.ConnectionId = "badconnectionid"
+
+			suite.chainA.App.GetIBCKeeper().ConnectionKeeper.SetConnection(suite.chainA.GetContext(), path.EndpointA.ConnectionID, connection)
+
+			err = path.EndpointA.UpdateClient()
+			suite.Require().NoError(err)
+
+			err = path.EndpointB.UpdateClient()
+			suite.Require().NoError(err)
+		}, false},
+		{"connection state is not INIT", func() {
+			// connection state is already OPEN on chainA
+			err := path.EndpointA.ConnOpenInit()
+			suite.Require().NoError(err)
+
+			// retrieve client state of chainB to pass as counterpartyClient
+			counterpartyClient = suite.chainB.GetClientState(path.EndpointB.ClientID)
+
+			err = path.EndpointB.ConnOpenTry()
+			suite.Require().NoError(err)
+
+			err = path.EndpointA.ConnOpenAck()
+			suite.Require().NoError(err)
+		}, false},
+		{"connection is in INIT but the proposed version is invalid", func() {
+			// chainA is in INIT, chainB is in TRYOPEN
+			err := path.EndpointA.ConnOpenInit()
+			suite.Require().NoError(err)
+
+			// retrieve client state of chainB to pass as counterpartyClient
+			counterpartyClient = suite.chainB.GetClientState(path.EndpointB.ClientID)
+
+			err = path.EndpointB.ConnOpenTry()
+			suite.Require().NoError(err)
+
+			version = connectiontypes.NewVersion("2.0", nil)
+		}, false},
+		{"incompatible IBC versions", func() {
+			err := path.EndpointA.ConnOpenInit()
+			suite.Require().NoError(err)
+
+			// retrieve client state of chainB to pass as counterpartyClient
+			counterpartyClient = suite.chainB.GetClientState(path.EndpointB.ClientID)
+
+			err = path.EndpointB.ConnOpenTry()
+			suite.Require().NoError(err)
+
+			// set version to a non-compatible version
+			version = connectiontypes.NewVersion("2.0", nil)
+		}, false},
+		{"empty version", func() {
+			err := path.EndpointA.ConnOpenInit()
+			suite.Require().NoError(err)
+
+			// retrieve client state of chainB to pass as counterpartyClient
+			counterpartyClient = suite.chainB.GetClientState(path.EndpointB.ClientID)
+
+			err = path.EndpointB.ConnOpenTry()
+			suite.Require().NoError(err)
+
+			version = &connectiontypes.Version{}
+		}, false},
+		{"feature set verification failed - unsupported feature", func() {
+			err := path.EndpointA.ConnOpenInit()
+			suite.Require().NoError(err)
+
+			// retrieve client state of chainB to pass as counterpartyClient
+			counterpartyClient = suite.chainB.GetClientState(path.EndpointB.ClientID)
+
+			err = path.EndpointB.ConnOpenTry()
+			suite.Require().NoError(err)
+
+			version = connectiontypes.NewVersion(connectiontypes.DefaultIBCVersionIdentifier, []string{"ORDER_ORDERED", "ORDER_UNORDERED", "ORDER_DAG"})
+		}, false},
+		{"self consensus state not found", func() {
+			err := path.EndpointA.ConnOpenInit()
+			suite.Require().NoError(err)
+
+			// retrieve client state of chainB to pass as counterpartyClient
+			counterpartyClient = suite.chainB.GetClientState(path.EndpointB.ClientID)
+
+			err = path.EndpointB.ConnOpenTry()
+			suite.Require().NoError(err)
+
+			consensusHeight = clienttypes.NewHeight(0, 1)
+		}, false},
+		{"connection state verification failed", func() {
+			// chainB connection is not in INIT
+			err := path.EndpointA.ConnOpenInit()
+			suite.Require().NoError(err)
+
+			// retrieve client state of chainB to pass as counterpartyClient
+			counterpartyClient = suite.chainB.GetClientState(path.EndpointB.ClientID)
+		}, false},
+		{"client state verification failed", func() {
+			err := path.EndpointA.ConnOpenInit()
+			suite.Require().NoError(err)
+
+			// retrieve client state of chainB to pass as counterpartyClient
+			counterpartyClient = suite.chainB.GetClientState(path.EndpointB.ClientID)
+
+			// modify counterparty client without setting in store so it still passes validate but fails proof verification
+			tmClient, ok := counterpartyClient.(*ibctm.ClientState)
+			suite.Require().True(ok)
+			tmClient.LatestHeight = tmClient.LatestHeight.Increment().(clienttypes.Height)
+
+			err = path.EndpointB.ConnOpenTry()
+			suite.Require().NoError(err)
+		}, false},
+		{"consensus state verification failed", func() {
+			err := path.EndpointA.ConnOpenInit()
+			suite.Require().NoError(err)
+
+			// retrieve client state of chainB to pass as counterpartyClient
+			counterpartyClient = suite.chainB.GetClientState(path.EndpointB.ClientID)
+
+			// give chainB wrong consensus state for chainA
+			consState, found := suite.chainB.App.GetIBCKeeper().ClientKeeper.GetLatestClientConsensusState(suite.chainB.GetContext(), path.EndpointB.ClientID)
+			suite.Require().True(found)
+
+			tmConsState, ok := consState.(*ibctm.ConsensusState)
+			suite.Require().True(ok)
+
+			tmConsState.Timestamp = tmConsState.Timestamp.Add(time.Second)
+			suite.chainB.App.GetIBCKeeper().ClientKeeper.SetClientConsensusState(suite.chainB.GetContext(), path.EndpointB.ClientID, counterpartyClient.GetLatestHeight(), tmConsState)
+
+			err = path.EndpointB.ConnOpenTry()
+			suite.Require().NoError(err)
+		}, false},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		suite.Run(tc.msg, func() {
+			statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+			statedb.Finalise(true)
+			vmctx := vm.BlockContext{
+				CanTransfer: func(vm.StateDB, common.Address, *big.Int) bool { return true },
+				Transfer:    func(vm.StateDB, common.Address, common.Address, *big.Int) {},
+			}
+			vmenv := vm.NewEVM(vmctx, vm.TxContext{}, statedb, params.TestChainConfig, vm.Config{ExtraEips: []int{2200}})
+
+			suite.SetupTest() // reset
+			path = ibctesting.NewPath(suite.chainA, suite.chainB)
+			suite.coordinator.SetupClients(path)
+
+			suite.SetupTest()                                                                             // reset
+			version = connectiontypes.ExportedVersionsToProto(connectiontypes.GetCompatibleVersions())[0] // must be explicitly changed in malleate
+			consensusHeight = clienttypes.ZeroHeight()                                                    // must be explicitly changed in malleate
+			path = ibctesting.NewPath(suite.chainA, suite.chainB)
+			suite.coordinator.SetupClients(path)
+
+			tc.malleate()
+
+			// ensure client is up to date to receive proof
+			err := path.EndpointA.UpdateClient()
+			suite.Require().NoError(err)
+
+			connectionKey := host.ConnectionKey(path.EndpointB.ConnectionID)
+			proofTry, proofHeight := suite.chainB.QueryProof(connectionKey)
+
+			if consensusHeight.IsZero() {
+				// retrieve consensus state height to provide proof for
+				clientState := suite.chainB.GetClientState(path.EndpointB.ClientID)
+				consensusHeight = clientState.GetLatestHeight().(clienttypes.Height)
+			}
+			consensusKey := host.FullConsensusStateKey(path.EndpointB.ClientID, consensusHeight)
+			proofConsensus, _ := suite.chainB.QueryProof(consensusKey)
+
+			// retrieve proof of counterparty clientstate on chainA
+			clientKey := host.FullClientStateKey(path.EndpointB.ClientID)
+			proofClient, _ := suite.chainB.QueryProof(clientKey)
+
+			var input []byte
+
+			ConnectionIDByte := []byte(path.EndpointA.ConnectionID)
+			ConnectionIDByteLen := make([]byte, 8)
+			binary.BigEndian.PutUint64(ConnectionIDByteLen, uint64(len(ConnectionIDByte)))
+
+			input = append(input, ConnectionIDByteLen...)
+			input = append(input, ConnectionIDByte...)
+
+			clientStateByte, _ := clienttypes.MarshalClientState(marshaler, counterpartyClient)
+			clientStateByteLen := make([]byte, 8)
+			binary.BigEndian.PutUint64(clientStateByteLen, uint64(len(clientStateByte)))
+
+			input = append(input, clientStateByteLen...)
+			input = append(input, clientStateByte...)
+
+			versionByte, _ := marshaler.Marshal(version)
+			versionByteLen := make([]byte, 8)
+			binary.BigEndian.PutUint64(versionByteLen, uint64(len(versionByte)))
+
+			input = append(input, versionByteLen...)
+			input = append(input, versionByte...)
+
+			counterpartyConnectionIDByte := []byte(path.EndpointB.ConnectionID)
+			counterpartyConnectionIDByteLen := make([]byte, 8)
+			binary.BigEndian.PutUint64(counterpartyConnectionIDByteLen, uint64(len(counterpartyConnectionIDByte)))
+
+			input = append(input, counterpartyConnectionIDByteLen...)
+			input = append(input, counterpartyConnectionIDByte...)
+
+			proofTryLen := make([]byte, 8)
+			binary.BigEndian.PutUint64(proofTryLen, uint64(len(proofTry)))
+
+			input = append(input, proofTryLen...)
+			input = append(input, proofTry...)
+
+			proofClientLen := make([]byte, 8)
+			binary.BigEndian.PutUint64(proofTryLen, uint64(len(proofClient)))
+
+			input = append(input, proofClientLen...)
+			input = append(input, proofClient...)
+
+			proofConsensusLen := make([]byte, 8)
+			binary.BigEndian.PutUint64(proofTryLen, uint64(len(proofConsensus)))
+
+			input = append(input, proofConsensusLen...)
+			input = append(input, proofConsensus...)
+
+			proofHeightByte, _ := marshaler.MarshalInterface(&proofHeight)
+			fmt.Println(proofHeightByte)
+			proofHeightByteLen := make([]byte, 8)
+			binary.BigEndian.PutUint64(proofHeightByteLen, uint64(len(proofHeightByte)))
+
+			input = append(input, proofHeightByteLen...)
+			input = append(input, proofHeightByte...)
+
+			consensusHeightByte, _ := marshaler.MarshalInterface(&consensusHeight)
+			consensusHeightByteLen := make([]byte, 8)
+			binary.BigEndian.PutUint64(consensusHeightByteLen, uint64(len(consensusHeightByte)))
+
+			input = append(input, consensusHeightByteLen...)
+			input = append(input, consensusHeightByte...)
+
+			connection, _ := suite.chainB.App.GetIBCKeeper().ConnectionKeeper.GetConnection(suite.chainB.GetContext(), path.EndpointA.ConnectionID)
+			connectionByte := marshaler.MustMarshal(&connection)
+			connectionsPath := fmt.Sprintf("connections/%s", path.EndpointA.ConnectionID)
+			vmenv.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
+
+			cs, _ := suite.chainB.App.GetIBCKeeper().ClientKeeper.GetClientState(suite.chainB.GetContext(), path.EndpointA.ClientID)
+			cStore := suite.chainB.App.GetIBCKeeper().ClientKeeper.ClientStore(suite.chainB.GetContext(), path.EndpointA.ClientID)
+
+			if cs != nil {
+				clientState := cs.(*ibctm.ClientState)
+				bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
+				consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
+				clientStateByte := clienttypes.MustMarshalClientState(marshaler, cs)
+
+				clientStatePath := fmt.Sprintf("clients/%s/clientState", connection.GetClientID())
+				vmenv.StateDB.SetPrecompileState(
+					common.BytesToAddress([]byte(clientStatePath)),
+					clientStateByte,
+				)
+				consensusStateByte := clienttypes.MustMarshalConsensusState(marshaler, consensusState)
+				consensusStatePath := fmt.Sprintf("clients/%s/consensusStates/%s", connection.GetClientID(), clientState.GetLatestHeight())
+				vmenv.StateDB.SetPrecompileState(
+					common.BytesToAddress([]byte(consensusStatePath)),
+					consensusStateByte,
+				)
+			}
+
+			input = append(getConnOpenAckSignature, input...)
+			admin := allowlist.TestAdminAddr
+			enableds := allowlist.TestEnabledAddr
+
+			allowlist.SetAllowListRole(vmenv.StateDB, ContractAddress, admin, allowlist.AdminRole)
+
+			contract := createIbcGoPrecompile()
+
+			suppliedGas := uint64(10000000)
+
+			_, _, err = contract.Run(vmenv, admin, enableds, input, suppliedGas, false)
+
+			if tc.expPass {
+				suite.Require().NoError(err)
+			} else {
+				suite.Require().Error(err)
+			}
+		})
+	}
+}
+
 // TestConnOpenConfirm - chainB calls ConnOpenConfirm to confirm that
 // chainA state is now OPEN.
 func (suite *KeeperTestSuite) TestConnOpenConfirm() {
