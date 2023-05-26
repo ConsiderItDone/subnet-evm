@@ -238,6 +238,7 @@ func (c *Config) SetDefaults() {
 	c.TxPoolAccountQueue = core.DefaultTxPoolConfig.AccountQueue
 	c.TxPoolGlobalQueue = core.DefaultTxPoolConfig.GlobalQueue
 
+	c.IbcAPIEnabled = true
 	c.APIMaxDuration.Duration = defaultApiMaxDuration
 	c.WSCPURefillRate.Duration = defaultWsCpuRefillRate
 	c.WSCPUMaxStored.Duration = defaultWsCpuMaxStored
