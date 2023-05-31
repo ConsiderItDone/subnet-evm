@@ -683,16 +683,16 @@ func ConnOpenTry(accessibleState contract.AccessibleState, caller common.Address
 	// connection defines chain B's ConnectionEnd
 	connection := connectiontypes.NewConnectionEnd(connectiontypes.TRYOPEN, clientID, *counterparty, []*connectiontypes.Version{version}, delayPeriod)
 
-	err = clientVerefication(connection, clientState, *proofHeight, accessibleState, marshaler, proofClientbyte)
+	err = clientVerification(connection, clientState, *proofHeight, accessibleState, marshaler, proofClientbyte)
 	if err != nil {
-		return nil, 0, fmt.Errorf("Error clientVerefication err: %w", err)
+		return nil, 0, fmt.Errorf("Error clientVerification err: %w", err)
 	}
-	err = connectionVerefication(connection, expectedConnection, *proofHeight, accessibleState, marshaler, connectionID, proofInitbyte)
+	err = connectionVerification(connection, expectedConnection, *proofHeight, accessibleState, marshaler, connectionID, proofInitbyte)
 	if err != nil {
-		return nil, 0, fmt.Errorf("Error connectionVerefication err: %w", err)
+		return nil, 0, fmt.Errorf("Error connectionVerification err: %w", err)
 	}
 
-	// err = consensusStateVerefication(connection, expectedConsensusState, proofHeight, accessibleState, marshaler, connectionID, proofClientbyte)
+	// err = consensusStateVerification(connection, expectedConsensusState, proofHeight, accessibleState, marshaler, connectionID, proofClientbyte)
 	// if err != nil {
 	// 	return nil, 0, err
 	// }
@@ -858,12 +858,12 @@ func ConnOpenAck(accessibleState contract.AccessibleState, caller common.Address
 	expectedCounterparty := connectiontypes.NewCounterparty(connection.ClientId, connectionID, commitmenttypes.NewMerklePrefix([]byte("ibc")))
 	expectedConnection := connectiontypes.NewConnectionEnd(connectiontypes.TRYOPEN, connection.Counterparty.ClientId, expectedCounterparty, []*connectiontypes.Version{&version}, connection.DelayPeriod)
 
-	if err := connectionVerefication(connection, expectedConnection, *proofHeight, accessibleState, marshaler, counterpartyConnectionID, proofTry); err != nil {
+	if err := connectionVerification(connection, expectedConnection, *proofHeight, accessibleState, marshaler, counterpartyConnectionID, proofTry); err != nil {
 		return nil, 0, err
 	}
 
 	// Check that ChainB stored the clientState provided in the msg
-	if err := clientVerefication(connection, clientState, *proofHeight, accessibleState, marshaler, proofClient); err != nil {
+	if err := clientVerification(connection, clientState, *proofHeight, accessibleState, marshaler, proofClient); err != nil {
 		return nil, 0, err
 	}
 
@@ -964,7 +964,7 @@ func ConnOpenConfirm(accessibleState contract.AccessibleState, caller common.Add
 	expectedCounterparty := connectiontypes.NewCounterparty(connection.ClientId, connectionID, commitmenttypes.NewMerklePrefix([]byte("ibc")))
 	expectedConnection := connectiontypes.NewConnectionEnd(connectiontypes.OPEN, connection.Counterparty.ClientId, expectedCounterparty, connection.Versions, connection.DelayPeriod)
 
-	err = connectionVerefication(*connection, expectedConnection, *proofHeight, accessibleState, marshaler, connectionID, proofAckbyte)
+	err = connectionVerification(*connection, expectedConnection, *proofHeight, accessibleState, marshaler, connectionID, proofAckbyte)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1030,6 +1030,8 @@ func ChanOpenInit(accessibleState contract.AccessibleState, caller common.Addres
 		channelbyte                  - channeltypes.Channel
 	*/
 
+	// TODO capability verification
+
 	if remainingGas, err = contract.DeductGas(suppliedGas, upgradeClientGas); err != nil {
 		return nil, 0, err
 	}
@@ -1057,6 +1059,7 @@ func ChanOpenInit(accessibleState contract.AccessibleState, caller common.Addres
 	portIDLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
 	carriage = carriage + 8
 	portIDbyte := getData(input, carriage, portIDLen)
+	carriage = carriage + portIDLen
 	portID := string(portIDbyte)
 
 	// channel
@@ -1232,7 +1235,7 @@ func ChanOpenTry(accessibleState contract.AccessibleState, caller common.Address
 		channeltypes.INIT, channel.Ordering, expectedCounterparty,
 		counterpartyHops, counterpartyVersion,
 	)
-	err = channelStateVerefication(*connectionEnd, expectedChannel, proofHeight, accessibleState, marshaler, channel.Counterparty.ChannelId, proofInitbyte, portID)
+	err = channelStateVerification(*connectionEnd, expectedChannel, proofHeight, accessibleState, marshaler, channel.Counterparty.ChannelId, proofInitbyte, portID)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1356,7 +1359,7 @@ func ChannelOpenAck(accessibleState contract.AccessibleState, caller common.Addr
 		counterpartyHops, counterpartyVersion,
 	)
 
-	err = channelStateVerefication(*connectionEnd, expectedChannel, proofHeight, accessibleState, marshaler, channelID, ProofTrybyte, channel.Counterparty.PortId)
+	err = channelStateVerification(*connectionEnd, expectedChannel, proofHeight, accessibleState, marshaler, channelID, ProofTrybyte, channel.Counterparty.PortId)
 	if err != nil {
 		return nil, 0, fmt.Errorf("channel handshake open ack failed")
 	}
@@ -1462,7 +1465,7 @@ func ChannelOpenConfirm(accessibleState contract.AccessibleState, caller common.
 		counterpartyHops, channel.Version,
 	)
 
-	err = channelStateVerefication(*connectionEnd, expectedChannel, proofHeight, accessibleState, marshaler, channel.Counterparty.ChannelId, proofAck, channel.Counterparty.PortId)
+	err = channelStateVerification(*connectionEnd, expectedChannel, proofHeight, accessibleState, marshaler, channel.Counterparty.ChannelId, proofAck, channel.Counterparty.PortId)
 	if err != nil {
 		return nil, 0, fmt.Errorf("channel handshake open ack failed")
 	}
@@ -1642,7 +1645,7 @@ func ChannelCloseConfirm(accessibleState contract.AccessibleState, caller common
 		counterpartyHops, channel.Version,
 	)
 
-	err = channelStateVerefication(*connectionEnd, expectedChannel, proofHeight, accessibleState, marshaler, channel.Counterparty.ChannelId, proofInit, channel.Counterparty.PortId)
+	err = channelStateVerification(*connectionEnd, expectedChannel, proofHeight, accessibleState, marshaler, channel.Counterparty.ChannelId, proofInit, channel.Counterparty.PortId)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1702,7 +1705,7 @@ func createIbcGoPrecompile() contract.StatefulPrecompiledContract {
 	return contract
 }
 
-func clientVerefication(
+func clientVerification(
 	connection connectiontypes.ConnectionEnd,
 	clientState exported.ClientState,
 	proofHeight exported.Height,
@@ -1756,7 +1759,7 @@ func clientVerefication(
 	return err
 }
 
-func consensusStateVerefication(
+func consensusStateVerification(
 	connection connectiontypes.ConnectionEnd,
 	consensusState exported.ConsensusState,
 	height exported.Height,
@@ -1809,7 +1812,7 @@ func consensusStateVerefication(
 	return nil
 }
 
-func connectionVerefication(
+func connectionVerification(
 	connection connectiontypes.ConnectionEnd,
 	connectionEnd connectiontypes.ConnectionEnd,
 	height exported.Height,
@@ -1862,7 +1865,7 @@ func connectionVerefication(
 	return nil
 }
 
-func channelStateVerefication(
+func channelStateVerification(
 	connection connectiontypes.ConnectionEnd,
 	channel channeltypes.Channel,
 	height exported.Height,
