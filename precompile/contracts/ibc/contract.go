@@ -16,7 +16,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
+
 	connectiontypes "github.com/cosmos/ibc-go/v7/modules/core/03-connection/types"
+	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
 	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
 	hosttypes "github.com/cosmos/ibc-go/v7/modules/core/24-host"
 	ibctm "github.com/cosmos/ibc-go/v7/modules/light-clients/07-tendermint"
@@ -34,6 +36,13 @@ const (
 	connOpenInitGas    = uint64(1)
 	connOpenTryGas     = uint64(1)
 	connOpenConfirmGas = uint64(1)
+
+	chanOpenInitGas        = uint64(1)
+	chanOpenTryGas         = uint64(1)
+	chanOpenAckGas         = uint64(1)
+	chanOpenConfirmGas     = uint64(1)
+	channelCloseInitGas    = uint64(1)
+	channelCloseConfirmGas = uint64(1)
 )
 
 // Singleton StatefulPrecompiledContract and signatures.
@@ -48,6 +57,13 @@ var (
 	getConnOpenConfirmSignature = contract.CalculateFunctionSelector("connOpenConfirm(uint64,bytes,uint64,bytes,uint64,bytes)")
 	getConnOpenTrySignature     = contract.CalculateFunctionSelector("connOpenTry(uint64,bytes,uint64,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes)")
 	getConnOpenAckSignature     = contract.CalculateFunctionSelector("connOpenAck(uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes)")
+
+	getChanOpenInitSignature        = contract.CalculateFunctionSelector("chanOpenInit(uint64,bytes,uint64,bytes)")
+	getChanOpenTrySignature         = contract.CalculateFunctionSelector("chanOpenTry(uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes)")
+	getChannelOpenAckSignature      = contract.CalculateFunctionSelector("channelOpenAck(uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes)")
+	getChannelOpenConfirmSignature  = contract.CalculateFunctionSelector("channelOpenConfirm(uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes)")
+	getChannelCloseInitSignature    = contract.CalculateFunctionSelector("channelCloseInit(uint64,bytes,uint64,bytes)")
+	getChannelCloseConfirmSignature = contract.CalculateFunctionSelector("channelCloseConfirm(uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes)")
 )
 
 // createClient generates a new client identifier and isolated prefix store for the provided client state.
@@ -1005,6 +1021,640 @@ func ConnOpenConfirm(accessibleState contract.AccessibleState, caller common.Add
 	return nil, connOpenConfirmGas, err
 }
 
+func ChanOpenInit(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+	/*
+		input
+		8 byte                       - portIDLen
+		portIDbyte                   - string
+		8 byte                       - channelLen
+		channelbyte                  - channeltypes.Channel
+	*/
+
+	if remainingGas, err = contract.DeductGas(suppliedGas, upgradeClientGas); err != nil {
+		return nil, 0, err
+	}
+	if readOnly {
+		return nil, remainingGas, vmerrs.ErrWriteProtection
+	}
+	// no input provided for this function
+
+	stateDB := accessibleState.GetStateDB()
+	// Verify that the caller is in the allow list and therefore has the right to call this function.
+	callerStatus := allowlist.GetAllowListStatus(stateDB, ContractAddress, caller)
+	if !callerStatus.IsEnabled() {
+		return nil, remainingGas, fmt.Errorf("non-enabled cannot call upgradeClient: %s", caller)
+	}
+
+	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
+
+	std.RegisterInterfaces(interfaceRegistry)
+	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+
+	carriage := uint64(0)
+
+	// portID
+	portIDLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	portIDbyte := getData(input, carriage, portIDLen)
+	portID := string(portIDbyte)
+
+	// channel
+	channelLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	channelbyte := getData(input, carriage, channelLen)
+
+	channel := &channeltypes.Channel{}
+	err = marshaler.Unmarshal(channelbyte, channel)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error unmarshalling channel: %w", err)
+	}
+
+	// connection hop length checked on msg.ValidateBasic()
+	connectionsPath := fmt.Sprintf("connections/%s", channel.ConnectionHops[0])
+	connectionEnd, err := getConnection(marshaler, connectionsPath, accessibleState)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	getVersions := connectionEnd.GetVersions()
+	if len(getVersions) != 1 {
+		return nil, 0, fmt.Errorf("single version must be negotiated on connection before opening channel, got: %v, err: %w",
+			getVersions,
+			connectiontypes.ErrInvalidVersion,
+		)
+	}
+
+	if !connectiontypes.VerifySupportedFeature(getVersions[0], channel.Ordering.String()) {
+		return nil, 0, fmt.Errorf("connection version %s does not support channel ordering: %s, err: %w",
+			getVersions[0], channel.Ordering.String(),
+			connectiontypes.ErrInvalidVersion,
+		)
+	}
+
+	clientStatePath := fmt.Sprintf("clients/%s/clientState", connectionEnd.ClientId)
+	_, err = getClientState(marshaler, clientStatePath, accessibleState)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	channelID := GenerateChannelIdentifier(accessibleState)
+
+	channelNew := channeltypes.NewChannel(channeltypes.INIT, channel.Ordering, channel.Counterparty, channel.ConnectionHops, channel.Version)
+	bz := marshaler.MustMarshal(&channelNew)
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.ChannelKey(portID, channelID))), bz)
+
+	SetNextSequenceSend(accessibleState, portID, channelID, 1)
+	SetNextSequenceRecv(accessibleState, portID, channelID, 1)
+	SetNextSequenceAck(accessibleState, portID, channelID, 1)
+
+	return nil, chanOpenInitGas, nil
+}
+
+func ChanOpenTry(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+	/*
+		input
+		8 byte                       - portIDLen
+		portIDbyte                   - string
+		8 byte                       - previousChannelIdLen
+		previousChannelIdbyte        - string
+		8 byte                       - channelLen
+		channelbyte                  - channeltypes.Channel
+		8 byte                       - counterpartyVersionLen
+		counterpartyVersionbyte      - string
+		8 byte                       - proofInitLen
+		proofInitbyte     			 - []byte
+		8 byte                       - proofHeightLen
+		proofHeightbyte          	 - clienttypes.Height
+	*/
+
+	if remainingGas, err = contract.DeductGas(suppliedGas, upgradeClientGas); err != nil {
+		return nil, 0, err
+	}
+	if readOnly {
+		return nil, remainingGas, vmerrs.ErrWriteProtection
+	}
+	// no input provided for this function
+
+	stateDB := accessibleState.GetStateDB()
+	// Verify that the caller is in the allow list and therefore has the right to call this function.
+	callerStatus := allowlist.GetAllowListStatus(stateDB, ContractAddress, caller)
+	if !callerStatus.IsEnabled() {
+		return nil, remainingGas, fmt.Errorf("non-enabled cannot call upgradeClient: %s", caller)
+	}
+
+	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
+
+	std.RegisterInterfaces(interfaceRegistry)
+	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+
+	carriage := uint64(0)
+
+	// portID
+	portIDLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	portIDbyte := getData(input, carriage, portIDLen)
+	portID := string(portIDbyte)
+
+	// previousChannelId
+	previousChannelIdLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	/* previousChannelIdbyte := */ getData(input, carriage, previousChannelIdLen)
+	/* previousChannelId := string(previousChannelIdbyte) */
+
+	// channel
+	channelLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	channelbyte := getData(input, carriage, channelLen)
+
+	channel := &channeltypes.Channel{}
+	err = marshaler.Unmarshal(channelbyte, channel)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error unmarshalling channel: %w", err)
+	}
+
+	// counterpartyVersion
+	counterpartyVersionLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	counterpartyVersionbyte := getData(input, carriage, counterpartyVersionLen)
+	counterpartyVersion := string(counterpartyVersionbyte)
+
+	// proofInitbyte
+	proofInitLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	proofInitbyte := getData(input, carriage, proofInitLen)
+
+	// proofHeightbyte
+	proofHeightLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	proofHeightbyte := getData(input, carriage, proofHeightLen)
+
+	proofHeight := &clienttypes.Height{}
+	err = marshaler.Unmarshal(proofHeightbyte, proofHeight)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error unmarshalling proofHeight: %w", err)
+	}
+
+	if len(channel.ConnectionHops) != 1 {
+		return nil, 0, fmt.Errorf("expected 1, got %d, err: %w", len(channel.ConnectionHops), channeltypes.ErrTooManyConnectionHops)
+	}
+
+	// generate a new channel
+	channelID := GenerateChannelIdentifier(accessibleState)
+
+	// connection hop length checked on msg.ValidateBasic()
+	connectionsPath := fmt.Sprintf("connections/%s", channel.ConnectionHops[0])
+	connectionEnd, err := getConnection(marshaler, connectionsPath, accessibleState)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if connectionEnd.GetState() != int32(connectiontypes.OPEN) {
+		return nil, 0, fmt.Errorf("connection state is not OPEN (got %s), err: %w", connectiontypes.State(connectionEnd.GetState()).String(), connectiontypes.ErrInvalidConnectionState)
+	}
+
+	getVersions := connectionEnd.GetVersions()
+	if len(getVersions) != 1 {
+		return nil, 0, fmt.Errorf("single version must be negotiated on connection before opening channel, got: %v, err: %w", getVersions, connectiontypes.ErrInvalidVersion)
+	}
+
+	if !connectiontypes.VerifySupportedFeature(getVersions[0], channel.Ordering.String()) {
+		return nil, 0, fmt.Errorf("connection version %s does not support channel ordering: %s, err: %w", getVersions[0], channel.Ordering.String(), connectiontypes.ErrInvalidVersion)
+	}
+
+	counterpartyHops := []string{connectionEnd.GetCounterparty().GetConnectionID()}
+
+	// expectedCounterpaty is the counterparty of the counterparty's channel end
+	// (i.e self)
+	expectedCounterparty := channeltypes.NewCounterparty(portID, "")
+	expectedChannel := channeltypes.NewChannel(
+		channeltypes.INIT, channel.Ordering, expectedCounterparty,
+		counterpartyHops, counterpartyVersion,
+	)
+	err = channelStateVerefication(*connectionEnd, expectedChannel, proofHeight, accessibleState, marshaler, channel.Counterparty.ChannelId, proofInitbyte, portID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	SetNextSequenceSend(accessibleState, portID, channelID, 1)
+	SetNextSequenceRecv(accessibleState, portID, channelID, 1)
+	SetNextSequenceAck(accessibleState, portID, channelID, 1)
+
+	channelNew := channeltypes.NewChannel(channeltypes.TRYOPEN, channel.Ordering, channel.Counterparty, channel.ConnectionHops, channel.Version)
+	bz := marshaler.MustMarshal(&channelNew)
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.ChannelKey(portID, channelID))), bz)
+
+	return []byte(channelID), chanOpenTryGas, nil
+}
+
+func ChannelOpenAck(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+	/*
+		input
+		8 byte                       - portIDLen
+		portIDbyte                   - string
+		8 byte                       - channelIdLen
+		channelIdbyte                - string
+		8 byte                       - counterpartyChannelIdLen
+		counterpartyChannelIdbyte    - string
+		8 byte                       - counterpartyVersionLen
+		counterpartyVersionbyte      - string
+		8 byte                       - ProofTryLen
+		ProofTrybyte     			 - []byte
+		8 byte                       - proofHeightLen
+		proofHeightbyte          	 - clienttypes.Height
+	*/
+
+	if remainingGas, err = contract.DeductGas(suppliedGas, upgradeClientGas); err != nil {
+		return nil, 0, err
+	}
+	if readOnly {
+		return nil, remainingGas, vmerrs.ErrWriteProtection
+	}
+	// no input provided for this function
+
+	stateDB := accessibleState.GetStateDB()
+	// Verify that the caller is in the allow list and therefore has the right to call this function.
+	callerStatus := allowlist.GetAllowListStatus(stateDB, ContractAddress, caller)
+	if !callerStatus.IsEnabled() {
+		return nil, remainingGas, fmt.Errorf("non-enabled cannot call upgradeClient: %s", caller)
+	}
+
+	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
+
+	std.RegisterInterfaces(interfaceRegistry)
+	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+
+	carriage := uint64(0)
+
+	// portID
+	portIDLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	portIDbyte := getData(input, carriage, portIDLen)
+	portID := string(portIDbyte)
+
+	// channelId
+	channelIdLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	channelIdbyte := getData(input, carriage, channelIdLen)
+	channelID := string(channelIdbyte)
+
+	// counterpartyChannelId
+	counterpartyChannelIdLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	counterpartyChannelIdbyte := getData(input, carriage, counterpartyChannelIdLen)
+	counterpartyChannelId := string(counterpartyChannelIdbyte)
+
+	// counterpartyVersion
+	counterpartyVersionLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	counterpartyVersionbyte := getData(input, carriage, counterpartyVersionLen)
+	counterpartyVersion := string(counterpartyVersionbyte)
+
+	// counterpartyVersion
+	ProofTryLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	ProofTrybyte := getData(input, carriage, ProofTryLen)
+
+	// proofHeightbyte
+	proofHeightLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	proofHeightbyte := getData(input, carriage, proofHeightLen)
+
+	proofHeight := &clienttypes.Height{}
+	err = marshaler.Unmarshal(proofHeightbyte, proofHeight)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error unmarshalling proofHeight: %w", err)
+	}
+
+	channel, err := getChannelState(marshaler, string(hosttypes.ChannelKey(portID, channelID)), accessibleState)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if channel.State != channeltypes.INIT {
+		return nil, 0, fmt.Errorf("channel state should be INIT (got %s), err: %w", channel.State.String(), channeltypes.ErrInvalidChannelState)
+	}
+
+	connectionsPath := fmt.Sprintf("connections/%s", channel.ConnectionHops[0])
+	connectionEnd, err := getConnection(marshaler, connectionsPath, accessibleState)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if connectionEnd.GetState() != int32(connectiontypes.OPEN) {
+		return nil, 0, fmt.Errorf("connection state is not OPEN (got %s), err: %w", connectiontypes.State(connectionEnd.GetState()).String(), connectiontypes.ErrInvalidConnectionState)
+	}
+
+	counterpartyHops := []string{connectionEnd.GetCounterparty().GetConnectionID()}
+
+	// counterparty of the counterparty channel end (i.e self)
+	expectedCounterparty := channeltypes.NewCounterparty(portID, channelID)
+	expectedChannel := channeltypes.NewChannel(
+		channeltypes.TRYOPEN, channel.Ordering, expectedCounterparty,
+		counterpartyHops, counterpartyVersion,
+	)
+
+	err = channelStateVerefication(*connectionEnd, expectedChannel, proofHeight, accessibleState, marshaler, channelID, ProofTrybyte, channel.Counterparty.PortId)
+	if err != nil {
+		return nil, 0, fmt.Errorf("channel handshake open ack failed")
+	}
+
+	channel.State = channeltypes.OPEN
+	channel.Version = counterpartyVersion
+	channel.Counterparty.ChannelId = counterpartyChannelId
+
+	bz := marshaler.MustMarshal(channel)
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.ChannelKey(portID, channelID))), bz)
+
+	return nil, chanOpenAckGas, nil
+}
+
+func ChannelOpenConfirm(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+	/*
+		input
+		8 byte                       - portIDLen
+		portIDbyte                   - string
+		8 byte                       - channelIdLen
+		channelIdbyte                - string
+		8 byte                       - proofAckLen
+		proofAckbyte     			 - []byte
+		8 byte                       - proofHeightLen
+		proofHeightbyte          	 - clienttypes.Height
+	*/
+
+	if remainingGas, err = contract.DeductGas(suppliedGas, upgradeClientGas); err != nil {
+		return nil, 0, err
+	}
+	if readOnly {
+		return nil, remainingGas, vmerrs.ErrWriteProtection
+	}
+	// no input provided for this function
+
+	stateDB := accessibleState.GetStateDB()
+	// Verify that the caller is in the allow list and therefore has the right to call this function.
+	callerStatus := allowlist.GetAllowListStatus(stateDB, ContractAddress, caller)
+	if !callerStatus.IsEnabled() {
+		return nil, remainingGas, fmt.Errorf("non-enabled cannot call upgradeClient: %s", caller)
+	}
+
+	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
+
+	std.RegisterInterfaces(interfaceRegistry)
+	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+
+	carriage := uint64(0)
+
+	// portID
+	portIDLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	portIDbyte := getData(input, carriage, portIDLen)
+	portID := string(portIDbyte)
+
+	// channelId
+	channelIdLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	channelIdbyte := getData(input, carriage, channelIdLen)
+	channelID := string(channelIdbyte)
+
+	// proofAck
+	proofAckLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	proofAck := getData(input, carriage, proofAckLen)
+
+	// proofHeightbyte
+	proofHeightLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	proofHeightbyte := getData(input, carriage, proofHeightLen)
+
+	proofHeight := &clienttypes.Height{}
+	err = marshaler.Unmarshal(proofHeightbyte, proofHeight)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error unmarshalling proofHeight: %w", err)
+	}
+
+	channel, err := getChannelState(marshaler, string(hosttypes.ChannelKey(portID, channelID)), accessibleState)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if channel.State != channeltypes.TRYOPEN {
+		return nil, 0, fmt.Errorf("channel state is not TRYOPEN (got %s), err: %w", channel.State.String(), channeltypes.ErrInvalidChannelState)
+	}
+
+	connectionsPath := fmt.Sprintf("connections/%s", channel.ConnectionHops[0])
+	connectionEnd, err := getConnection(marshaler, connectionsPath, accessibleState)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if connectionEnd.GetState() != int32(connectiontypes.OPEN) {
+		return nil, 0, fmt.Errorf("connection state is not OPEN (got %s), err: %w", connectiontypes.State(connectionEnd.GetState()).String(), connectiontypes.ErrInvalidConnectionState)
+	}
+
+	counterpartyHops := []string{connectionEnd.GetCounterparty().GetConnectionID()}
+
+	counterparty := channeltypes.NewCounterparty(portID, channelID)
+	expectedChannel := channeltypes.NewChannel(
+		channeltypes.OPEN, channel.Ordering, counterparty,
+		counterpartyHops, channel.Version,
+	)
+
+	err = channelStateVerefication(*connectionEnd, expectedChannel, proofHeight, accessibleState, marshaler, channel.Counterparty.ChannelId, proofAck, channel.Counterparty.PortId)
+	if err != nil {
+		return nil, 0, fmt.Errorf("channel handshake open ack failed")
+	}
+	channel.State = channeltypes.OPEN
+
+	bz := marshaler.MustMarshal(channel)
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.ChannelKey(portID, channelID))), bz)
+
+	return nil, chanOpenConfirmGas, nil
+}
+
+func ChannelCloseInit(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+	/*
+		input
+		8 byte                       - portIDLen
+		portIDbyte                   - string
+		8 byte                       - channelIdLen
+		channelIdbyte                - string
+	*/
+
+	if remainingGas, err = contract.DeductGas(suppliedGas, upgradeClientGas); err != nil {
+		return nil, 0, err
+	}
+	if readOnly {
+		return nil, remainingGas, vmerrs.ErrWriteProtection
+	}
+	// no input provided for this function
+
+	stateDB := accessibleState.GetStateDB()
+	// Verify that the caller is in the allow list and therefore has the right to call this function.
+	callerStatus := allowlist.GetAllowListStatus(stateDB, ContractAddress, caller)
+	if !callerStatus.IsEnabled() {
+		return nil, remainingGas, fmt.Errorf("non-enabled cannot call upgradeClient: %s", caller)
+	}
+
+	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
+
+	std.RegisterInterfaces(interfaceRegistry)
+	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+
+	carriage := uint64(0)
+
+	// portID
+	portIDLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	portIDbyte := getData(input, carriage, portIDLen)
+	portID := string(portIDbyte)
+
+	// channelId
+	channelIdLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	channelIdbyte := getData(input, carriage, channelIdLen)
+	channelID := string(channelIdbyte)
+
+	channel, err := getChannelState(marshaler, string(hosttypes.ChannelKey(portID, channelID)), accessibleState)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if channel.State == channeltypes.CLOSED {
+		return nil, remainingGas, fmt.Errorf("channel is already CLOSED: %w", channeltypes.ErrInvalidChannelState)
+	}
+
+	connectionsPath := fmt.Sprintf("connections/%s", channel.ConnectionHops[0])
+	connectionEnd, err := getConnection(marshaler, connectionsPath, accessibleState)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	clientStatePath := fmt.Sprintf("clients/%s/clientState", connectionEnd.ClientId)
+	_, err = getClientState(marshaler, clientStatePath, accessibleState)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if connectionEnd.GetState() != int32(connectiontypes.OPEN) {
+		return nil, remainingGas, fmt.Errorf("connection state is not OPEN (got %s), err: %w", connectiontypes.State(connectionEnd.GetState()).String(), connectiontypes.ErrInvalidConnectionState)
+	}
+
+	channel.State = channeltypes.CLOSED
+
+	bz := marshaler.MustMarshal(channel)
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.ChannelKey(portID, channelID))), bz)
+
+	return nil, channelCloseInitGas, nil
+}
+
+func ChannelCloseConfirm(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+	/*
+		input
+		8 byte                       - portIDLen
+		portIDbyte                   - string
+		8 byte                       - channelIdLen
+		channelIdbyte                - string
+		8 byte                       - proofInitLen
+		proofInitbyte                - []byte
+		8 byte                       - proofHeightLen
+		proofHeightbyte              - channeltypes.Height
+	*/
+
+	if remainingGas, err = contract.DeductGas(suppliedGas, upgradeClientGas); err != nil {
+		return nil, 0, err
+	}
+	if readOnly {
+		return nil, remainingGas, vmerrs.ErrWriteProtection
+	}
+	// no input provided for this function
+
+	stateDB := accessibleState.GetStateDB()
+	// Verify that the caller is in the allow list and therefore has the right to call this function.
+	callerStatus := allowlist.GetAllowListStatus(stateDB, ContractAddress, caller)
+	if !callerStatus.IsEnabled() {
+		return nil, remainingGas, fmt.Errorf("non-enabled cannot call upgradeClient: %s", caller)
+	}
+
+	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
+
+	std.RegisterInterfaces(interfaceRegistry)
+	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+
+	carriage := uint64(0)
+
+	// portID
+	portIDLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	portIDbyte := getData(input, carriage, portIDLen)
+	portID := string(portIDbyte)
+
+	// channelId
+	channelIdLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	channelIdbyte := getData(input, carriage, channelIdLen)
+	channelID := string(channelIdbyte)
+
+	// proofInit
+	proofInitLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	proofInit := getData(input, carriage, proofInitLen)
+
+	// proofHeightbyte
+	proofHeightLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
+	carriage = carriage + 8
+	proofHeightbyte := getData(input, carriage, proofHeightLen)
+
+	proofHeight := &clienttypes.Height{}
+	err = marshaler.Unmarshal(proofHeightbyte, proofHeight)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error unmarshalling proofHeight: %w", err)
+	}
+
+	channel, err := getChannelState(marshaler, string(hosttypes.ChannelKey(portID, channelID)), accessibleState)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if channel.State == channeltypes.CLOSED {
+		return nil, 0, fmt.Errorf("channel is already CLOSED: %w", channeltypes.ErrInvalidChannelState)
+	}
+
+	connectionsPath := fmt.Sprintf("connections/%s", channel.ConnectionHops[0])
+	connectionEnd, err := getConnection(marshaler, connectionsPath, accessibleState)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if connectionEnd.GetState() != int32(connectiontypes.OPEN) {
+		return nil, 0, fmt.Errorf("connection state is not OPEN (got %s), err: %w", connectiontypes.State(connectionEnd.GetState()).String(), channeltypes.ErrInvalidChannelState)
+	}
+
+	counterpartyHops := []string{connectionEnd.GetCounterparty().GetConnectionID()}
+
+	counterparty := channeltypes.NewCounterparty(portID, channelID)
+	expectedChannel := channeltypes.NewChannel(
+		channeltypes.CLOSED, channel.Ordering, counterparty,
+		counterpartyHops, channel.Version,
+	)
+
+	err = channelStateVerefication(*connectionEnd, expectedChannel, proofHeight, accessibleState, marshaler, channel.Counterparty.ChannelId, proofInit, channel.Counterparty.PortId)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	channel.State = channeltypes.CLOSED
+
+	bz := marshaler.MustMarshal(channel)
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.ChannelKey(portID, channelID))), bz)
+
+	return nil, channelCloseConfirmGas, nil
+}
+
 // getData returns a slice from the data based on the start and size and pads
 // up to size with zero's. This function is overflow safe.
 func getData(data []byte, start uint64, size uint64) []byte {
@@ -1028,10 +1678,18 @@ func createIbcGoPrecompile() contract.StatefulPrecompiledContract {
 		contract.NewStatefulPrecompileFunction(getCreateClientSignature, createClient),
 		contract.NewStatefulPrecompileFunction(getUpdateClientSignature, updateClient),
 		contract.NewStatefulPrecompileFunction(getUpgradeClientSignature, upgradeClient),
+
 		contract.NewStatefulPrecompileFunction(getConnOpenInitSignature, ConnOpenInit),
 		contract.NewStatefulPrecompileFunction(getConnOpenTrySignature, ConnOpenTry),
 		contract.NewStatefulPrecompileFunction(getConnOpenAckSignature, ConnOpenAck),
 		contract.NewStatefulPrecompileFunction(getConnOpenConfirmSignature, ConnOpenConfirm),
+
+		contract.NewStatefulPrecompileFunction(getChanOpenInitSignature, ChanOpenInit),
+		contract.NewStatefulPrecompileFunction(getChanOpenTrySignature, ChanOpenTry),
+		contract.NewStatefulPrecompileFunction(getChannelOpenAckSignature, ChannelOpenAck),
+		contract.NewStatefulPrecompileFunction(getChannelOpenConfirmSignature, ChannelOpenConfirm),
+		contract.NewStatefulPrecompileFunction(getChannelCloseInitSignature, ChannelCloseInit),
+		contract.NewStatefulPrecompileFunction(getChannelCloseConfirmSignature, ChannelCloseConfirm),
 	)
 
 	// Construct the contract with no fallback function.
@@ -1204,6 +1862,61 @@ func connectionVerefication(
 	return nil
 }
 
+func channelStateVerefication(
+	connection connectiontypes.ConnectionEnd,
+	channel channeltypes.Channel,
+	height exported.Height,
+	accessibleState contract.AccessibleState,
+	marshaler *codec.ProtoCodec,
+	channelID string,
+	proof []byte,
+	portID string,
+) error {
+	clientID := connection.GetClientID()
+
+	clientStatePath := fmt.Sprintf("clients/%s/clientState", clientID)
+	clientStateByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(clientStatePath)))
+	clientStateExp, err := clienttypes.UnmarshalClientState(marshaler, clientStateByte)
+	if err != nil {
+		return fmt.Errorf("error unmarshalling client state file, err: %w", err)
+	}
+	clientState := clientStateExp.(*ibctm.ClientState)
+
+	consensusStatePath := fmt.Sprintf("clients/%s/consensusStates/%s", clientID, clientState.GetLatestHeight())
+	consensusStateByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(consensusStatePath)))
+	consensusStateExp, err := clienttypes.UnmarshalConsensusState(marshaler, consensusStateByte)
+	if err != nil {
+		return fmt.Errorf("error unmarshalling consensus state file, err: %w", err)
+	}
+	consensusState := consensusStateExp.(*ibctm.ConsensusState)
+
+	merklePath := commitmenttypes.NewMerklePath(hosttypes.ChannelPath(portID, channelID))
+	merklePath, err = commitmenttypes.ApplyPrefix(connection.GetCounterparty().GetPrefix(), merklePath)
+	if err != nil {
+		return err
+	}
+
+	bz, err := marshaler.Marshal(&channel)
+	if err != nil {
+		return err
+	}
+
+	if clientState.GetLatestHeight().LT(height) {
+		return fmt.Errorf("client state height < proof height (%d < %d), please ensure the client has been updated", clientState.GetLatestHeight(), height)
+	}
+
+	var merkleProof commitmenttypes.MerkleProof
+	if err := marshaler.Unmarshal(proof, &merkleProof); err != nil {
+		return fmt.Errorf("failed to unmarshal proof into ICS 23 commitment merkle proof")
+	}
+	err = merkleProof.VerifyMembership(clientState.ProofSpecs, consensusState.GetRoot(), merklePath, bz)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func getClientConnectionPaths(
 	marshaler *codec.ProtoCodec,
 	clientID string,
@@ -1217,4 +1930,139 @@ func getClientConnectionPaths(
 	var clientPaths connectiontypes.ClientPaths
 	marshaler.MustUnmarshal(bz, &clientPaths)
 	return clientPaths.Paths, true
+}
+
+func getConnection(
+	marshaler *codec.ProtoCodec,
+	connectionsPath string,
+	accessibleState contract.AccessibleState,
+) (*connectiontypes.ConnectionEnd, error) {
+	// connection hop length checked on msg.ValidateBasic()
+	exist := accessibleState.GetStateDB().Exist(common.BytesToAddress([]byte(connectionsPath)))
+	if !exist {
+		return nil, fmt.Errorf("cannot find connection with path: %s", connectionsPath)
+	}
+	connection := &connectiontypes.ConnectionEnd{}
+	connectionByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(connectionsPath)))
+
+	marshaler.MustUnmarshal(connectionByte, connection)
+	return connection, nil
+}
+
+func geConsensusState(
+	marshaler *codec.ProtoCodec,
+	consensusStatePath string,
+	accessibleState contract.AccessibleState,
+) (*ibctm.ConsensusState, error) {
+	// connection hop length checked on msg.ValidateBasic()
+	exist := accessibleState.GetStateDB().Exist(common.BytesToAddress([]byte(consensusStatePath)))
+	if !exist {
+		return nil, fmt.Errorf("cannot find consensusState with path: %s", consensusStatePath)
+	}
+	consensusStateByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(consensusStatePath)))
+	consensusStateExp, err := clienttypes.UnmarshalConsensusState(marshaler, consensusStateByte)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshalling consensus state file, err: %w", err)
+	}
+	consensusState := consensusStateExp.(*ibctm.ConsensusState)
+
+	return consensusState, nil
+}
+
+func getClientState(
+	marshaler *codec.ProtoCodec,
+	clientStatePath string,
+	accessibleState contract.AccessibleState,
+) (*ibctm.ClientState, error) {
+	// connection hop length checked on msg.ValidateBasic()
+	exist := accessibleState.GetStateDB().Exist(common.BytesToAddress([]byte(clientStatePath)))
+	if !exist {
+		return nil, fmt.Errorf("cannot find client state with path: %s", clientStatePath)
+	}
+	clientStateByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(clientStatePath)))
+	clientStateExp, err := clienttypes.UnmarshalClientState(marshaler, clientStateByte)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshalling client state file, err: %w", err)
+	}
+	clientState := clientStateExp.(*ibctm.ClientState)
+
+	return clientState, nil
+}
+
+func getChannelState(
+	marshaler *codec.ProtoCodec,
+	channelStatePath string,
+	accessibleState contract.AccessibleState,
+) (*channeltypes.Channel, error) {
+	// connection hop length checked on msg.ValidateBasic()
+	exist := accessibleState.GetStateDB().Exist(common.BytesToAddress([]byte(channelStatePath)))
+	if !exist {
+		return nil, fmt.Errorf("cannot find channel state with path: %s", channelStatePath)
+	}
+	channelStateByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(channelStatePath)))
+	channelState := &channeltypes.Channel{}
+	marshaler.MustUnmarshal(channelStateByte, channelState)
+	return channelState, nil
+}
+
+func GenerateChannelIdentifier(accessibleState contract.AccessibleState) string {
+	sequence := uint64(0)
+	if accessibleState.GetStateDB().Exist(common.BytesToAddress([]byte("nextChannelSeq"))) {
+		b := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte("nextChannelSeq")))
+		sequence = binary.BigEndian.Uint64(b)
+	}
+	sequence++
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, sequence)
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte("nextChannelSeq")), b)
+
+	return fmt.Sprintf("%s%d", "channel-", sequence)
+}
+
+// GetNextSequenceSend gets a channel's next send sequence from the store
+func GetNextSequenceSend(accessibleState contract.AccessibleState, portID, channelID string) (uint64, bool) {
+	bz := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(hosttypes.NextSequenceSendKey(portID, channelID))))
+	if len(bz) == 0 {
+		return 0, false
+	}
+	return binary.BigEndian.Uint64(bz), true
+}
+
+// SetNextSequenceSend sets a channel's next send sequence to the store
+func SetNextSequenceSend(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64) {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, sequence)
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.NextSequenceSendKey(portID, channelID))), b)
+}
+
+// GetNextSequenceRecv gets a channel's next receive sequence from the store
+func GetNextSequenceRecv(accessibleState contract.AccessibleState, portID, channelID string) (uint64, bool) {
+	bz := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(hosttypes.NextSequenceRecvKey(portID, channelID))))
+	if len(bz) == 0 {
+		return 0, false
+	}
+	return binary.BigEndian.Uint64(bz), true
+}
+
+// SetNextSequenceRecv sets a channel's next receive sequence to the store
+func SetNextSequenceRecv(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64) {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, sequence)
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.NextSequenceRecvKey(portID, channelID))), b)
+}
+
+// GetNextSequenceAck gets a channel's next ack sequence from the store
+func GetNextSequenceAck(accessibleState contract.AccessibleState, portID, channelID string) (uint64, bool) {
+	bz := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(hosttypes.NextSequenceAckKey(portID, channelID))))
+	if len(bz) == 0 {
+		return 0, false
+	}
+	return binary.BigEndian.Uint64(bz), true
+}
+
+// SetNextSequenceAck sets a channel's next ack sequence to the store
+func SetNextSequenceAck(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64) {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, sequence)
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.NextSequenceAckKey(portID, channelID))), b)
 }
