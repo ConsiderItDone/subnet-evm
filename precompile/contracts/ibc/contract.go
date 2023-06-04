@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/ava-labs/subnet-evm/precompile/allowlist"
 	"github.com/ava-labs/subnet-evm/precompile/contract"
@@ -17,6 +18,7 @@ import (
 
 	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
 
+	capabilitytypes "github.com/cosmos/ibc-go/modules/capability/types"
 	connectiontypes "github.com/cosmos/ibc-go/v7/modules/core/03-connection/types"
 	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
 	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
@@ -58,12 +60,12 @@ var (
 	getConnOpenTrySignature     = contract.CalculateFunctionSelector("connOpenTry(uint64,bytes,uint64,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes)")
 	getConnOpenAckSignature     = contract.CalculateFunctionSelector("connOpenAck(uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes)")
 
-	getChanOpenInitSignature        = contract.CalculateFunctionSelector("chanOpenInit(uint64,bytes,uint64,bytes)")
-	getChanOpenTrySignature         = contract.CalculateFunctionSelector("chanOpenTry(uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes)")
-	getChannelOpenAckSignature      = contract.CalculateFunctionSelector("channelOpenAck(uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes)")
-	getChannelOpenConfirmSignature  = contract.CalculateFunctionSelector("channelOpenConfirm(uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes)")
-	getChannelCloseInitSignature    = contract.CalculateFunctionSelector("channelCloseInit(uint64,bytes,uint64,bytes)")
-	getChannelCloseConfirmSignature = contract.CalculateFunctionSelector("channelCloseConfirm(uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes)")
+	getChanOpenInitSignature     = contract.CalculateFunctionSelector("chanOpenInit(uint64,bytes,uint64,bytes)")
+	getChanOpenTrySignature      = contract.CalculateFunctionSelector("chanOpenTry(uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes)")
+	getChanOpenAckSignature      = contract.CalculateFunctionSelector("channelOpenAck(uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes)")
+	getChanOpenConfirmSignature  = contract.CalculateFunctionSelector("channelOpenConfirm(uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes)")
+	getChanCloseInitSignature    = contract.CalculateFunctionSelector("channelCloseInit(uint64,bytes,uint64,bytes)")
+	getChanCloseConfirmSignature = contract.CalculateFunctionSelector("channelCloseConfirm(uint64,bytes,uint64,bytes,uint64,bytes,uint64,bytes)")
 )
 
 // createClient generates a new client identifier and isolated prefix store for the provided client state.
@@ -1107,6 +1109,11 @@ func ChanOpenInit(accessibleState contract.AccessibleState, caller common.Addres
 	bz := marshaler.MustMarshal(&channelNew)
 	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.ChannelKey(portID, channelID))), bz)
 
+	_, err = setCapability(hosttypes.ChannelCapabilityPath(portID, channelID), accessibleState, marshaler)
+	if err != nil {
+		return nil, 0, err
+	}
+
 	SetNextSequenceSend(accessibleState, portID, channelID, 1)
 	SetNextSequenceRecv(accessibleState, portID, channelID, 1)
 	SetNextSequenceAck(accessibleState, portID, channelID, 1)
@@ -1119,8 +1126,6 @@ func ChanOpenTry(accessibleState contract.AccessibleState, caller common.Address
 		input
 		8 byte                       - portIDLen
 		portIDbyte                   - string
-		8 byte                       - previousChannelIdLen
-		previousChannelIdbyte        - string
 		8 byte                       - channelLen
 		channelbyte                  - channeltypes.Channel
 		8 byte                       - counterpartyVersionLen
@@ -1159,17 +1164,13 @@ func ChanOpenTry(accessibleState contract.AccessibleState, caller common.Address
 	carriage = carriage + 8
 	portIDbyte := getData(input, carriage, portIDLen)
 	portID := string(portIDbyte)
-
-	// previousChannelId
-	previousChannelIdLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
-	carriage = carriage + 8
-	/* previousChannelIdbyte := */ getData(input, carriage, previousChannelIdLen)
-	/* previousChannelId := string(previousChannelIdbyte) */
+	carriage = carriage + portIDLen
 
 	// channel
 	channelLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
 	carriage = carriage + 8
 	channelbyte := getData(input, carriage, channelLen)
+	carriage = carriage + channelLen
 
 	channel := &channeltypes.Channel{}
 	err = marshaler.Unmarshal(channelbyte, channel)
@@ -1182,11 +1183,13 @@ func ChanOpenTry(accessibleState contract.AccessibleState, caller common.Address
 	carriage = carriage + 8
 	counterpartyVersionbyte := getData(input, carriage, counterpartyVersionLen)
 	counterpartyVersion := string(counterpartyVersionbyte)
+	carriage = carriage + counterpartyVersionLen
 
 	// proofInitbyte
 	proofInitLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
 	carriage = carriage + 8
 	proofInitbyte := getData(input, carriage, proofInitLen)
+	carriage = carriage + proofInitLen
 
 	// proofHeightbyte
 	proofHeightLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
@@ -1235,7 +1238,7 @@ func ChanOpenTry(accessibleState contract.AccessibleState, caller common.Address
 		channeltypes.INIT, channel.Ordering, expectedCounterparty,
 		counterpartyHops, counterpartyVersion,
 	)
-	err = channelStateVerification(*connectionEnd, expectedChannel, proofHeight, accessibleState, marshaler, channel.Counterparty.ChannelId, proofInitbyte, portID)
+	err = channelStateVerification(*connectionEnd, expectedChannel, *proofHeight, accessibleState, marshaler, channel.Counterparty.ChannelId, proofInitbyte, portID)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1296,29 +1299,34 @@ func ChannelOpenAck(accessibleState contract.AccessibleState, caller common.Addr
 	carriage = carriage + 8
 	portIDbyte := getData(input, carriage, portIDLen)
 	portID := string(portIDbyte)
+	carriage = carriage + portIDLen
 
 	// channelId
 	channelIdLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
 	carriage = carriage + 8
 	channelIdbyte := getData(input, carriage, channelIdLen)
 	channelID := string(channelIdbyte)
+	carriage = carriage + channelIdLen
 
 	// counterpartyChannelId
 	counterpartyChannelIdLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
 	carriage = carriage + 8
 	counterpartyChannelIdbyte := getData(input, carriage, counterpartyChannelIdLen)
 	counterpartyChannelId := string(counterpartyChannelIdbyte)
+	carriage = carriage + counterpartyChannelIdLen
 
 	// counterpartyVersion
 	counterpartyVersionLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
 	carriage = carriage + 8
 	counterpartyVersionbyte := getData(input, carriage, counterpartyVersionLen)
 	counterpartyVersion := string(counterpartyVersionbyte)
+	carriage = carriage + counterpartyVersionLen
 
 	// counterpartyVersion
 	ProofTryLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
 	carriage = carriage + 8
 	ProofTrybyte := getData(input, carriage, ProofTryLen)
+	carriage = carriage + ProofTryLen
 
 	// proofHeightbyte
 	proofHeightLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
@@ -1359,7 +1367,7 @@ func ChannelOpenAck(accessibleState contract.AccessibleState, caller common.Addr
 		counterpartyHops, counterpartyVersion,
 	)
 
-	err = channelStateVerification(*connectionEnd, expectedChannel, proofHeight, accessibleState, marshaler, channelID, ProofTrybyte, channel.Counterparty.PortId)
+	err = channelStateVerification(*connectionEnd, expectedChannel, *proofHeight, accessibleState, marshaler, channelID, ProofTrybyte, channel.Counterparty.PortId)
 	if err != nil {
 		return nil, 0, fmt.Errorf("channel handshake open ack failed")
 	}
@@ -1415,17 +1423,20 @@ func ChannelOpenConfirm(accessibleState contract.AccessibleState, caller common.
 	carriage = carriage + 8
 	portIDbyte := getData(input, carriage, portIDLen)
 	portID := string(portIDbyte)
+	carriage = carriage + portIDLen
 
 	// channelId
 	channelIdLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
 	carriage = carriage + 8
 	channelIdbyte := getData(input, carriage, channelIdLen)
 	channelID := string(channelIdbyte)
+	carriage = carriage + channelIdLen
 
 	// proofAck
 	proofAckLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
 	carriage = carriage + 8
 	proofAck := getData(input, carriage, proofAckLen)
+	carriage = carriage + proofAckLen
 
 	// proofHeightbyte
 	proofHeightLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
@@ -1465,7 +1476,7 @@ func ChannelOpenConfirm(accessibleState contract.AccessibleState, caller common.
 		counterpartyHops, channel.Version,
 	)
 
-	err = channelStateVerification(*connectionEnd, expectedChannel, proofHeight, accessibleState, marshaler, channel.Counterparty.ChannelId, proofAck, channel.Counterparty.PortId)
+	err = channelStateVerification(*connectionEnd, expectedChannel, *proofHeight, accessibleState, marshaler, channel.Counterparty.ChannelId, proofAck, channel.Counterparty.PortId)
 	if err != nil {
 		return nil, 0, fmt.Errorf("channel handshake open ack failed")
 	}
@@ -1514,6 +1525,7 @@ func ChannelCloseInit(accessibleState contract.AccessibleState, caller common.Ad
 	carriage = carriage + 8
 	portIDbyte := getData(input, carriage, portIDLen)
 	portID := string(portIDbyte)
+	carriage = carriage + portIDLen
 
 	// channelId
 	channelIdLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
@@ -1530,6 +1542,9 @@ func ChannelCloseInit(accessibleState contract.AccessibleState, caller common.Ad
 		return nil, remainingGas, fmt.Errorf("channel is already CLOSED: %w", channeltypes.ErrInvalidChannelState)
 	}
 
+	if len(channel.ConnectionHops) == 0 {
+		return nil, remainingGas, fmt.Errorf("length channel.ConnectionHops == 0")
+	}
 	connectionsPath := fmt.Sprintf("connections/%s", channel.ConnectionHops[0])
 	connectionEnd, err := getConnection(marshaler, connectionsPath, accessibleState)
 	if err != nil {
@@ -1595,17 +1610,20 @@ func ChannelCloseConfirm(accessibleState contract.AccessibleState, caller common
 	carriage = carriage + 8
 	portIDbyte := getData(input, carriage, portIDLen)
 	portID := string(portIDbyte)
+	carriage = carriage + portIDLen
 
 	// channelId
 	channelIdLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
 	carriage = carriage + 8
 	channelIdbyte := getData(input, carriage, channelIdLen)
 	channelID := string(channelIdbyte)
+	carriage = carriage + channelIdLen
 
 	// proofInit
 	proofInitLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
 	carriage = carriage + 8
 	proofInit := getData(input, carriage, proofInitLen)
+	carriage = carriage + proofInitLen
 
 	// proofHeightbyte
 	proofHeightLen := new(big.Int).SetBytes(getData(input, carriage, 8)).Uint64()
@@ -1645,7 +1663,7 @@ func ChannelCloseConfirm(accessibleState contract.AccessibleState, caller common
 		counterpartyHops, channel.Version,
 	)
 
-	err = channelStateVerification(*connectionEnd, expectedChannel, proofHeight, accessibleState, marshaler, channel.Counterparty.ChannelId, proofInit, channel.Counterparty.PortId)
+	err = channelStateVerification(*connectionEnd, expectedChannel, *proofHeight, accessibleState, marshaler, channel.Counterparty.ChannelId, proofInit, channel.Counterparty.PortId)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1689,10 +1707,10 @@ func createIbcGoPrecompile() contract.StatefulPrecompiledContract {
 
 		contract.NewStatefulPrecompileFunction(getChanOpenInitSignature, ChanOpenInit),
 		contract.NewStatefulPrecompileFunction(getChanOpenTrySignature, ChanOpenTry),
-		contract.NewStatefulPrecompileFunction(getChannelOpenAckSignature, ChannelOpenAck),
-		contract.NewStatefulPrecompileFunction(getChannelOpenConfirmSignature, ChannelOpenConfirm),
-		contract.NewStatefulPrecompileFunction(getChannelCloseInitSignature, ChannelCloseInit),
-		contract.NewStatefulPrecompileFunction(getChannelCloseConfirmSignature, ChannelCloseConfirm),
+		contract.NewStatefulPrecompileFunction(getChanOpenAckSignature, ChannelOpenAck),
+		contract.NewStatefulPrecompileFunction(getChanOpenConfirmSignature, ChannelOpenConfirm),
+		contract.NewStatefulPrecompileFunction(getChanCloseInitSignature, ChannelCloseInit),
+		contract.NewStatefulPrecompileFunction(getChanCloseConfirmSignature, ChannelCloseConfirm),
 	)
 
 	// Construct the contract with no fallback function.
@@ -2020,6 +2038,121 @@ func GenerateChannelIdentifier(accessibleState contract.AccessibleState) string 
 	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte("nextChannelSeq")), b)
 
 	return fmt.Sprintf("%s%d", "channel-", sequence)
+}
+
+func setCapability(name string,
+	accessibleState contract.AccessibleState,
+	marshaler *codec.ProtoCodec,
+) (*capabilitytypes.Capability, error) {
+	if strings.TrimSpace(name) == "" {
+		return nil, fmt.Errorf("capability name cannot be empty, err: %w", capabilitytypes.ErrInvalidCapabilityName)
+	}
+
+	if _, err := getCapability(name, accessibleState); err != nil {
+		return nil, fmt.Errorf("name: %s, err: %w", name, capabilitytypes.ErrCapabilityTaken)
+	}
+
+	indexBytes := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte("globalIndex")))
+	index := binary.BigEndian.Uint64(indexBytes)
+	cap := capabilitytypes.NewCapability(index)
+
+	// update capability owner set
+	if err := addOwner(cap, accessibleState, marshaler, name); err != nil {
+		return nil, err
+	}
+
+	// increment global index
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, index+1)
+
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte("globalIndex")), b)
+
+	// Set the forward mapping between the module and capability tuple and the
+	// capability name in the memKVStore
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(name)), capabilitytypes.FwdCapabilityKey("channel", cap))
+
+	// Set the reverse mapping between the module and capability name and the
+	// index in the in-memory store. Since marshalling and unmarshalling into a store
+	// will change memory address of capability, we simply store index as value here
+	// and retrieve the in-memory pointer to the capability from our map
+
+	key := capabilitytypes.RevCapabilityKey("channel", name)
+	binary.BigEndian.PutUint64(b, index)
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress(key), b)
+
+	capMapByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte("CapMap")))
+	capMap := map[uint64]*capabilitytypes.Capability{}
+	json.Unmarshal(capMapByte, capMap)
+	// Set the mapping from index from index to in-memory capability in the go map
+	capMap[index] = cap
+	capMapByte, err := json.Marshal(capMap)
+	if err != nil {
+		return nil, err
+	}
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte("CapMap")), capMapByte)
+
+	return cap, nil
+
+}
+
+func addOwner(cap *capabilitytypes.Capability,
+	accessibleState contract.AccessibleState,
+	marshaler *codec.ProtoCodec,
+	name string) error {
+	indexKey := capabilitytypes.IndexToKey(cap.GetIndex())
+
+	capOwners := getOwners(accessibleState, cap, marshaler)
+
+	// TODO sk.module what is it?
+	if err := capOwners.Set(capabilitytypes.NewOwner("channel", name)); err != nil {
+		return err
+	}
+
+	// update capability owner set
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(fmt.Sprintf("%s/%s", capabilitytypes.KeyPrefixIndexCapability, indexKey))), marshaler.MustMarshal(capOwners))
+	return nil
+}
+
+func getOwners(accessibleState contract.AccessibleState,
+	cap *capabilitytypes.Capability,
+	marshaler *codec.ProtoCodec,
+) *capabilitytypes.CapabilityOwners {
+	indexKey := capabilitytypes.IndexToKey(cap.GetIndex())
+
+	bz := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(fmt.Sprintf("%s/%s", capabilitytypes.KeyPrefixIndexCapability, indexKey))))
+
+	if len(bz) == 0 {
+		return capabilitytypes.NewCapabilityOwners()
+	}
+
+	var capOwners capabilitytypes.CapabilityOwners
+	marshaler.MustUnmarshal(bz, &capOwners)
+	return &capOwners
+}
+
+func getCapability(name string,
+	accessibleState contract.AccessibleState,
+) (*capabilitytypes.Capability, error) {
+	if strings.TrimSpace(name) == "" {
+		return nil, fmt.Errorf("capability name cannot be empty, err: %w", capabilitytypes.ErrInvalidCapabilityName)
+	}
+
+	key := capabilitytypes.RevCapabilityKey("channel", name)
+	indexBytes := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress(key))
+	index := binary.BigEndian.Uint64(indexBytes)
+
+	if len(indexBytes) == 0 {
+		return nil, fmt.Errorf("Error: len(indexBytes) == 0")
+	}
+
+	capMapByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte("CapMap")))
+	capMap := map[uint64]*capabilitytypes.Capability{}
+	json.Unmarshal(capMapByte, capMap)
+	cap := capMap[index]
+	if cap == nil {
+		return nil, fmt.Errorf("capability found in memstore is missing from map")
+	}
+	return cap, nil
 }
 
 // GetNextSequenceSend gets a channel's next send sequence from the store
