@@ -1109,10 +1109,10 @@ func ChanOpenInit(accessibleState contract.AccessibleState, caller common.Addres
 	bz := marshaler.MustMarshal(&channelNew)
 	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.ChannelKey(portID, channelID))), bz)
 
-	_, err = setCapability(hosttypes.ChannelCapabilityPath(portID, channelID), accessibleState, marshaler)
-	if err != nil {
-		return nil, 0, err
-	}
+	// _, err = setCapability(hosttypes.ChannelCapabilityPath(portID, channelID), accessibleState, marshaler)
+	// if err != nil {
+	// 	return nil, 0, err
+	// }
 
 	SetNextSequenceSend(accessibleState, portID, channelID, 1)
 	SetNextSequenceRecv(accessibleState, portID, channelID, 1)
