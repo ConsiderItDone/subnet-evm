@@ -9,12 +9,13 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/ava-labs/subnet-evm/precompile/allowlist"
-	"github.com/ava-labs/subnet-evm/precompile/contract"
-	"github.com/ava-labs/subnet-evm/vmerrs"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/std"
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/ava-labs/subnet-evm/precompile/allowlist"
+	"github.com/ava-labs/subnet-evm/precompile/contract"
+	"github.com/ava-labs/subnet-evm/vmerrs"
 
 	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
 
@@ -45,6 +46,7 @@ const (
 	chanOpenConfirmGas     = uint64(1)
 	channelCloseInitGas    = uint64(1)
 	channelCloseConfirmGas = uint64(1)
+	sendPacketGas          = uint64(1)
 )
 
 // Singleton StatefulPrecompiledContract and signatures.
@@ -226,7 +228,7 @@ func updateClient(accessibleState contract.AccessibleState, caller common.Addres
 
 	consensusStatePath = fmt.Sprintf("clients/%s/consensusStates/%s", clientID, clientMessage.GetHeight())
 	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(consensusStatePath)), consensusStateByte)
-	return nil, updateClientGas, nil
+	return nil, remainingGas, nil
 }
 
 func upgradeClient(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
@@ -714,7 +716,7 @@ func ConnOpenTry(accessibleState contract.AccessibleState, caller common.Address
 	bz := marshaler.MustMarshal(&clientPaths)
 
 	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress(hosttypes.ClientConnectionsKey(clientID)), bz)
-	return []byte(connectionID), connOpenTryGas, nil
+	return []byte(connectionID), remainingGas, nil
 }
 
 func ConnOpenAck(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
@@ -888,7 +890,7 @@ func ConnOpenAck(accessibleState contract.AccessibleState, caller common.Address
 	connectionsPath = fmt.Sprintf("connections/%s", connectionID)
 	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
 
-	return nil, 0, nil
+	return nil, remainingGas, nil
 }
 
 func ConnOpenConfirm(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
@@ -1020,7 +1022,7 @@ func ConnOpenConfirm(accessibleState contract.AccessibleState, caller common.Add
 	connectionsPath = fmt.Sprintf("connections/%s", connectionID)
 	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
 
-	return nil, connOpenConfirmGas, err
+	return nil, remainingGas, err
 }
 
 func ChanOpenInit(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
@@ -1034,7 +1036,7 @@ func ChanOpenInit(accessibleState contract.AccessibleState, caller common.Addres
 
 	// TODO capability verification
 
-	if remainingGas, err = contract.DeductGas(suppliedGas, upgradeClientGas); err != nil {
+	if remainingGas, err = contract.DeductGas(suppliedGas, chanOpenInitGas); err != nil {
 		return nil, 0, err
 	}
 	if readOnly {
@@ -1118,7 +1120,7 @@ func ChanOpenInit(accessibleState contract.AccessibleState, caller common.Addres
 	SetNextSequenceRecv(accessibleState, portID, channelID, 1)
 	SetNextSequenceAck(accessibleState, portID, channelID, 1)
 
-	return nil, chanOpenInitGas, nil
+	return nil, remainingGas, nil
 }
 
 func ChanOpenTry(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
@@ -1251,7 +1253,7 @@ func ChanOpenTry(accessibleState contract.AccessibleState, caller common.Address
 	bz := marshaler.MustMarshal(&channelNew)
 	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.ChannelKey(portID, channelID))), bz)
 
-	return []byte(channelID), chanOpenTryGas, nil
+	return []byte(channelID), remainingGas, nil
 }
 
 func ChannelOpenAck(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
@@ -1379,7 +1381,7 @@ func ChannelOpenAck(accessibleState contract.AccessibleState, caller common.Addr
 	bz := marshaler.MustMarshal(channel)
 	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.ChannelKey(portID, channelID))), bz)
 
-	return nil, chanOpenAckGas, nil
+	return nil, remainingGas, nil
 }
 
 func ChannelOpenConfirm(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
@@ -1485,7 +1487,7 @@ func ChannelOpenConfirm(accessibleState contract.AccessibleState, caller common.
 	bz := marshaler.MustMarshal(channel)
 	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.ChannelKey(portID, channelID))), bz)
 
-	return nil, chanOpenConfirmGas, nil
+	return nil, remainingGas, nil
 }
 
 func ChannelCloseInit(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
@@ -1566,7 +1568,7 @@ func ChannelCloseInit(accessibleState contract.AccessibleState, caller common.Ad
 	bz := marshaler.MustMarshal(channel)
 	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.ChannelKey(portID, channelID))), bz)
 
-	return nil, channelCloseInitGas, nil
+	return nil, remainingGas, nil
 }
 
 func ChannelCloseConfirm(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
@@ -1673,7 +1675,7 @@ func ChannelCloseConfirm(accessibleState contract.AccessibleState, caller common
 	bz := marshaler.MustMarshal(channel)
 	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.ChannelKey(portID, channelID))), bz)
 
-	return nil, channelCloseConfirmGas, nil
+	return nil, remainingGas, nil
 }
 
 // getData returns a slice from the data based on the start and size and pads
@@ -1711,6 +1713,8 @@ func createIbcGoPrecompile() contract.StatefulPrecompiledContract {
 		contract.NewStatefulPrecompileFunction(getChanOpenConfirmSignature, ChannelOpenConfirm),
 		contract.NewStatefulPrecompileFunction(getChanCloseInitSignature, ChannelCloseInit),
 		contract.NewStatefulPrecompileFunction(getChanCloseConfirmSignature, ChannelCloseConfirm),
+		contract.NewStatefulPrecompileFunction(sendPacketSignature, SendPacket),
+		contract.NewStatefulPrecompileFunction(receivePacketSignature, ReceivePacket),
 	)
 
 	// Construct the contract with no fallback function.
@@ -2169,6 +2173,11 @@ func SetNextSequenceSend(accessibleState contract.AccessibleState, portID, chann
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, sequence)
 	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.NextSequenceSendKey(portID, channelID))), b)
+}
+
+// SetPacketCommitment sets the packet commitment hash to the store
+func SetPacketCommitment(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64, commitmentHash []byte) {
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.PacketCommitmentKey(portID, channelID, sequence))), commitmentHash)
 }
 
 // GetNextSequenceRecv gets a channel's next receive sequence from the store
