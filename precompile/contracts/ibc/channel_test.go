@@ -14,6 +14,7 @@ import (
 	hosttypes "github.com/cosmos/ibc-go/v7/modules/core/24-host"
 	ibctm "github.com/cosmos/ibc-go/v7/modules/light-clients/07-tendermint"
 	ibctesting "github.com/cosmos/ibc-go/v7/testing"
+	ibcmock "github.com/cosmos/ibc-go/v7/testing/mock"
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/ava-labs/subnet-evm/core/rawdb"
@@ -24,6 +25,11 @@ import (
 )
 
 const doesnotexist = "doesnotexist"
+
+var (
+	disabledTimeoutTimestamp = uint64(0)
+	defaultTimeoutHeight     = clienttypes.NewHeight(1, 100)
+)
 
 func (suite *KeeperTestSuite) TestChanOpenInit() {
 	var path *ibctesting.Path
@@ -1077,6 +1083,283 @@ func (suite *KeeperTestSuite) TestChanCloseConfirm() {
 				suite.Require().NoError(err)
 			} else {
 				suite.Require().Error(err)
+			}
+		})
+	}
+}
+
+// TestAcknowledgePacket tests the call AcknowledgePacket on chainA.
+func (suite *KeeperTestSuite) TestAcknowledgePacket() {
+	var (
+		path   *ibctesting.Path
+		packet channeltypes.Packet
+		ack    = ibcmock.MockAcknowledgement
+	)
+
+	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+
+	std.RegisterInterfaces(interfaceRegistry)
+	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
+
+	testCases := []struct {
+		msg      string
+		malleate func()
+		expPass  bool
+	}{
+		{"success on ordered channel", func() {
+			path.SetChannelOrdered()
+			suite.coordinator.Setup(path)
+
+			// create packet commitment
+			sequence, err := path.EndpointA.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, ibctesting.MockPacketData)
+			suite.Require().NoError(err)
+
+			// create packet receipt and acknowledgement
+			packet = channeltypes.NewPacket(ibctesting.MockPacketData, sequence, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, defaultTimeoutHeight, disabledTimeoutTimestamp)
+			err = path.EndpointB.RecvPacket(packet)
+			suite.Require().NoError(err)
+		}, true},
+		{"success on unordered channel", func() {
+			// setup uses an UNORDERED channel
+			suite.coordinator.Setup(path)
+
+			// create packet commitment
+			sequence, err := path.EndpointA.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, ibctesting.MockPacketData)
+			suite.Require().NoError(err)
+
+			// create packet receipt and acknowledgement
+			packet = channeltypes.NewPacket(ibctesting.MockPacketData, sequence, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, defaultTimeoutHeight, disabledTimeoutTimestamp)
+			err = path.EndpointB.RecvPacket(packet)
+			suite.Require().NoError(err)
+		}, true},
+		{"packet already acknowledged ordered channel (no-op)", func() {
+
+			path.SetChannelOrdered()
+			suite.coordinator.Setup(path)
+
+			// create packet commitment
+			sequence, err := path.EndpointA.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, ibctesting.MockPacketData)
+			suite.Require().NoError(err)
+
+			// create packet receipt and acknowledgement
+			packet = channeltypes.NewPacket(ibctesting.MockPacketData, sequence, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, defaultTimeoutHeight, disabledTimeoutTimestamp)
+			err = path.EndpointB.RecvPacket(packet)
+			suite.Require().NoError(err)
+
+			err = path.EndpointA.AcknowledgePacket(packet, ack.Acknowledgement())
+			suite.Require().NoError(err)
+		}, false},
+		{"packet already acknowledged unordered channel (no-op)", func() {
+
+			// setup uses an UNORDERED channel
+			suite.coordinator.Setup(path)
+
+			// create packet commitment
+			sequence, err := path.EndpointA.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, ibctesting.MockPacketData)
+			suite.Require().NoError(err)
+
+			// create packet receipt and acknowledgement
+			packet = channeltypes.NewPacket(ibctesting.MockPacketData, sequence, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, defaultTimeoutHeight, disabledTimeoutTimestamp)
+			err = path.EndpointB.RecvPacket(packet)
+			suite.Require().NoError(err)
+
+			err = path.EndpointA.AcknowledgePacket(packet, ack.Acknowledgement())
+			suite.Require().NoError(err)
+		}, false},
+		{"channel not found", func() {
+
+			// use wrong channel naming
+			suite.coordinator.Setup(path)
+			packet = channeltypes.NewPacket(ibctesting.MockPacketData, 1, ibctesting.InvalidID, ibctesting.InvalidID, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, defaultTimeoutHeight, disabledTimeoutTimestamp)
+		}, false},
+		{"channel not open", func() {
+
+			suite.coordinator.Setup(path)
+			packet = channeltypes.NewPacket(ibctesting.MockPacketData, 1, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, defaultTimeoutHeight, disabledTimeoutTimestamp)
+
+			err := path.EndpointA.SetChannelState(channeltypes.CLOSED)
+			suite.Require().NoError(err)
+		}, false},
+		{"packet destination port ≠ channel counterparty port", func() {
+			suite.coordinator.Setup(path)
+
+			// use wrong port for dest
+			packet = channeltypes.NewPacket(ibctesting.MockPacketData, 1, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, ibctesting.InvalidID, path.EndpointB.ChannelID, defaultTimeoutHeight, disabledTimeoutTimestamp)
+		}, false},
+		{"packet destination channel ID ≠ channel counterparty channel ID", func() {
+			suite.coordinator.Setup(path)
+
+			// use wrong channel for dest
+			packet = channeltypes.NewPacket(ibctesting.MockPacketData, 1, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, path.EndpointB.ChannelConfig.PortID, ibctesting.InvalidID, defaultTimeoutHeight, disabledTimeoutTimestamp)
+		}, false},
+		{"connection not found", func() {
+			suite.coordinator.Setup(path)
+
+			// pass channel check
+			suite.chainA.App.GetIBCKeeper().ChannelKeeper.SetChannel(
+				suite.chainA.GetContext(),
+				path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID,
+				channeltypes.NewChannel(channeltypes.OPEN, channeltypes.ORDERED, channeltypes.NewCounterparty(path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID), []string{"connection-1000"}, path.EndpointA.ChannelConfig.Version),
+			)
+			packet = channeltypes.NewPacket(ibctesting.MockPacketData, 1, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, defaultTimeoutHeight, disabledTimeoutTimestamp)
+			suite.chainA.CreateChannelCapability(suite.chainA.GetSimApp().ScopedIBCMockKeeper, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID)
+		}, false},
+		{"connection not OPEN", func() {
+			suite.coordinator.SetupClients(path)
+			// connection on chainA is in INIT
+			err := path.EndpointA.ConnOpenInit()
+			suite.Require().NoError(err)
+
+			// pass channel check
+			suite.chainA.App.GetIBCKeeper().ChannelKeeper.SetChannel(
+				suite.chainA.GetContext(),
+				path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID,
+				channeltypes.NewChannel(channeltypes.OPEN, channeltypes.ORDERED, channeltypes.NewCounterparty(path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID), []string{path.EndpointA.ConnectionID}, path.EndpointA.ChannelConfig.Version),
+			)
+			packet = channeltypes.NewPacket(ibctesting.MockPacketData, 1, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, defaultTimeoutHeight, disabledTimeoutTimestamp)
+			suite.chainA.CreateChannelCapability(suite.chainA.GetSimApp().ScopedIBCMockKeeper, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID)
+		}, false},
+		{"packet hasn't been sent", func() {
+
+			// packet commitment never written
+			suite.coordinator.Setup(path)
+			packet = channeltypes.NewPacket(ibctesting.MockPacketData, 1, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, defaultTimeoutHeight, disabledTimeoutTimestamp)
+		}, false},
+		{"packet ack verification failed", func() {
+			// skip error code check since error occurs in light-clients
+
+			// ack never written
+			suite.coordinator.Setup(path)
+
+			// create packet commitment
+			sequence, err := path.EndpointA.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, ibctesting.MockPacketData)
+			suite.Require().NoError(err)
+			packet = channeltypes.NewPacket(ibctesting.MockPacketData, sequence, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, defaultTimeoutHeight, disabledTimeoutTimestamp)
+		}, false},
+		{"packet commitment bytes do not match", func() {
+
+			// setup uses an UNORDERED channel
+			suite.coordinator.Setup(path)
+
+			// create packet commitment
+			sequence, err := path.EndpointA.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, ibctesting.MockPacketData)
+			suite.Require().NoError(err)
+
+			// create packet receipt and acknowledgement
+			packet = channeltypes.NewPacket(ibctesting.MockPacketData, sequence, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, defaultTimeoutHeight, disabledTimeoutTimestamp)
+			err = path.EndpointB.RecvPacket(packet)
+			suite.Require().NoError(err)
+
+			packet.Data = []byte("invalid packet commitment")
+		}, false},
+	}
+
+	for i, tc := range testCases {
+		tc := tc
+		suite.Run(fmt.Sprintf("Case %s, %d/%d tests", tc.msg, i, len(testCases)), func() {
+			suite.SetupTest() // reset
+			path = ibctesting.NewPath(suite.chainA, suite.chainB)
+
+			statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+			statedb.Finalise(true)
+			vmctx := vm.BlockContext{
+				CanTransfer: func(vm.StateDB, common.Address, *big.Int) bool { return true },
+				Transfer:    func(vm.StateDB, common.Address, common.Address, *big.Int) {},
+			}
+			vmenv := vm.NewEVM(vmctx, vm.TxContext{}, statedb, params.TestChainConfig, vm.Config{ExtraEips: []int{2200}})
+
+			tc.malleate()
+
+			packetKey := hosttypes.PacketAcknowledgementKey(packet.GetDestPort(), packet.GetDestChannel(), packet.GetSequence())
+			proof, proofHeight := path.EndpointB.QueryProof(packetKey)
+
+			var input []byte
+
+			packetByte, _ := marshaler.Marshal(&packet)
+			packetLen := make([]byte, 8)
+			binary.BigEndian.PutUint64(packetLen, uint64(len(packetByte)))
+
+			input = append(input, packetLen...)
+			input = append(input, packetByte...)
+
+			acknowledgementLen := make([]byte, 8)
+			binary.BigEndian.PutUint64(acknowledgementLen, uint64(len(ack.Acknowledgement())))
+
+			input = append(input, acknowledgementLen...)
+			input = append(input, ack.Acknowledgement()...)
+
+			proofAckedLen := make([]byte, 8)
+			binary.BigEndian.PutUint64(proofAckedLen, uint64(len(proof)))
+
+			input = append(input, proofAckedLen...)
+			input = append(input, proof...)
+
+			proofHeightByte, _ := marshaler.Marshal(&proofHeight)
+			proofHeightLen := make([]byte, 8)
+			binary.BigEndian.PutUint64(proofHeightLen, uint64(len(proofHeightByte)))
+
+			input = append(input, proofHeightLen...)
+			input = append(input, proofHeightByte...)
+
+			input = append(acknowledgementSignature, input...)
+			admin := allowlist.TestAdminAddr
+			enableds := allowlist.TestEnabledAddr
+
+			allowlist.SetAllowListRole(vmenv.StateDB, ContractAddress, admin, allowlist.AdminRole)
+
+			contract := createIbcGoPrecompile()
+
+			suppliedGas := uint64(10000000)
+
+			channel, _ := suite.chainA.App.GetIBCKeeper().ChannelKeeper.GetChannel(suite.chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID)
+			chanByte := marshaler.MustMarshal(&channel)
+			channelState := &channeltypes.Channel{}
+			marshaler.MustUnmarshal(chanByte, channelState)
+
+			chanPath := hosttypes.ChannelKey(packet.GetSourcePort(), packet.GetSourceChannel())
+
+
+			vmenv.GetStateDB().SetPrecompileState(common.BytesToAddress(chanPath), chanByte)
+
+
+			connection, _ := suite.chainA.App.GetIBCKeeper().ConnectionKeeper.GetConnection(suite.chainA.GetContext(), path.EndpointA.ConnectionID)
+			connectionByte := marshaler.MustMarshal(&connection)
+			connectionsPath := fmt.Sprintf("connections/%s", path.EndpointA.ConnectionID)
+			vmenv.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
+
+			cs, _ := suite.chainA.App.GetIBCKeeper().ClientKeeper.GetClientState(suite.chainA.GetContext(), path.EndpointA.ClientID)
+			cStore := suite.chainA.App.GetIBCKeeper().ClientKeeper.ClientStore(suite.chainA.GetContext(), path.EndpointA.ClientID)
+
+			if cs != nil {
+				clientState := cs.(*ibctm.ClientState)
+				bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
+				consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
+				clientStateByte := clienttypes.MustMarshalClientState(marshaler, cs)
+
+				clientStatePath := fmt.Sprintf("clients/%s/clientState", connection.GetClientID())
+				vmenv.StateDB.SetPrecompileState(
+					common.BytesToAddress([]byte(clientStatePath)),
+					clientStateByte,
+				)
+				consensusStateByte := clienttypes.MustMarshalConsensusState(marshaler, consensusState)
+				consensusStatePath := fmt.Sprintf("clients/%s/consensusStates/%s", connection.GetClientID(), clientState.GetLatestHeight())
+				vmenv.StateDB.SetPrecompileState(
+					common.BytesToAddress([]byte(consensusStatePath)),
+					consensusStateByte,
+				)
+			}
+
+			commitment := suite.chainA.App.GetIBCKeeper().ChannelKeeper.GetPacketCommitment(suite.chainA.GetContext(), packet.GetSourcePort(), packet.GetSourceChannel(), packet.GetSequence())
+			SetPacketCommitment(vmenv, packet.GetSourcePort(), packet.GetSourceChannel(), packet.GetSequence(), commitment)
+			SetNextSequenceAck(vmenv, packet.GetSourcePort(), packet.GetSourceChannel(), 1)
+
+			_, _, err := contract.Run(vmenv, admin, enableds, input, suppliedGas, false)
+
+			if tc.expPass {
+				suite.NoError(err)
+			} else {
+				suite.Error(err)
 			}
 		})
 	}

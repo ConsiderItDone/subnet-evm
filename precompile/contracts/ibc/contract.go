@@ -47,6 +47,8 @@ const (
 	channelCloseInitGas    = uint64(1)
 	channelCloseConfirmGas = uint64(1)
 	sendPacketGas          = uint64(1)
+	receivePacketGas       = uint64(1)
+	acknowledgementGas     = uint64(1)
 )
 
 // Singleton StatefulPrecompiledContract and signatures.
@@ -1715,6 +1717,7 @@ func createIbcGoPrecompile() contract.StatefulPrecompiledContract {
 		contract.NewStatefulPrecompileFunction(getChanCloseConfirmSignature, ChannelCloseConfirm),
 		contract.NewStatefulPrecompileFunction(sendPacketSignature, SendPacket),
 		contract.NewStatefulPrecompileFunction(receivePacketSignature, ReceivePacket),
+		contract.NewStatefulPrecompileFunction(acknowledgementSignature, Acknowledgement),
 	)
 
 	// Construct the contract with no fallback function.
@@ -1974,7 +1977,7 @@ func getConnection(
 	return connection, nil
 }
 
-func geConsensusState(
+func getConsensusState(
 	marshaler *codec.ProtoCodec,
 	consensusStatePath string,
 	accessibleState contract.AccessibleState,
@@ -2028,6 +2031,16 @@ func getChannelState(
 	channelState := &channeltypes.Channel{}
 	marshaler.MustUnmarshal(channelStateByte, channelState)
 	return channelState, nil
+}
+
+// GetPacketCommitment gets the packet commitment hash from the store
+func GetPacketCommitment(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64) ([]byte, error) {
+	getPacketCommitmentPath := hosttypes.PacketCommitmentKey(portID, channelID, sequence)
+	exist := accessibleState.GetStateDB().Exist(common.BytesToAddress([]byte(getPacketCommitmentPath)))
+	if !exist {
+		return nil, fmt.Errorf("cannot find packet commitment with path: %s", getPacketCommitmentPath)
+	}
+	return accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(getPacketCommitmentPath))), nil
 }
 
 func GenerateChannelIdentifier(accessibleState contract.AccessibleState) string {
@@ -2180,6 +2193,11 @@ func SetPacketCommitment(accessibleState contract.AccessibleState, portID, chann
 	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.PacketCommitmentKey(portID, channelID, sequence))), commitmentHash)
 }
 
+// DeletePacketCommitment delete the packet commitment hash frome the store
+func DeletePacketCommitment(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64) {
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.PacketCommitmentKey(portID, channelID, sequence))), []byte(""))
+}
+
 // GetNextSequenceRecv gets a channel's next receive sequence from the store
 func GetNextSequenceRecv(accessibleState contract.AccessibleState, portID, channelID string) (uint64, bool) {
 	bz := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(hosttypes.NextSequenceRecvKey(portID, channelID))))
@@ -2198,7 +2216,10 @@ func SetNextSequenceRecv(accessibleState contract.AccessibleState, portID, chann
 
 // GetNextSequenceAck gets a channel's next ack sequence from the store
 func GetNextSequenceAck(accessibleState contract.AccessibleState, portID, channelID string) (uint64, bool) {
-	bz := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(hosttypes.NextSequenceAckKey(portID, channelID))))
+	path := []byte(fmt.Sprintf("%s/%s/%s", portID, channelID, "nextSequenceAck"))
+	bz := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress(path))
+	// TODO
+	// bz := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(hosttypes.NextSequenceAckKey(portID, channelID))))
 	if len(bz) == 0 {
 		return 0, false
 	}
@@ -2209,5 +2230,10 @@ func GetNextSequenceAck(accessibleState contract.AccessibleState, portID, channe
 func SetNextSequenceAck(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64) {
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, sequence)
-	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.NextSequenceAckKey(portID, channelID))), b)
+
+	path := []byte(fmt.Sprintf("%s/%s/%s", portID, channelID, "nextSequenceAck"))
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress(path), b)
+	// TODO
+	// accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.NextSequenceAckKey(portID, channelID))), b)
+
 }
