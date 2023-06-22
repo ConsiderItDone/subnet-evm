@@ -2,7 +2,6 @@ package ibc
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math/big"
 	"time"
@@ -16,6 +15,7 @@ import (
 	cosmostypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/std"
 	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
+	solomachine "github.com/cosmos/ibc-go/v7/modules/light-clients/06-solomachine"
 	"github.com/ethereum/go-ethereum/common"
 
 	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
@@ -27,17 +27,33 @@ import (
 
 func (suite *KeeperTestSuite) TestCreateClient() {
 	cases := []struct {
-		msg            string
-		clientState    exported.ClientState
-		consensusState exported.ConsensusState
-		expPass        bool
-		nextClientSeq  uint64
+		msg           string
+		mfnc          func() ([]byte, []byte, exported.ClientState)
+		expPass       bool
+		nextClientSeq uint64
 	}{
 		{
 			"success: 07-tendermint client type supported",
-			ibctm.NewClientState(testChainID, ibctm.DefaultTrustLevel, trustingPeriod, ubdPeriod, maxClockDrift, testClientHeight, commitmenttypes.GetSDKSpecs(), ibctesting.UpgradePath),
-			suite.consensusState,
+			func() ([]byte, []byte, exported.ClientState) {
+				clientState := ibctm.NewClientState(testChainID, ibctm.DefaultTrustLevel, trustingPeriod, ubdPeriod, maxClockDrift, testClientHeight, commitmenttypes.GetSDKSpecs(), ibctesting.UpgradePath)
+				consensusState := suite.consensusState
+				clientStateByte, _ := clientState.Marshal()
+				consensusStateByte, _ := consensusState.Marshal()
+				return clientStateByte, consensusStateByte, clientState
+			},
 			true,
+			3454,
+		},
+		{
+			"failed: 06-solomachine client type not supported",
+			func() ([]byte, []byte, exported.ClientState) {
+				clientState := solomachine.NewClientState(0, &solomachine.ConsensusState{PublicKey: suite.solomachine.ConsensusState().PublicKey, Diversifier: suite.solomachine.Diversifier, Timestamp: suite.solomachine.Time})
+				consensusState := &solomachine.ConsensusState{PublicKey: suite.solomachine.ConsensusState().PublicKey, Diversifier: suite.solomachine.Diversifier, Timestamp: suite.solomachine.Time}
+				clientStateByte, _ := clientState.Marshal()
+				consensusStateByte, _ := consensusState.Marshal()
+				return clientStateByte, consensusStateByte, clientState
+			},
+			false,
 			3454,
 		},
 	}
@@ -53,14 +69,7 @@ func (suite *KeeperTestSuite) TestCreateClient() {
 	for _, tc := range cases {
 		var input []byte
 
-		// clientStateLen     - clientState
-		clientState, ok := tc.clientState.(*ibctm.ClientState)
-		if !ok {
-			suite.Require().NoError(errors.New("convert to proto.Message failer"))
-		}
-		clientStateByte, err := clientState.Marshal()
-
-		suite.Require().NoError(err)
+		clientStateByte, consensusStateByte, clientState := tc.mfnc()
 
 		b := make([]byte, 8)
 		binary.BigEndian.PutUint64(b, tc.nextClientSeq)
@@ -74,14 +83,6 @@ func (suite *KeeperTestSuite) TestCreateClient() {
 		input = append(input, clientStateByte...)
 
 		// consensusStateLen  - consensusState
-
-		consensusState, ok := tc.consensusState.(*ibctm.ConsensusState)
-		if !ok {
-			suite.Require().NoError(errors.New("convert to proto.Message failer"))
-		}
-		consensusStateByte, err := consensusState.Marshal()
-		suite.Require().NoError(err)
-
 		// 8 byte             - consensusStateLen
 		consensusStateLen := make([]byte, 8)
 		binary.BigEndian.PutUint64(consensusStateLen, uint64(len(consensusStateByte)))
@@ -100,13 +101,17 @@ func (suite *KeeperTestSuite) TestCreateClient() {
 		suppliedGas := uint64(10000000)
 		output, _, err := contract.Run(vmenv, admin, enableds, input, suppliedGas, false)
 
-		suite.Require().NoError(err)
+		if tc.expPass {
+			suite.Require().NoError(err)
+			b = vmenv.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte("nextClientSeq")))
+			nextClientSeq := binary.BigEndian.Uint64(b)
+			suite.Equal(tc.nextClientSeq+1, nextClientSeq, "clientID bad formatting")
 
-		b = vmenv.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte("nextClientSeq")))
-		nextClientSeq := binary.BigEndian.Uint64(b)
-		suite.Equal(tc.nextClientSeq+1, nextClientSeq, "clientID bad formatting")
+			suite.Equal(fmt.Sprintf("%s-%d", clientState.ClientType(), tc.nextClientSeq), string(output), "clientID bad formatting")
+		} else {
+			suite.Require().Error(err)
+		}
 
-		suite.Equal(fmt.Sprintf("%s-%d", tc.clientState.ClientType(), tc.nextClientSeq), string(output), "clientID bad formatting")
 	}
 }
 
