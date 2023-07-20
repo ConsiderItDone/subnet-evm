@@ -1,0 +1,31 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "clientType",
+        "type": "string"
+      },
+      {
+        "internalType": "bytes",
+        "name": "clientState",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "consensusState",
+        "type": "bytes"
+      }
+    ],
+    "name": "createClient",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "clientID",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]

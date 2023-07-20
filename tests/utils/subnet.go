@@ -16,11 +16,12 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	wallet "github.com/ava-labs/avalanchego/wallet/subnet/primary"
-	"github.com/ava-labs/subnet-evm/core"
-	"github.com/ava-labs/subnet-evm/plugin/evm"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/onsi/gomega"
+
+	"github.com/ava-labs/subnet-evm/core"
+	"github.com/ava-labs/subnet-evm/plugin/evm"
 )
 
 // RunTestCMD runs a given test command with the given rpcURI
