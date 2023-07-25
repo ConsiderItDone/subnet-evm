@@ -5,19 +5,31 @@
 package ibc
 
 import (
-	_ "embed"
 	"errors"
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-
 	"github.com/ava-labs/subnet-evm/accounts/abi"
 	"github.com/ava-labs/subnet-evm/precompile/contract"
+	"github.com/ava-labs/subnet-evm/vmerrs"
+
+	_ "embed"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 const (
-	CreateClientGasCost uint64 = 1
+	// Gas costs for each function. These are set to 1 by default.
+	// You should set a gas cost for each function in your contract.
+	// Generally, you should not set gas costs very low as this may cause your network to be vulnerable to DoS attacks.
+	// There are some predefined gas costs in contract/utils.go that you can use.
+	ConnOpenAckGasCost     uint64 = 1 /* SET A GAS COST HERE */
+	ConnOpenConfirmGasCost uint64 = 1 /* SET A GAS COST HERE */
+	ConnOpenInitGasCost    uint64 = 1 /* SET A GAS COST HERE */
+	ConnOpenTryGasCost     uint64 = 1 /* SET A GAS COST HERE */
+	CreateClientGasCost    uint64 = 1 /* SET A GAS COST HERE */
+	UpdateClientGasCost    uint64 = 1 /* SET A GAS COST HERE */
+	UpgradeClientGasCost   uint64 = 1 /* SET A GAS COST HERE */
 )
 
 // CUSTOM CODE STARTS HERE
@@ -31,29 +43,453 @@ var (
 // Singleton StatefulPrecompiledContract and signatures.
 var (
 
-	// IBCRawABI contains the raw ABI of IBC contract.
+	// ContractRawABI contains the raw ABI of Contract contract.
 	//go:embed contract.abi
-	IBCRawABI string
+	ContractRawABI string
 
-	IBCABI        = contract.ParseABI(IBCRawABI)
-	IBCPrecompile = createIBCPrecompile()
+	ContractABI = contract.ParseABI(ContractRawABI)
 
-	nextClientSeqStorageKey = common.Hash{'n', 'c', 's', 'e', 'q', 's', 'k'}
-	clientStateStorageKey   = common.Hash{'c', 's', 't', 's', 'k'}
-
-	ErrWrongClientType = errors.New("wrong client type. Only Tendermint supported")
+	ContractPrecompile = createContractPrecompile()
 )
 
-// createIBCPrecompile returns a StatefulPrecompiledContract with getters and setters for the precompile.
-func createIBCPrecompile() contract.StatefulPrecompiledContract {
+type ConnOpenAckInput struct {
+	ConnectionID             string
+	ClientState              []byte
+	Version                  []byte
+	CounterpartyConnectionID []byte
+	ProofTry                 []byte
+	ProofClient              []byte
+	ProofConsensus           []byte
+	ProofHeight              []byte
+	ConsensusHeight          []byte
+}
+
+type ConnOpenConfirmInput struct {
+	ConnectionID string
+	ProofAck     []byte
+	ProofHeight  []byte
+}
+
+type ConnOpenInitInput struct {
+	ClientID     string
+	Counterparty []byte
+	Version      []byte
+	DelayPeriod  uint32
+}
+
+type ConnOpenTryInput struct {
+	Counterparty         []byte
+	DelayPeriod          uint32
+	ClientID             string
+	ClientState          []byte
+	CounterpartyVersions []byte
+	ProofInit            []byte
+	ProofClient          []byte
+	ProofConsensus       []byte
+	ProofHeight          []byte
+	ConsensusHeight      []byte
+}
+
+type CreateClientInput struct {
+	ClientType     string
+	ClientState    []byte
+	ConsensusState []byte
+}
+
+type UpdateClientInput struct {
+	ClientID      string
+	ClientMessage []byte
+}
+
+type UpgradeClientInput struct {
+	ClientID              string
+	UpgradePath           []byte
+	UpgradedClien         []byte
+	UpgradedConsState     []byte
+	ProofUpgradeClient    []byte
+	ProofUpgradeConsState []byte
+}
+
+// UnpackConnOpenAckInput attempts to unpack [input] as ConnOpenAckInput
+// assumes that [input] does not include selector (omits first 4 func signature bytes)
+func UnpackConnOpenAckInput(input []byte) (ConnOpenAckInput, error) {
+	inputStruct := ConnOpenAckInput{}
+	err := ContractABI.UnpackInputIntoInterface(&inputStruct, "connOpenAck", input)
+
+	return inputStruct, err
+}
+
+// PackConnOpenAck packs [inputStruct] of type ConnOpenAckInput into the appropriate arguments for connOpenAck.
+func PackConnOpenAck(inputStruct ConnOpenAckInput) ([]byte, error) {
+	return ContractABI.Pack("connOpenAck", inputStruct.ConnectionID, inputStruct.ClientState, inputStruct.Version, inputStruct.CounterpartyConnectionID, inputStruct.ProofTry, inputStruct.ProofClient, inputStruct.ProofConsensus, inputStruct.ProofHeight, inputStruct.ConsensusHeight)
+}
+
+func connOpenAck(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+	if remainingGas, err = contract.DeductGas(suppliedGas, ConnOpenAckGasCost); err != nil {
+		return nil, 0, err
+	}
+	if readOnly {
+		return nil, remainingGas, vmerrs.ErrWriteProtection
+	}
+	// attempts to unpack [input] into the arguments to the ConnOpenAckInput.
+	// Assumes that [input] does not include selector
+	// You can use unpacked [inputStruct] variable in your code
+	inputStruct, err := UnpackConnOpenAckInput(input)
+	if err != nil {
+		return nil, remainingGas, err
+	}
+
+	// CUSTOM CODE STARTS HERE
+	if err := _connOpenAck(&callOpts[ConnOpenAckInput]{
+		accessibleState: accessibleState,
+		caller:          caller,
+		addr:            addr,
+		suppliedGas:     suppliedGas,
+		readOnly:        readOnly,
+		args:            inputStruct,
+	}); err != nil {
+		return nil, remainingGas, err
+	}
+
+	// this function does not return an output, leave this one as is
+	packedOutput := []byte{}
+
+	// Return the packed output and the remaining gas
+	return packedOutput, remainingGas, nil
+}
+
+// UnpackConnOpenConfirmInput attempts to unpack [input] as ConnOpenConfirmInput
+// assumes that [input] does not include selector (omits first 4 func signature bytes)
+func UnpackConnOpenConfirmInput(input []byte) (ConnOpenConfirmInput, error) {
+	inputStruct := ConnOpenConfirmInput{}
+	err := ContractABI.UnpackInputIntoInterface(&inputStruct, "connOpenConfirm", input)
+
+	return inputStruct, err
+}
+
+// PackConnOpenConfirm packs [inputStruct] of type ConnOpenConfirmInput into the appropriate arguments for connOpenConfirm.
+func PackConnOpenConfirm(inputStruct ConnOpenConfirmInput) ([]byte, error) {
+	return ContractABI.Pack("connOpenConfirm", inputStruct.ConnectionID, inputStruct.ProofAck, inputStruct.ProofHeight)
+}
+
+func connOpenConfirm(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+	if remainingGas, err = contract.DeductGas(suppliedGas, ConnOpenConfirmGasCost); err != nil {
+		return nil, 0, err
+	}
+	if readOnly {
+		return nil, remainingGas, vmerrs.ErrWriteProtection
+	}
+	// attempts to unpack [input] into the arguments to the ConnOpenConfirmInput.
+	// Assumes that [input] does not include selector
+	// You can use unpacked [inputStruct] variable in your code
+	inputStruct, err := UnpackConnOpenConfirmInput(input)
+	if err != nil {
+		return nil, remainingGas, err
+	}
+
+	// CUSTOM CODE STARTS HERE
+	if err := _connOpenConfirm(&callOpts[ConnOpenConfirmInput]{
+		accessibleState: accessibleState,
+		caller:          caller,
+		addr:            addr,
+		suppliedGas:     suppliedGas,
+		readOnly:        readOnly,
+		args:            inputStruct,
+	}); err != nil {
+		return nil, remainingGas, err
+	}
+
+	// this function does not return an output, leave this one as is
+	packedOutput := []byte{}
+
+	// Return the packed output and the remaining gas
+	return packedOutput, remainingGas, nil
+}
+
+// UnpackConnOpenInitInput attempts to unpack [input] as ConnOpenInitInput
+// assumes that [input] does not include selector (omits first 4 func signature bytes)
+func UnpackConnOpenInitInput(input []byte) (ConnOpenInitInput, error) {
+	inputStruct := ConnOpenInitInput{}
+	err := ContractABI.UnpackInputIntoInterface(&inputStruct, "connOpenInit", input)
+
+	return inputStruct, err
+}
+
+// PackConnOpenInit packs [inputStruct] of type ConnOpenInitInput into the appropriate arguments for connOpenInit.
+func PackConnOpenInit(inputStruct ConnOpenInitInput) ([]byte, error) {
+	return ContractABI.Pack("connOpenInit", inputStruct.ClientID, inputStruct.Counterparty, inputStruct.Version, inputStruct.DelayPeriod)
+}
+
+// PackConnOpenInitOutput attempts to pack given connectionID of type string
+// to conform the ABI outputs.
+func PackConnOpenInitOutput(connectionID string) ([]byte, error) {
+	return ContractABI.PackOutput("connOpenInit", connectionID)
+}
+
+func connOpenInit(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+	if remainingGas, err = contract.DeductGas(suppliedGas, ConnOpenInitGasCost); err != nil {
+		return nil, 0, err
+	}
+	if readOnly {
+		return nil, remainingGas, vmerrs.ErrWriteProtection
+	}
+	// attempts to unpack [input] into the arguments to the ConnOpenInitInput.
+	// Assumes that [input] does not include selector
+	// You can use unpacked [inputStruct] variable in your code
+	inputStruct, err := UnpackConnOpenInitInput(input)
+	if err != nil {
+		return nil, remainingGas, err
+	}
+
+	// CUSTOM CODE STARTS HERE
+	connectionID, err := _connOpenInit(&callOpts[ConnOpenInitInput]{
+		accessibleState: accessibleState,
+		caller:          caller,
+		addr:            addr,
+		suppliedGas:     suppliedGas,
+		readOnly:        readOnly,
+		args:            inputStruct,
+	})
+	if err != nil {
+		return nil, remainingGas, err
+	}
+
+	packedOutput, err := PackConnOpenInitOutput(connectionID)
+	if err != nil {
+		return nil, remainingGas, err
+	}
+
+	// Return the packed output and the remaining gas
+	return packedOutput, remainingGas, nil
+}
+
+// UnpackConnOpenTryInput attempts to unpack [input] as ConnOpenTryInput
+// assumes that [input] does not include selector (omits first 4 func signature bytes)
+func UnpackConnOpenTryInput(input []byte) (ConnOpenTryInput, error) {
+	inputStruct := ConnOpenTryInput{}
+	err := ContractABI.UnpackInputIntoInterface(&inputStruct, "connOpenTry", input)
+
+	return inputStruct, err
+}
+
+// PackConnOpenTry packs [inputStruct] of type ConnOpenTryInput into the appropriate arguments for connOpenTry.
+func PackConnOpenTry(inputStruct ConnOpenTryInput) ([]byte, error) {
+	return ContractABI.Pack("connOpenTry", inputStruct.Counterparty, inputStruct.DelayPeriod, inputStruct.ClientID, inputStruct.ClientState, inputStruct.CounterpartyVersions, inputStruct.ProofInit, inputStruct.ProofClient, inputStruct.ProofConsensus, inputStruct.ProofHeight, inputStruct.ConsensusHeight)
+}
+
+// PackConnOpenTryOutput attempts to pack given connectionID of type string
+// to conform the ABI outputs.
+func PackConnOpenTryOutput(connectionID string) ([]byte, error) {
+	return ContractABI.PackOutput("connOpenTry", connectionID)
+}
+
+func connOpenTry(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+	if remainingGas, err = contract.DeductGas(suppliedGas, ConnOpenTryGasCost); err != nil {
+		return nil, 0, err
+	}
+	if readOnly {
+		return nil, remainingGas, vmerrs.ErrWriteProtection
+	}
+	// attempts to unpack [input] into the arguments to the ConnOpenTryInput.
+	// Assumes that [input] does not include selector
+	// You can use unpacked [inputStruct] variable in your code
+	inputStruct, err := UnpackConnOpenTryInput(input)
+	if err != nil {
+		return nil, remainingGas, err
+	}
+
+	// CUSTOM CODE STARTS HERE
+	connectionID, err := _connOpenTry(&callOpts[ConnOpenTryInput]{
+		accessibleState: accessibleState,
+		caller:          caller,
+		addr:            addr,
+		suppliedGas:     suppliedGas,
+		readOnly:        readOnly,
+		args:            inputStruct,
+	})
+	if err != nil {
+		return nil, remainingGas, err
+	}
+
+	packedOutput, err := PackConnOpenTryOutput(connectionID)
+	if err != nil {
+		return nil, remainingGas, err
+	}
+
+	// Return the packed output and the remaining gas
+	return packedOutput, remainingGas, nil
+}
+
+// UnpackCreateClientInput attempts to unpack [input] as CreateClientInput
+// assumes that [input] does not include selector (omits first 4 func signature bytes)
+func UnpackCreateClientInput(input []byte) (CreateClientInput, error) {
+	inputStruct := CreateClientInput{}
+	err := ContractABI.UnpackInputIntoInterface(&inputStruct, "createClient", input)
+
+	return inputStruct, err
+}
+
+// PackCreateClient packs [inputStruct] of type CreateClientInput into the appropriate arguments for createClient.
+func PackCreateClient(inputStruct CreateClientInput) ([]byte, error) {
+	return ContractABI.Pack("createClient", inputStruct.ClientType, inputStruct.ClientState, inputStruct.ConsensusState)
+}
+
+// PackCreateClientOutput attempts to pack given clientID of type string
+// to conform the ABI outputs.
+func PackCreateClientOutput(clientID string) ([]byte, error) {
+	return ContractABI.PackOutput("createClient", clientID)
+}
+
+func createClient(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+	if remainingGas, err = contract.DeductGas(suppliedGas, CreateClientGasCost); err != nil {
+		return nil, 0, err
+	}
+	if readOnly {
+		return nil, remainingGas, vmerrs.ErrWriteProtection
+	}
+	// attempts to unpack [input] into the arguments to the CreateClientInput.
+	// Assumes that [input] does not include selector
+	// You can use unpacked [inputStruct] variable in your code
+	inputStruct, err := UnpackCreateClientInput(input)
+	if err != nil {
+		return nil, remainingGas, err
+	}
+
+	// CUSTOM CODE STARTS HERE
+	clientID, err := _createClient(&callOpts[CreateClientInput]{
+		accessibleState: accessibleState,
+		caller:          caller,
+		addr:            addr,
+		suppliedGas:     suppliedGas,
+		readOnly:        readOnly,
+		args:            inputStruct,
+	})
+	if err != nil {
+		return nil, remainingGas, err
+	}
+
+	packedOutput, err := PackCreateClientOutput(clientID)
+	if err != nil {
+		return nil, remainingGas, err
+	}
+
+	// Return the packed output and the remaining gas
+	return packedOutput, remainingGas, nil
+}
+
+// UnpackUpdateClientInput attempts to unpack [input] as UpdateClientInput
+// assumes that [input] does not include selector (omits first 4 func signature bytes)
+func UnpackUpdateClientInput(input []byte) (UpdateClientInput, error) {
+	inputStruct := UpdateClientInput{}
+	err := ContractABI.UnpackInputIntoInterface(&inputStruct, "updateClient", input)
+
+	return inputStruct, err
+}
+
+// PackUpdateClient packs [inputStruct] of type UpdateClientInput into the appropriate arguments for updateClient.
+func PackUpdateClient(inputStruct UpdateClientInput) ([]byte, error) {
+	return ContractABI.Pack("updateClient", inputStruct.ClientID, inputStruct.ClientMessage)
+}
+
+func updateClient(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+	if remainingGas, err = contract.DeductGas(suppliedGas, UpdateClientGasCost); err != nil {
+		return nil, 0, err
+	}
+	if readOnly {
+		return nil, remainingGas, vmerrs.ErrWriteProtection
+	}
+	// attempts to unpack [input] into the arguments to the UpdateClientInput.
+	// Assumes that [input] does not include selector
+	// You can use unpacked [inputStruct] variable in your code
+	inputStruct, err := UnpackUpdateClientInput(input)
+	if err != nil {
+		return nil, remainingGas, err
+	}
+
+	// CUSTOM CODE STARTS HERE
+	if err := _updateClient(&callOpts[UpdateClientInput]{
+		accessibleState: accessibleState,
+		caller:          caller,
+		addr:            addr,
+		suppliedGas:     suppliedGas,
+		readOnly:        readOnly,
+		args:            inputStruct,
+	}); err != nil {
+		return nil, remainingGas, err
+	}
+
+	// this function does not return an output, leave this one as is
+	packedOutput := []byte{}
+
+	// Return the packed output and the remaining gas
+	return packedOutput, remainingGas, nil
+}
+
+// UnpackUpgradeClientInput attempts to unpack [input] as UpgradeClientInput
+// assumes that [input] does not include selector (omits first 4 func signature bytes)
+func UnpackUpgradeClientInput(input []byte) (UpgradeClientInput, error) {
+	inputStruct := UpgradeClientInput{}
+	err := ContractABI.UnpackInputIntoInterface(&inputStruct, "upgradeClient", input)
+
+	return inputStruct, err
+}
+
+// PackUpgradeClient packs [inputStruct] of type UpgradeClientInput into the appropriate arguments for upgradeClient.
+func PackUpgradeClient(inputStruct UpgradeClientInput) ([]byte, error) {
+	return ContractABI.Pack("upgradeClient", inputStruct.ClientID, inputStruct.UpgradePath, inputStruct.UpgradedClien, inputStruct.UpgradedConsState, inputStruct.ProofUpgradeClient, inputStruct.ProofUpgradeConsState)
+}
+
+func upgradeClient(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+	if remainingGas, err = contract.DeductGas(suppliedGas, UpgradeClientGasCost); err != nil {
+		return nil, 0, err
+	}
+	if readOnly {
+		return nil, remainingGas, vmerrs.ErrWriteProtection
+	}
+	// attempts to unpack [input] into the arguments to the UpgradeClientInput.
+	// Assumes that [input] does not include selector
+	// You can use unpacked [inputStruct] variable in your code
+	inputStruct, err := UnpackUpgradeClientInput(input)
+	if err != nil {
+		return nil, remainingGas, err
+	}
+
+	// CUSTOM CODE STARTS HERE
+	if err := _upgradeClient(&callOpts[UpgradeClientInput]{
+		accessibleState: accessibleState,
+		caller:          caller,
+		addr:            addr,
+		suppliedGas:     suppliedGas,
+		readOnly:        readOnly,
+		args:            inputStruct,
+	}); err != nil {
+		return nil, remainingGas, err
+	}
+
+	// this function does not return an output, leave this one as is
+	packedOutput := []byte{}
+
+	// Return the packed output and the remaining gas
+	return packedOutput, remainingGas, nil
+}
+
+// createContractPrecompile returns a StatefulPrecompiledContract with getters and setters for the precompile.
+
+func createContractPrecompile() contract.StatefulPrecompiledContract {
 	var functions []*contract.StatefulPrecompileFunction
 
 	abiFunctionMap := map[string]contract.RunStatefulPrecompileFunc{
-		"createClient": createClient,
+		"connOpenAck":     connOpenAck,
+		"connOpenConfirm": connOpenConfirm,
+		"connOpenInit":    connOpenInit,
+		"connOpenTry":     connOpenTry,
+		"createClient":    createClient,
+		"updateClient":    updateClient,
+		"upgradeClient":   upgradeClient,
 	}
 
 	for name, function := range abiFunctionMap {
-		method, ok := IBCABI.Methods[name]
+		method, ok := ContractABI.Methods[name]
 		if !ok {
 			panic(fmt.Errorf("given method (%s) does not exist in the ABI", name))
 		}

@@ -13,7 +13,7 @@ import (
 var _ precompileconfig.Config = &Config{}
 
 // Config implements the precompileconfig.Config interface and
-// adds specific configuration for IBC.
+// adds specific configuration for Contract.
 type Config struct {
 	precompileconfig.Upgrade
 	// CUSTOM CODE STARTS HERE
@@ -21,7 +21,7 @@ type Config struct {
 }
 
 // NewConfig returns a config for a network upgrade at [blockTimestamp] that enables
-// IBC.
+// Contract.
 func NewConfig(blockTimestamp *big.Int) *Config {
 	return &Config{
 		Upgrade: precompileconfig.Upgrade{BlockTimestamp: blockTimestamp},
@@ -29,7 +29,7 @@ func NewConfig(blockTimestamp *big.Int) *Config {
 }
 
 // NewDisableConfig returns config for a network upgrade at [blockTimestamp]
-// that disables IBC.
+// that disables Contract.
 func NewDisableConfig(blockTimestamp *big.Int) *Config {
 	return &Config{
 		Upgrade: precompileconfig.Upgrade{
@@ -39,7 +39,7 @@ func NewDisableConfig(blockTimestamp *big.Int) *Config {
 	}
 }
 
-// Key returns the key for the IBC precompileconfig.
+// Key returns the key for the Contract precompileconfig.
 // This should be the same key as used in the precompile module.
 func (*Config) Key() string { return ConfigKey }
 
