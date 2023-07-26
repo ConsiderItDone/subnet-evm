@@ -26,7 +26,7 @@ var ContractAddress = common.HexToAddress("0x03000000000000000000000000000000000
 var Module = modules.Module{
 	ConfigKey:    ConfigKey,
 	Address:      ContractAddress,
-	Contract:     ContractPrecompile,
+	Contract:     IBCPrecompile,
 	Configurator: &configurator{},
 }
 

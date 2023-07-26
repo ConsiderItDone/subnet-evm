@@ -7,11 +7,12 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ava-labs/subnet-evm/precompile/allowlist"
-	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/std"
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/ava-labs/subnet-evm/precompile/allowlist"
+	"github.com/ava-labs/subnet-evm/precompile/contract"
 
 	cosmostypes "github.com/cosmos/cosmos-sdk/codec/types"
 	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
@@ -25,8 +26,6 @@ import (
 
 var (
 	keyClientSeq = common.BytesToHash([]byte("client-seq"))
-
-	ErrWrongClientType = errors.New("wrong client type")
 )
 
 type callOpts[T any] struct {
