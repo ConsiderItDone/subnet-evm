@@ -35,8 +35,9 @@ var (
 	//go:embed contract.abi
 	IBCRawABI string
 
-	IBCABI        = contract.ParseABI(IBCRawABI)
-	IBCPrecompile = createIBCPrecompile()
+	IBCABI                    = contract.ParseABI(IBCRawABI)
+	IBCPrecompile             = createIBCPrecompile()
+	GeneratedClientIdentifier = IBCABI.Events["ClientCreated"]
 
 	nextClientSeqStorageKey = common.Hash{'n', 'c', 's', 'e', 'q', 's', 'k'}
 	clientStateStorageKey   = common.Hash{'c', 's', 't', 's', 'k'}

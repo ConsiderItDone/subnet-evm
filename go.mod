@@ -5,6 +5,7 @@ go 1.19
 require (
 	github.com/VictoriaMetrics/fastcache v1.10.0
 	github.com/ava-labs/avalanchego v1.10.1
+	github.com/avast/retry-go v3.0.0+incompatible
 	github.com/cespare/cp v0.1.0
 	github.com/cometbft/cometbft v0.37.1
 	github.com/cosmos/cosmos-sdk v0.47.2

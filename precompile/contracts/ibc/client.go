@@ -8,7 +8,6 @@ import (
 	ibctm "github.com/cosmos/ibc-go/v7/modules/light-clients/07-tendermint"
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/ava-labs/subnet-evm/core/state"
 	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/ava-labs/subnet-evm/vmerrs"
 )
@@ -66,7 +65,7 @@ func generateClientIdentifier(db contract.StateDB, clientType string) (string, e
 	return clientId, nil
 }
 
-func storeClientState(db state.StateDB, clientState *ibctm.ClientState) error {
+func storeClientState(db contract.StateDB, clientState *ibctm.ClientState) error {
 	bz, err := clientState.Marshal()
 	if err != nil {
 		return err
@@ -107,6 +106,16 @@ func createClient(accessibleState contract.AccessibleState, caller common.Addres
 	if err != nil {
 		return nil, remainingGas, err
 	}
+
+	// emit event
+	topics := make([]common.Hash, 1)
+	topics[0] = GeneratedClientIdentifier.ID
+	data, err := GeneratedClientIdentifier.Inputs.Pack(clientId)
+	if err != nil {
+		return nil, remainingGas, ErrWrongClientType
+	}
+	blockNumber := accessibleState.GetBlockContext().Number().Uint64()
+	accessibleState.GetStateDB().AddLog(ContractAddress, topics, data, blockNumber)
 
 	//clientState := &ibctm.ClientState{}
 	//err = clientState.Unmarshal(inputStruct.ClientState)
