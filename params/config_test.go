@@ -32,11 +32,13 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/subnet-evm/precompile/contracts/ibc"
 	"github.com/ava-labs/subnet-evm/precompile/contracts/nativeminter"
 	"github.com/ava-labs/subnet-evm/precompile/contracts/rewardmanager"
 	"github.com/ava-labs/subnet-evm/precompile/contracts/txallowlist"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/stretchr/testify/require"
 )
 
 func TestCheckCompatible(t *testing.T) {
@@ -161,6 +163,9 @@ func TestConfigUnmarshalJSON(t *testing.T) {
 		nil,
 		nil,
 	)
+	testIbcConfig := ibc.NewConfig(
+		big.NewInt(0),
+	)
 
 	config := []byte(`
 	{
@@ -180,6 +185,9 @@ func TestConfigUnmarshalJSON(t *testing.T) {
 			"adminAddresses": [
 				"0x8db97C7cEcE249c2b98bDC0226Cc4C2A57BF52FC"
 			]
+		},
+		"ibcConfig": {
+			"blockTimestamp": 0
 		}
 	}
 	`)
@@ -199,6 +207,10 @@ func TestConfigUnmarshalJSON(t *testing.T) {
 	require.Equal(nativeMinterConfig.Key(), nativeminter.ConfigKey)
 	require.True(nativeMinterConfig.Equal(testContractNativeMinterConfig))
 
+	ibcConfig := c.GenesisPrecompiles[ibc.ConfigKey]
+	require.Equal(ibcConfig.Key(), ibc.ConfigKey)
+	require.True(ibcConfig.Equal(testIbcConfig))
+
 	// Marshal and unmarshal again and check that the result is the same
 	marshaled, err := json.Marshal(c)
 	require.NoError(err)
@@ -216,6 +228,9 @@ func TestActivePrecompiles(t *testing.T) {
 					nativeminter.NewConfig(common.Big0, nil, nil, nil), // enable at genesis
 				},
 				{
+					ibc.NewConfig(common.Big0), // enable at genesis
+				},
+				{
 					nativeminter.NewDisableConfig(common.Big1), // disable at timestamp 1
 				},
 			},
@@ -224,6 +239,7 @@ func TestActivePrecompiles(t *testing.T) {
 
 	rules0 := config.AvalancheRules(common.Big0, common.Big0)
 	require.True(t, rules0.IsPrecompileEnabled(nativeminter.Module.Address))
+	require.True(t, rules0.IsPrecompileEnabled(ibc.Module.Address))
 
 	rules1 := config.AvalancheRules(common.Big0, common.Big1)
 	require.False(t, rules1.IsPrecompileEnabled(nativeminter.Module.Address))

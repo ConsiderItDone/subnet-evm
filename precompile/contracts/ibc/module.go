@@ -20,7 +20,7 @@ var _ contract.Configurator = &configurator{}
 // must be unique across all precompiles.
 const ConfigKey = "ibcConfig"
 
-var ContractAddress = common.HexToAddress("0x0300000000000000000000000000000000000001")
+var ContractAddress = common.HexToAddress("0x0300000000000000000000000000000000000002")
 
 // Module is the precompile module. It is used to register the precompile contract.
 var Module = modules.Module{

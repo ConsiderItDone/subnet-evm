@@ -1,5 +1,18 @@
 [
   {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "clientId",
+        "type": "string"
+      }
+    ],
+    "name": "ClientCreated",
+    "type": "event"
+  },
+  {
     "inputs": [
       {
         "internalType": "string",

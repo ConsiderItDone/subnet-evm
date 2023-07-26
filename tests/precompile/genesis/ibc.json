@@ -22,6 +22,9 @@
       "targetBlockRate": 1,
       "blockGasCostStep": 500000
     },
+    "ibcConfig": {
+      "blockTimestamp": 0
+    },
     "rewardManagerConfig": {
       "blockTimestamp": 0,
       "adminAddresses": [

@@ -5,31 +5,28 @@
 package ibc
 
 import (
+	_ "embed"
 	"errors"
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/ava-labs/subnet-evm/accounts/abi"
 	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/ava-labs/subnet-evm/vmerrs"
-
-	_ "embed"
-
-	"github.com/ethereum/go-ethereum/common"
 )
 
 const (
-	// Gas costs for each function. These are set to 1 by default.
-	// You should set a gas cost for each function in your contract.
-	// Generally, you should not set gas costs very low as this may cause your network to be vulnerable to DoS attacks.
-	// There are some predefined gas costs in contract/utils.go that you can use.
-	ConnOpenAckGasCost     uint64 = 1 /* SET A GAS COST HERE */
-	ConnOpenConfirmGasCost uint64 = 1 /* SET A GAS COST HERE */
-	ConnOpenInitGasCost    uint64 = 1 /* SET A GAS COST HERE */
-	ConnOpenTryGasCost     uint64 = 1 /* SET A GAS COST HERE */
-	CreateClientGasCost    uint64 = 1 /* SET A GAS COST HERE */
-	UpdateClientGasCost    uint64 = 1 /* SET A GAS COST HERE */
-	UpgradeClientGasCost   uint64 = 1 /* SET A GAS COST HERE */
+	CreateClientGasCost uint64 = 1
+	UpdateClientGasCost    uint64 = 1
+	UpgradeClientGasCost   uint64 = 1
+
+	ConnOpenAckGasCost     uint64 = 1
+	ConnOpenConfirmGasCost uint64 = 1
+	ConnOpenInitGasCost    uint64 = 1
+	ConnOpenTryGasCost     uint64 = 1
+
 )
 
 // CUSTOM CODE STARTS HERE
@@ -43,14 +40,20 @@ var (
 // Singleton StatefulPrecompiledContract and signatures.
 var (
 
-	// ContractRawABI contains the raw ABI of Contract contract.
+	// IBCRawABI contains the raw ABI of IBC contract.
 	//go:embed contract.abi
-	ContractRawABI string
+	IBCRawABI string
 
-	ContractABI = contract.ParseABI(ContractRawABI)
+	IBCABI                    = contract.ParseABI(IBCRawABI)
+	IBCPrecompile             = createIBCPrecompile()
+	GeneratedClientIdentifier = IBCABI.Events["ClientCreated"]
 
-	ContractPrecompile = createContractPrecompile()
+	nextClientSeqStorageKey = common.Hash{'n', 'c', 's', 'e', 'q', 's', 'k'}
+	clientStateStorageKey   = common.Hash{'c', 's', 't', 's', 'k'}
+
+	ErrWrongClientType = errors.New("wrong client type. Only Tendermint supported")
 )
+
 
 type ConnOpenAckInput struct {
 	ConnectionID             string
@@ -109,6 +112,7 @@ type UpgradeClientInput struct {
 	ProofUpgradeClient    []byte
 	ProofUpgradeConsState []byte
 }
+
 
 // UnpackConnOpenAckInput attempts to unpack [input] as ConnOpenAckInput
 // assumes that [input] does not include selector (omits first 4 func signature bytes)
@@ -473,9 +477,8 @@ func upgradeClient(accessibleState contract.AccessibleState, caller common.Addre
 	return packedOutput, remainingGas, nil
 }
 
-// createContractPrecompile returns a StatefulPrecompiledContract with getters and setters for the precompile.
-
-func createContractPrecompile() contract.StatefulPrecompiledContract {
+// createIBCPrecompile returns a StatefulPrecompiledContract with getters and setters for the precompile.
+func createIBCPrecompile() contract.StatefulPrecompiledContract {
 	var functions []*contract.StatefulPrecompileFunction
 
 	abiFunctionMap := map[string]contract.RunStatefulPrecompileFunc{
@@ -489,7 +492,7 @@ func createContractPrecompile() contract.StatefulPrecompiledContract {
 	}
 
 	for name, function := range abiFunctionMap {
-		method, ok := ContractABI.Methods[name]
+		method, ok := IBCABI.Methods[name]
 		if !ok {
 			panic(fmt.Errorf("given method (%s) does not exist in the ABI", name))
 		}
