@@ -5,17 +5,13 @@
 package ibc
 
 import (
-	"math/big"
 	"testing"
 
-	"github.com/cosmos/ibc-go/v7/modules/core/exported"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/stretchr/testify/require"
-
 	"github.com/ava-labs/subnet-evm/core/state"
-	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/ava-labs/subnet-evm/precompile/testutils"
 	"github.com/ava-labs/subnet-evm/vmerrs"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/require"
 )
 
 // TestRun tests the Run function of the precompile contract.
@@ -26,6 +22,118 @@ import (
 // tests for specific cases.
 func TestRun(t *testing.T) {
 	tests := map[string]testutils.PrecompileTest{
+		"readOnly connOpenAck should fail": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := ConnOpenAckInput{}
+				input, err := PackConnOpenAck(testInput)
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: ConnOpenAckGasCost,
+			ReadOnly:    true,
+			ExpectedErr: vmerrs.ErrWriteProtection.Error(),
+		},
+		"insufficient gas for connOpenAck should fail": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := ConnOpenAckInput{}
+				input, err := PackConnOpenAck(testInput)
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: ConnOpenAckGasCost - 1,
+			ReadOnly:    false,
+			ExpectedErr: vmerrs.ErrOutOfGas.Error(),
+		},
+		"readOnly connOpenConfirm should fail": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := ConnOpenConfirmInput{}
+				input, err := PackConnOpenConfirm(testInput)
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: ConnOpenConfirmGasCost,
+			ReadOnly:    true,
+			ExpectedErr: vmerrs.ErrWriteProtection.Error(),
+		},
+		"insufficient gas for connOpenConfirm should fail": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := ConnOpenConfirmInput{}
+				input, err := PackConnOpenConfirm(testInput)
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: ConnOpenConfirmGasCost - 1,
+			ReadOnly:    false,
+			ExpectedErr: vmerrs.ErrOutOfGas.Error(),
+		},
+		"readOnly connOpenInit should fail": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := ConnOpenInitInput{}
+				input, err := PackConnOpenInit(testInput)
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: ConnOpenInitGasCost,
+			ReadOnly:    true,
+			ExpectedErr: vmerrs.ErrWriteProtection.Error(),
+		},
+		"insufficient gas for connOpenInit should fail": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := ConnOpenInitInput{}
+				input, err := PackConnOpenInit(testInput)
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: ConnOpenInitGasCost - 1,
+			ReadOnly:    false,
+			ExpectedErr: vmerrs.ErrOutOfGas.Error(),
+		},
+		"readOnly connOpenTry should fail": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := ConnOpenTryInput{}
+				input, err := PackConnOpenTry(testInput)
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: ConnOpenTryGasCost,
+			ReadOnly:    true,
+			ExpectedErr: vmerrs.ErrWriteProtection.Error(),
+		},
+		"insufficient gas for connOpenTry should fail": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := ConnOpenTryInput{}
+				input, err := PackConnOpenTry(testInput)
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: ConnOpenTryGasCost - 1,
+			ReadOnly:    false,
+			ExpectedErr: vmerrs.ErrOutOfGas.Error(),
+		},
 		"readOnly createClient should fail": {
 			Caller: common.Address{1},
 			InputFn: func(t testing.TB) []byte {
@@ -54,29 +162,61 @@ func TestRun(t *testing.T) {
 			ReadOnly:    false,
 			ExpectedErr: vmerrs.ErrOutOfGas.Error(),
 		},
-		"client id stored properly": {
+		"readOnly updateClient should fail": {
 			Caller: common.Address{1},
 			InputFn: func(t testing.TB) []byte {
-				testInput := CreateClientInput{
-					ClientType: exported.Tendermint,
-				}
-				input, err := PackCreateClient(testInput)
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := UpdateClientInput{}
+				input, err := PackUpdateClient(testInput)
 				require.NoError(t, err)
 				return input
 			},
-			SuppliedGas: CreateClientGasCost,
-			ReadOnly:    false,
-			ExpectedRes: func() []byte {
-				res, err := PackCreateClientOutput("07-tendermint-0")
-				if err != nil {
-					panic(err)
-				}
-				return res
-			}(),
-			AfterHook: func(t testing.TB, state contract.StateDB) {
-				nextClientId := getStoredNextClientSeq(state)
-				require.EqualValues(t, big.NewInt(1), nextClientId)
+			SuppliedGas: UpdateClientGasCost,
+			ReadOnly:    true,
+			ExpectedErr: vmerrs.ErrWriteProtection.Error(),
+		},
+		"insufficient gas for updateClient should fail": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := UpdateClientInput{}
+				input, err := PackUpdateClient(testInput)
+				require.NoError(t, err)
+				return input
 			},
+			SuppliedGas: UpdateClientGasCost - 1,
+			ReadOnly:    false,
+			ExpectedErr: vmerrs.ErrOutOfGas.Error(),
+		},
+		"readOnly upgradeClient should fail": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := UpgradeClientInput{}
+				input, err := PackUpgradeClient(testInput)
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: UpgradeClientGasCost,
+			ReadOnly:    true,
+			ExpectedErr: vmerrs.ErrWriteProtection.Error(),
+		},
+		"insufficient gas for upgradeClient should fail": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := UpgradeClientInput{}
+				input, err := PackUpgradeClient(testInput)
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: UpgradeClientGasCost - 1,
+			ReadOnly:    false,
+			ExpectedErr: vmerrs.ErrOutOfGas.Error(),
 		},
 	}
 	// Run tests.

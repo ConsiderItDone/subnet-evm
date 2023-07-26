@@ -14,10 +14,18 @@ import (
 
 	"github.com/ava-labs/subnet-evm/accounts/abi"
 	"github.com/ava-labs/subnet-evm/precompile/contract"
+	"github.com/ava-labs/subnet-evm/vmerrs"
 )
 
 const (
-	CreateClientGasCost uint64 = 1
+	CreateClientGasCost  uint64 = 1
+	UpdateClientGasCost  uint64 = 1
+	UpgradeClientGasCost uint64 = 1
+
+	ConnOpenAckGasCost     uint64 = 1
+	ConnOpenConfirmGasCost uint64 = 1
+	ConnOpenInitGasCost    uint64 = 1
+	ConnOpenTryGasCost     uint64 = 1
 )
 
 // CUSTOM CODE STARTS HERE
@@ -45,12 +53,55 @@ var (
 	ErrWrongClientType = errors.New("wrong client type. Only Tendermint supported")
 )
 
+func createClient2(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+	if remainingGas, err = contract.DeductGas(suppliedGas, CreateClientGasCost); err != nil {
+		return nil, 0, err
+	}
+	if readOnly {
+		return nil, remainingGas, vmerrs.ErrWriteProtection
+	}
+	// attempts to unpack [input] into the arguments to the CreateClientInput.
+	// Assumes that [input] does not include selector
+	// You can use unpacked [inputStruct] variable in your code
+	inputStruct, err := UnpackCreateClientInput(input)
+	if err != nil {
+		return nil, remainingGas, err
+	}
+
+	// CUSTOM CODE STARTS HERE
+	clientID, err := _createClient(&callOpts[CreateClientInput]{
+		accessibleState: accessibleState,
+		caller:          caller,
+		addr:            addr,
+		suppliedGas:     suppliedGas,
+		readOnly:        readOnly,
+		args:            inputStruct,
+	})
+	if err != nil {
+		return nil, remainingGas, err
+	}
+
+	packedOutput, err := PackCreateClientOutput(clientID)
+	if err != nil {
+		return nil, remainingGas, err
+	}
+
+	// Return the packed output and the remaining gas
+	return packedOutput, remainingGas, nil
+}
+
 // createIBCPrecompile returns a StatefulPrecompiledContract with getters and setters for the precompile.
 func createIBCPrecompile() contract.StatefulPrecompiledContract {
 	var functions []*contract.StatefulPrecompileFunction
 
 	abiFunctionMap := map[string]contract.RunStatefulPrecompileFunc{
-		"createClient": createClient,
+		"connOpenAck":     connOpenAck,
+		"connOpenConfirm": connOpenConfirm,
+		"connOpenInit":    connOpenInit,
+		"connOpenTry":     connOpenTry,
+		"createClient":    createClient,
+		"updateClient":    updateClient,
+		"upgradeClient":   upgradeClient,
 	}
 
 	for name, function := range abiFunctionMap {
