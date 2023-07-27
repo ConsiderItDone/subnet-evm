@@ -14,7 +14,6 @@ import (
 
 	"github.com/ava-labs/subnet-evm/accounts/abi"
 	"github.com/ava-labs/subnet-evm/precompile/contract"
-	"github.com/ava-labs/subnet-evm/vmerrs"
 )
 
 const (
@@ -43,52 +42,16 @@ var (
 	//go:embed contract.abi
 	IBCRawABI string
 
-	IBCABI                    = contract.ParseABI(IBCRawABI)
-	IBCPrecompile             = createIBCPrecompile()
-	GeneratedClientIdentifier = IBCABI.Events["ClientCreated"]
+	IBCABI                        = contract.ParseABI(IBCRawABI)
+	IBCPrecompile                 = createIBCPrecompile()
+	GeneratedClientIdentifier     = IBCABI.Events["ClientCreated"]
+	GeneratedConnectionIdentifier = IBCABI.Events["ConnectionCreated"]
 
 	nextClientSeqStorageKey = common.Hash{'n', 'c', 's', 'e', 'q', 's', 'k'}
 	clientStateStorageKey   = common.Hash{'c', 's', 't', 's', 'k'}
 
 	ErrWrongClientType = errors.New("wrong client type. Only Tendermint supported")
 )
-
-func createClient2(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
-	if remainingGas, err = contract.DeductGas(suppliedGas, CreateClientGasCost); err != nil {
-		return nil, 0, err
-	}
-	if readOnly {
-		return nil, remainingGas, vmerrs.ErrWriteProtection
-	}
-	// attempts to unpack [input] into the arguments to the CreateClientInput.
-	// Assumes that [input] does not include selector
-	// You can use unpacked [inputStruct] variable in your code
-	inputStruct, err := UnpackCreateClientInput(input)
-	if err != nil {
-		return nil, remainingGas, err
-	}
-
-	// CUSTOM CODE STARTS HERE
-	clientID, err := _createClient(&callOpts[CreateClientInput]{
-		accessibleState: accessibleState,
-		caller:          caller,
-		addr:            addr,
-		suppliedGas:     suppliedGas,
-		readOnly:        readOnly,
-		args:            inputStruct,
-	})
-	if err != nil {
-		return nil, remainingGas, err
-	}
-
-	packedOutput, err := PackCreateClientOutput(clientID)
-	if err != nil {
-		return nil, remainingGas, err
-	}
-
-	// Return the packed output and the remaining gas
-	return packedOutput, remainingGas, nil
-}
 
 // createIBCPrecompile returns a StatefulPrecompiledContract with getters and setters for the precompile.
 func createIBCPrecompile() contract.StatefulPrecompiledContract {

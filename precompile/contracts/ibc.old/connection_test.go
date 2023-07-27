@@ -300,21 +300,26 @@ func (suite *KeeperTestSuite) TestConnOpenTry() {
 
 			connectionKey := host.ConnectionKey(path.EndpointA.ConnectionID)
 			proofInit, proofHeight := suite.chainA.QueryProof(connectionKey)
-
+			fmt.Printf("proofInit %#v\n", proofInit)
+			fmt.Printf("proofHeight %#v\n", proofHeight)
 			if consensusHeight.IsZero() {
 				// retrieve consensus state height to provide proof for
 				consensusHeight = counterpartyClient.GetLatestHeight().(clienttypes.Height)
 			}
 			consensusKey := host.FullConsensusStateKey(path.EndpointA.ClientID, consensusHeight)
 			proofConsensus, _ := suite.chainA.QueryProof(consensusKey)
+			fmt.Printf("proofConsensus %#v\n", proofConsensus)
 
 			// retrieve proof of counterparty clientstate on chainA
 			clientKey := host.FullClientStateKey(path.EndpointA.ClientID)
 			proofClient, _ := suite.chainA.QueryProof(clientKey)
+			fmt.Printf("proofClient %#v\n", proofClient)
 
 			var input []byte
 
 			counterpartyByte, _ := counterparty.Marshal()
+			fmt.Printf("counterparty %#v\n", counterpartyByte)
+
 			counterpartyByteLen := make([]byte, 8)
 			binary.BigEndian.PutUint64(counterpartyByteLen, uint64(len(counterpartyByte)))
 
@@ -327,6 +332,8 @@ func (suite *KeeperTestSuite) TestConnOpenTry() {
 			input = append(input, delayPeriodByte...)
 
 			clientIDByte := []byte(path.EndpointB.ClientID)
+			fmt.Printf("ClientID %s\n", path.EndpointB.ClientID)
+
 			clientIDByteLen := make([]byte, 8)
 			binary.BigEndian.PutUint64(clientIDByteLen, uint64(len(clientIDByte)))
 
@@ -335,6 +342,8 @@ func (suite *KeeperTestSuite) TestConnOpenTry() {
 
 			// clientStateByte, _ := marshaler.MarshalInterface(counterpartyClient.(*ibctm.ClientState))
 			clientStateByte, _ := clienttypes.MarshalClientState(marshaler, counterpartyClient)
+			fmt.Printf("clientState %#v\n", clientStateByte)
+
 			clientStateByteLen := make([]byte, 8)
 			binary.BigEndian.PutUint64(clientStateByteLen, uint64(len(clientStateByte)))
 
@@ -343,6 +352,8 @@ func (suite *KeeperTestSuite) TestConnOpenTry() {
 
 			// versionsByte, _ := marshaler.Marshal()
 			versionsByte, _ := json.Marshal(connectiontypes.ExportedVersionsToProto(versions))
+			fmt.Printf("versions %#v\n", versionsByte)
+
 			versionsByteLen := make([]byte, 8)
 			binary.BigEndian.PutUint64(versionsByteLen, uint64(len(versionsByte)))
 
@@ -368,6 +379,8 @@ func (suite *KeeperTestSuite) TestConnOpenTry() {
 			input = append(input, proofConsensus...)
 
 			proofHeightByte, _ := marshaler.MarshalInterface(&proofHeight)
+			fmt.Printf("proofHeightByte %#v\n", proofHeightByte)
+
 			proofHeightByteLen := make([]byte, 8)
 			binary.BigEndian.PutUint64(proofHeightByteLen, uint64(len(proofHeightByte)))
 
@@ -375,6 +388,8 @@ func (suite *KeeperTestSuite) TestConnOpenTry() {
 			input = append(input, proofHeightByte...)
 
 			consensusHeightByte, _ := marshaler.MarshalInterface(&consensusHeight)
+			fmt.Printf("consensusHeightByte %#v\n", consensusHeightByte)
+
 			consensusHeightByteLen := make([]byte, 8)
 			binary.BigEndian.PutUint64(consensusHeightByteLen, uint64(len(consensusHeightByte)))
 

@@ -56,11 +56,11 @@ var (
 // This includes the client state, initial consensus state and any associated metadata.
 func createClient(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
 	// TODO ask Avalabs team about pHeight
-	pHeight, _ := accessibleState.GetSnowContext().ValidatorState.GetCurrentHeight(nil)
-	validatorSet, _ := accessibleState.GetSnowContext().ValidatorState.GetValidatorSet(nil, pHeight, accessibleState.GetSnowContext().ChainID)
-
-	store_to_db("pHeight", pHeight)
-	store_to_db("validatorSet", validatorSet)
+	//pHeight, _ := accessibleState.GetSnowContext().ValidatorState.GetCurrentHeight(nil)
+	//validatorSet, _ := accessibleState.GetSnowContext().ValidatorState.GetValidatorSet(nil, pHeight, accessibleState.GetSnowContext().ChainID)
+	//
+	//store_to_db("pHeight", pHeight)
+	//store_to_db("validatorSet", validatorSet)
 
 	/*
 		input

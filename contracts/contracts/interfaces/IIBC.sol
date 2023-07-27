@@ -3,6 +3,8 @@ pragma solidity ^0.8.0;
 
 interface IIBC {
   event ClientCreated(string clientId);
+  event ConnectionCreated(string clientId, string connectionId);
+  event ChannelCreated(string clientId, string connectionId);
 
   // Create IBC Client
   function createClient(

@@ -54,7 +54,7 @@ var _ = ginkgo.Describe("[Precompiles]", ginkgo.Ordered, func() {
 	//	utils.RunDefaultHardhatTests(ctx, "reward_manager")
 	//})
 
-	ginkgo.It("ibc: create client", ginkgo.Label("Precompile"), ginkgo.Label("IBC"), func() {
+	ginkgo.It("ibc", ginkgo.Label("Precompile"), ginkgo.Label("IBC"), func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 

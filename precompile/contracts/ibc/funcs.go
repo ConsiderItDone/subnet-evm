@@ -5,17 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/big"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/std"
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/ava-labs/subnet-evm/precompile/allowlist"
 	"github.com/ava-labs/subnet-evm/precompile/contract"
 
 	cosmostypes "github.com/cosmos/cosmos-sdk/codec/types"
-	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
 	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
 	connectiontypes "github.com/cosmos/ibc-go/v7/modules/core/03-connection/types"
 	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
@@ -37,215 +34,8 @@ type callOpts[T any] struct {
 	args            T
 }
 
-func _createClient(opts *callOpts[CreateClientInput]) (string, error) {
-	if opts.args.ClientType != exported.Tendermint {
-		return "", ErrWrongClientType
-	}
-
-	db := opts.accessibleState.GetStateDB()
-	clientSeq := db.GetState(ContractAddress, keyClientSeq)
-	newClientSeq := common.BigToHash(
-		new(big.Int).Add(
-			clientSeq.Big(),
-			big.NewInt(1),
-		),
-	)
-	db.SetState(ContractAddress, keyClientSeq, newClientSeq)
-
-	return fmt.Sprintf("%s-%d", opts.args.ClientType, clientSeq.Big().Int64()), nil
-}
-
-func _updateClient(opts *callOpts[UpdateClientInput]) error {
-	stateDB := opts.accessibleState.GetStateDB()
-	// Verify that the caller is in the allow list and therefore has the right to call this function.
-	callerStatus := allowlist.GetAllowListStatus(stateDB, ContractAddress, opts.caller)
-	if !callerStatus.IsEnabled() {
-		return fmt.Errorf("non-enabled cannot call updateClient: %s", opts.caller)
-	}
-
-	clientStatePath := fmt.Sprintf("clients/%s/clientState", opts.args.ClientID)
-	found := opts.accessibleState.GetStateDB().Exist(common.BytesToAddress([]byte(clientStatePath)))
-	if !found {
-		return fmt.Errorf("cannot update client with ID %s", opts.args.ClientID)
-	}
-
-	clientStateByte := opts.accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(clientStatePath)))
-	clientState := &ibctm.ClientState{}
-	if err := clientState.Unmarshal(clientStateByte); err != nil {
-		return err
-	}
-
-	consensusStatePath := fmt.Sprintf("clients/%s/consensusStates/%s", opts.args.ClientID, clientState.GetLatestHeight())
-	found = opts.accessibleState.GetStateDB().Exist(common.BytesToAddress([]byte(consensusStatePath)))
-	if !found {
-		return fmt.Errorf("cannot update consensusState with ID %s", opts.args.ClientID)
-	}
-
-	clientMessage := &ibctm.Header{}
-	if err := clientMessage.Unmarshal(opts.args.ClientMessage); err != nil {
-		return fmt.Errorf("error unmarshalling client state file: %w", err)
-	}
-
-	consensusState := &ibctm.ConsensusState{
-		Timestamp:          clientMessage.GetTime(),
-		Root:               commitmenttypes.NewMerkleRoot(clientMessage.Header.GetAppHash()),
-		NextValidatorsHash: clientMessage.Header.NextValidatorsHash,
-	}
-	// store ConsensusStateBytes
-	consensusStateByte, err := consensusState.Marshal()
-	if err != nil {
-		return errors.New("consensusState marshaler error")
-	}
-
-	consensusStatePath = fmt.Sprintf("clients/%s/consensusStates/%s", opts.args.ClientID, clientMessage.GetHeight())
-	opts.accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(consensusStatePath)), consensusStateByte)
-	return nil
-}
-
-func _upgradeClient(opts *callOpts[UpgradeClientInput]) error {
-	stateDB := opts.accessibleState.GetStateDB()
-	// Verify that the caller is in the allow list and therefore has the right to call this function.
-	callerStatus := allowlist.GetAllowListStatus(stateDB, ContractAddress, opts.caller)
-	if !callerStatus.IsEnabled() {
-		return fmt.Errorf("non-enabled cannot call upgradeClient: %s", opts.caller)
-	}
-
-	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
-	marshaler := codec.NewProtoCodec(interfaceRegistry)
-
-	std.RegisterInterfaces(interfaceRegistry)
-	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
-
-	upgradedClient := &ibctm.ClientState{}
-	if err := upgradedClient.Unmarshal(opts.args.UpgradedClien); err != nil {
-		return fmt.Errorf("error unmarshalling upgraded client: %w", err)
-	}
-
-	upgradedConsState := &ibctm.ConsensusState{}
-	if err := upgradedConsState.Unmarshal(opts.args.UpgradedConsState); err != nil {
-		return fmt.Errorf("error unmarshalling upgraded ConsensusState: %w", err)
-	}
-
-	clientStatePath := fmt.Sprintf("clients/%s/clientState", opts.args.ClientID)
-	clientStateByte := opts.accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(clientStatePath)))
-	clientStateExp := clienttypes.MustUnmarshalClientState(marshaler, clientStateByte)
-	clientState, ok := clientStateExp.(*ibctm.ClientState)
-	if !ok {
-		return fmt.Errorf("error unmarshalling client state file")
-	}
-
-	consensusStatePath := fmt.Sprintf("clients/%s/consensusStates/%s", opts.args.ClientID, clientState.GetLatestHeight())
-	consensusStateByte := opts.accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(consensusStatePath)))
-	consensusStateExp := clienttypes.MustUnmarshalConsensusState(marshaler, consensusStateByte)
-	consensusState, ok := consensusStateExp.(*ibctm.ConsensusState)
-	if !ok {
-		return fmt.Errorf("error unmarshalling consensus state file")
-	}
-
-	if len(clientState.UpgradePath) == 0 {
-		return errors.New("cannot upgrade client, no upgrade path set")
-	}
-
-	// last height of current counterparty chain must be client's latest height
-	lastHeight := clientState.GetLatestHeight()
-
-	if !upgradedClient.GetLatestHeight().GT(lastHeight) {
-		return fmt.Errorf("upgraded client height %s must be at greater than current client height %s", upgradedClient.GetLatestHeight(), lastHeight)
-	}
-
-	// unmarshal proofs
-	var merkleProofClient, merkleProofConsState commitmenttypes.MerkleProof
-	if err := marshaler.Unmarshal(opts.args.ProofUpgradeClient, &merkleProofClient); err != nil {
-		return fmt.Errorf("could not unmarshal client merkle proof: %v", err)
-	}
-	if err := marshaler.Unmarshal(opts.args.ProofUpgradeConsState, &merkleProofConsState); err != nil {
-		return fmt.Errorf("could not unmarshal consensus state merkle proof: %v", err)
-	}
-
-	// Verify client proof
-	client := upgradedClient.ZeroCustomFields()
-	bz, err := marshaler.MarshalInterface(client)
-	if err != nil {
-		return fmt.Errorf("could not marshal client state: %v", err)
-	}
-	// copy all elements from upgradePath except final element
-	clientPath := make([]string, len(clientState.UpgradePath)-1)
-	copy(clientPath, clientState.UpgradePath)
-
-	// append lastHeight and `upgradedClient` to last key of upgradePath and use as lastKey of clientPath
-	// this will create the IAVL key that is used to store client in upgrade store
-	lastKey := clientState.UpgradePath[len(clientState.UpgradePath)-1]
-	appendedKey := fmt.Sprintf("%s/%d/%s", lastKey, lastHeight.GetRevisionHeight(), upgradetypes.KeyUpgradedClient)
-
-	clientPath = append(clientPath, appendedKey)
-
-	// construct clientState Merkle path
-	upgradeClientPath := commitmenttypes.NewMerklePath(clientPath...)
-
-	if err := merkleProofClient.VerifyMembership(clientState.ProofSpecs, consensusState.GetRoot(), upgradeClientPath, bz); err != nil {
-		return fmt.Errorf("client state proof failed. Path: %s, err: %v", upgradeClientPath.Pretty(), err)
-	}
-
-	// Verify consensus state proof
-	bz, err = marshaler.MarshalInterface(upgradedConsState)
-	if err != nil {
-		return fmt.Errorf("could not marshal consensus state: %v", err)
-	}
-
-	// copy all elements from upgradePath except final element
-	consPath := make([]string, len(clientState.UpgradePath)-1)
-	copy(consPath, clientState.UpgradePath)
-
-	// append lastHeight and `upgradedClient` to last key of upgradePath and use as lastKey of clientPath
-	// this will create the IAVL key that is used to store client in upgrade store
-	lastKey = clientState.UpgradePath[len(clientState.UpgradePath)-1]
-	appendedKey = fmt.Sprintf("%s/%d/%s", lastKey, lastHeight.GetRevisionHeight(), upgradetypes.KeyUpgradedConsState)
-
-	consPath = append(consPath, appendedKey)
-	// construct consensus state Merkle path
-	upgradeConsStatePath := commitmenttypes.NewMerklePath(consPath...)
-
-	if err := merkleProofConsState.VerifyMembership(clientState.ProofSpecs, consensusState.GetRoot(), upgradeConsStatePath, bz); err != nil {
-		return fmt.Errorf("consensus state proof failed. Path: %s", upgradeConsStatePath.Pretty())
-	}
-
-	newClientState := ibctm.NewClientState(
-		upgradedClient.ChainId, clientState.TrustLevel, clientState.TrustingPeriod, upgradedClient.UnbondingPeriod,
-		clientState.MaxClockDrift, upgradedClient.LatestHeight, upgradedClient.ProofSpecs, upgradedClient.UpgradePath,
-	)
-
-	if err := newClientState.Validate(); err != nil {
-		return fmt.Errorf("updated client state failed basic validation")
-	}
-
-	newConsState := ibctm.NewConsensusState(
-		upgradedConsState.Timestamp, commitmenttypes.NewMerkleRoot([]byte(ibctm.SentinelRoot)), upgradedConsState.NextValidatorsHash,
-	)
-
-	consensusStateByte, err = marshaler.MarshalInterface(newConsState)
-	if err != nil {
-		return errors.New("consensusState marshaler error")
-	}
-	consensusStatePath = fmt.Sprintf("clients/%s/consensusStates/%s", opts.args.ClientID, lastHeight)
-	opts.accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(consensusStatePath)), consensusStateByte)
-
-	clientStateByte, err = marshaler.MarshalInterface(newClientState)
-	if err != nil {
-		return errors.New("clientState marshaler error")
-	}
-	clientStatePath = fmt.Sprintf("clients/%s/clientState", opts.args.ClientID)
-	opts.accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(clientStatePath)), clientStateByte)
-	return nil
-}
-
 func _connOpenInit(opts *callOpts[ConnOpenInitInput]) (string, error) {
 	stateDB := opts.accessibleState.GetStateDB()
-
-	// Verify that the caller is in the allow list and therefore has the right to call this function.
-	callerStatus := allowlist.GetAllowListStatus(stateDB, ContractAddress, opts.caller)
-	if !callerStatus.IsEnabled() {
-		return "", fmt.Errorf("non-enabled cannot call upgradeClient: %s", opts.caller)
-	}
 
 	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
 	marshaler := codec.NewProtoCodec(interfaceRegistry)
@@ -271,22 +61,25 @@ func _connOpenInit(opts *callOpts[ConnOpenInitInput]) (string, error) {
 		versions = []exported.Version{version}
 	}
 
-	clientStatePath := fmt.Sprintf("clients/%s/clientState", opts.args.ClientID)
-	found := opts.accessibleState.GetStateDB().Exist(common.BytesToAddress([]byte(clientStatePath)))
+	// check ClientState exists in database
+	_, found, err := getClientState(stateDB, opts.args.ClientID)
+	if err != nil {
+		return "", err
+	}
 	if !found {
 		return "", fmt.Errorf("cannot update client with ID %s", opts.args.ClientID)
 	}
 
 	nextConnSeq := uint64(0)
-	if opts.accessibleState.GetStateDB().Exist(common.BytesToAddress([]byte("nextConnSeq"))) {
-		b := opts.accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte("nextConnSeq")))
+	if stateDB.Exist(common.BytesToAddress([]byte("nextConnSeq"))) {
+		b := stateDB.GetPrecompileState(common.BytesToAddress([]byte("nextConnSeq")))
 		nextConnSeq = binary.BigEndian.Uint64(b)
 	}
 	connectionID := fmt.Sprintf("%s%d", "connection-", nextConnSeq)
 	nextConnSeq++
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, nextConnSeq)
-	opts.accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte("nextConnSeq")), b)
+	stateDB.SetPrecompileState(common.BytesToAddress([]byte("nextConnSeq")), b)
 
 	// connection defines chain A's ConnectionEnd
 	connection := connectiontypes.NewConnectionEnd(connectiontypes.INIT, opts.args.ClientID, *counterparty, connectiontypes.ExportedVersionsToProto(versions), uint64(opts.args.DelayPeriod))
@@ -296,19 +89,23 @@ func _connOpenInit(opts *callOpts[ConnOpenInitInput]) (string, error) {
 		return "", fmt.Errorf("connection marshaler error: %w", err)
 	}
 	connectionsPath := fmt.Sprintf("connections/%s", connectionID)
-	opts.accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
+	stateDB.SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
+
+	// emit event
+	topics := make([]common.Hash, 1)
+	topics[0] = GeneratedConnectionIdentifier.ID
+	data, err := GeneratedConnectionIdentifier.Inputs.Pack(opts.args.ClientID, connectionID)
+	if err != nil {
+		return "", err
+	}
+	blockNumber := opts.accessibleState.GetBlockContext().Number().Uint64()
+	opts.accessibleState.GetStateDB().AddLog(ContractAddress, topics, data, blockNumber)
 
 	return connectionID, nil
 }
 
 func _connOpenTry(opts *callOpts[ConnOpenTryInput]) (string, error) {
 	stateDB := opts.accessibleState.GetStateDB()
-
-	// Verify that the caller is in the allow list and therefore has the right to call this function.
-	callerStatus := allowlist.GetAllowListStatus(stateDB, ContractAddress, opts.caller)
-	if !callerStatus.IsEnabled() {
-		return "", fmt.Errorf("non-enabled cannot call upgradeClient: %s", opts.caller)
-	}
 
 	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
 
@@ -343,15 +140,15 @@ func _connOpenTry(opts *callOpts[ConnOpenTryInput]) (string, error) {
 	}
 
 	nextConnSeq := uint64(0)
-	if opts.accessibleState.GetStateDB().Exist(common.BytesToAddress([]byte("nextConnSeq"))) {
-		b := opts.accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte("nextConnSeq")))
+	if stateDB.Exist(common.BytesToAddress([]byte("nextConnSeq"))) {
+		b := stateDB.GetPrecompileState(common.BytesToAddress([]byte("nextConnSeq")))
 		nextConnSeq = binary.BigEndian.Uint64(b)
 	}
 	connectionID := fmt.Sprintf("%s%d", "connection-", nextConnSeq)
 	nextConnSeq++
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, nextConnSeq)
-	opts.accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte("nextConnSeq")), b)
+	stateDB.SetPrecompileState(common.BytesToAddress([]byte("nextConnSeq")), b)
 
 	expectedCounterparty := connectiontypes.NewCounterparty(opts.args.ClientID, "", commitmenttypes.NewMerklePrefix([]byte("ibc")))
 	expectedConnection := connectiontypes.NewConnectionEnd(connectiontypes.INIT, counterparty.ClientId, expectedCounterparty, counterpartyVersions, uint64(opts.args.DelayPeriod))
@@ -367,8 +164,8 @@ func _connOpenTry(opts *callOpts[ConnOpenTryInput]) (string, error) {
 	// connection defines chain B's ConnectionEnd
 	connection := connectiontypes.NewConnectionEnd(connectiontypes.TRYOPEN, opts.args.ClientID, *counterparty, []*connectiontypes.Version{version}, uint64(opts.args.DelayPeriod))
 
-	if err = clientVerefication(connection, clientState, *proofHeight, opts.accessibleState, marshaler, opts.args.ProofClient); err != nil {
-		return "", fmt.Errorf("error clientVerefication err: %w", err)
+	if err = clientVerification(connection, clientState, *proofHeight, opts.accessibleState, marshaler, opts.args.ProofClient); err != nil {
+		return "", fmt.Errorf("error clientVerification err: %w", err)
 	}
 
 	if err = connectionVerefication(connection, expectedConnection, *proofHeight, opts.accessibleState, marshaler, connectionID, opts.args.ProofInit); err != nil {
@@ -376,7 +173,7 @@ func _connOpenTry(opts *callOpts[ConnOpenTryInput]) (string, error) {
 	}
 
 	clientStatePath := fmt.Sprintf("clients/%s/clientState", opts.args.ClientID)
-	found := opts.accessibleState.GetStateDB().Exist(common.BytesToAddress([]byte(clientStatePath)))
+	found := stateDB.Exist(common.BytesToAddress([]byte(clientStatePath)))
 	if !found {
 		return "", clienttypes.ErrClientNotFound
 	}
@@ -389,17 +186,12 @@ func _connOpenTry(opts *callOpts[ConnOpenTryInput]) (string, error) {
 	clientPaths := connectiontypes.ClientPaths{Paths: conns}
 	bz := marshaler.MustMarshal(&clientPaths)
 
-	opts.accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress(hosttypes.ClientConnectionsKey(opts.args.ClientID)), bz)
+	stateDB.SetPrecompileState(common.BytesToAddress(hosttypes.ClientConnectionsKey(opts.args.ClientID)), bz)
 	return connectionID, nil
 }
 
 func _connOpenAck(opts *callOpts[ConnOpenAckInput]) error {
 	stateDB := opts.accessibleState.GetStateDB()
-	// Verify that the caller is in the allow list and therefore has the right to call this function.
-	callerStatus := allowlist.GetAllowListStatus(stateDB, ContractAddress, opts.caller)
-	if !callerStatus.IsEnabled() {
-		return fmt.Errorf("non-enabled cannot call upgradeClient: %s", opts.caller)
-	}
 
 	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
 
@@ -429,7 +221,7 @@ func _connOpenAck(opts *callOpts[ConnOpenAckInput]) error {
 	}
 
 	connectionsPath := fmt.Sprintf("connections/%s", opts.args.ConnectionID)
-	connectionByte := opts.accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(connectionsPath)))
+	connectionByte := stateDB.GetPrecompileState(common.BytesToAddress([]byte(connectionsPath)))
 	connection := connectiontypes.ConnectionEnd{}
 	if err = marshaler.Unmarshal(connectionByte, &connection); err != nil {
 		return fmt.Errorf("error unmarshalling connection id: %s, error: %w", opts.args.ConnectionID, err)
@@ -453,7 +245,7 @@ func _connOpenAck(opts *callOpts[ConnOpenAckInput]) error {
 	}
 
 	// Check that ChainB stored the clientState provided in the msg
-	if err := clientVerefication(connection, clientState, *proofHeight, opts.accessibleState, marshaler, opts.args.ProofClient); err != nil {
+	if err := clientVerification(connection, clientState, *proofHeight, opts.accessibleState, marshaler, opts.args.ProofClient); err != nil {
 		return err
 	}
 
@@ -467,18 +259,13 @@ func _connOpenAck(opts *callOpts[ConnOpenAckInput]) error {
 		return errors.New("connection marshaler error")
 	}
 	connectionsPath = fmt.Sprintf("connections/%s", opts.args.ConnectionID)
-	opts.accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
+	stateDB.SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
 
 	return nil
 }
 
 func _connOpenConfirm(opts *callOpts[ConnOpenConfirmInput]) error {
 	stateDB := opts.accessibleState.GetStateDB()
-	// Verify that the caller is in the allow list and therefore has the right to call this function.
-	callerStatus := allowlist.GetAllowListStatus(stateDB, ContractAddress, opts.caller)
-	if !callerStatus.IsEnabled() {
-		return fmt.Errorf("non-enabled cannot call upgradeClient: %s", opts.caller)
-	}
 
 	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
 
@@ -492,12 +279,12 @@ func _connOpenConfirm(opts *callOpts[ConnOpenConfirmInput]) error {
 	}
 
 	connectionsPath := fmt.Sprintf("connections/%s", opts.args.ConnectionID)
-	exist := opts.accessibleState.GetStateDB().Exist(common.BytesToAddress([]byte(connectionsPath)))
+	exist := stateDB.Exist(common.BytesToAddress([]byte(connectionsPath)))
 	if !exist {
 		return fmt.Errorf("cannot find connection with path: %s", connectionsPath)
 	}
 
-	connectionByte := opts.accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(connectionsPath)))
+	connectionByte := stateDB.GetPrecompileState(common.BytesToAddress([]byte(connectionsPath)))
 	connection := &connectiontypes.ConnectionEnd{}
 	marshaler.MustUnmarshal(connectionByte, connection)
 
@@ -517,7 +304,7 @@ func _connOpenConfirm(opts *callOpts[ConnOpenConfirmInput]) error {
 	clientID := connection.GetClientID()
 
 	clientStatePath := fmt.Sprintf("clients/%s/clientState", clientID)
-	clientStateByte := opts.accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(clientStatePath)))
+	clientStateByte := stateDB.GetPrecompileState(common.BytesToAddress([]byte(clientStatePath)))
 	clientStateExp, err := clienttypes.UnmarshalClientState(marshaler, clientStateByte)
 	if err != nil {
 		return fmt.Errorf("error unmarshalling client state file, err: %w", err)
@@ -525,7 +312,7 @@ func _connOpenConfirm(opts *callOpts[ConnOpenConfirmInput]) error {
 	clientState := clientStateExp.(*ibctm.ClientState)
 
 	consensusStatePath := fmt.Sprintf("clients/%s/consensusStates/%s", clientID, clientState.GetLatestHeight())
-	consensusStateByte := opts.accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(consensusStatePath)))
+	consensusStateByte := stateDB.GetPrecompileState(common.BytesToAddress([]byte(consensusStatePath)))
 	consensusStateExp, err := clienttypes.UnmarshalConsensusState(marshaler, consensusStateByte)
 	if err != nil {
 		return fmt.Errorf("error unmarshalling consensus state file, err: %w", err)
@@ -561,12 +348,12 @@ func _connOpenConfirm(opts *callOpts[ConnOpenConfirmInput]) error {
 		return errors.New("connection marshaler error")
 	}
 	connectionsPath = fmt.Sprintf("connections/%s", opts.args.ConnectionID)
-	opts.accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
+	stateDB.SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
 
 	return nil
 }
 
-func clientVerefication(
+func clientVerification(
 	connection connectiontypes.ConnectionEnd,
 	clientState exported.ClientState,
 	proofHeight exported.Height,

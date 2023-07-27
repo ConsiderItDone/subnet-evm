@@ -7,10 +7,222 @@
         "internalType": "string",
         "name": "clientId",
         "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "connectionId",
+        "type": "string"
+      }
+    ],
+    "name": "ChannelCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "clientId",
+        "type": "string"
       }
     ],
     "name": "ClientCreated",
     "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "clientId",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "connectionId",
+        "type": "string"
+      }
+    ],
+    "name": "ConnectionCreated",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "connectionID",
+        "type": "string"
+      },
+      {
+        "internalType": "bytes",
+        "name": "clientState",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "version",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "counterpartyConnectionID",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofTry",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofClient",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofConsensus",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofHeight",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "consensusHeight",
+        "type": "bytes"
+      }
+    ],
+    "name": "connOpenAck",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "connectionID",
+        "type": "string"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofAck",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofHeight",
+        "type": "bytes"
+      }
+    ],
+    "name": "connOpenConfirm",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "clientID",
+        "type": "string"
+      },
+      {
+        "internalType": "bytes",
+        "name": "counterparty",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "version",
+        "type": "bytes"
+      },
+      {
+        "internalType": "uint32",
+        "name": "delayPeriod",
+        "type": "uint32"
+      }
+    ],
+    "name": "connOpenInit",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "connectionID",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes",
+        "name": "counterparty",
+        "type": "bytes"
+      },
+      {
+        "internalType": "uint32",
+        "name": "delayPeriod",
+        "type": "uint32"
+      },
+      {
+        "internalType": "string",
+        "name": "clientID",
+        "type": "string"
+      },
+      {
+        "internalType": "bytes",
+        "name": "clientState",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "counterpartyVersions",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofInit",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofClient",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofConsensus",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofHeight",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "consensusHeight",
+        "type": "bytes"
+      }
+    ],
+    "name": "connOpenTry",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "connectionID",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
     "inputs": [
@@ -38,6 +250,62 @@
         "type": "string"
       }
     ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "clientID",
+        "type": "string"
+      },
+      {
+        "internalType": "bytes",
+        "name": "clientMessage",
+        "type": "bytes"
+      }
+    ],
+    "name": "updateClient",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "clientID",
+        "type": "string"
+      },
+      {
+        "internalType": "bytes",
+        "name": "upgradePath",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "upgradedClien",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "upgradedConsState",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofUpgradeClient",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofUpgradeConsState",
+        "type": "bytes"
+      }
+    ],
+    "name": "upgradeClient",
+    "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   }
