@@ -165,28 +165,13 @@ func _connOpenTry(opts *callOpts[ConnOpenTryInput]) (string, error) {
 	connection := connectiontypes.NewConnectionEnd(connectiontypes.TRYOPEN, opts.args.ClientID, *counterparty, []*connectiontypes.Version{version}, uint64(opts.args.DelayPeriod))
 
 	if err = clientVerification(connection, clientState, *proofHeight, opts.accessibleState, marshaler, opts.args.ProofClient); err != nil {
-		return "", fmt.Errorf("error clientVerification err: %w", err)
+		return "", fmt.Errorf("error clientVerification: %w", err)
 	}
 
-	if err = connectionVerefication(connection, expectedConnection, *proofHeight, opts.accessibleState, marshaler, connectionID, opts.args.ProofInit); err != nil {
-		return "", fmt.Errorf("error connectionVerefication err: %w", err)
+	if err = connectionVerification(connection, expectedConnection, *proofHeight, opts.accessibleState, marshaler, connectionID, opts.args.ProofInit); err != nil {
+		return "", fmt.Errorf("error connectionVerification: %w", err)
 	}
 
-	clientStatePath := fmt.Sprintf("clients/%s/clientState", opts.args.ClientID)
-	found := stateDB.Exist(common.BytesToAddress([]byte(clientStatePath)))
-	if !found {
-		return "", clienttypes.ErrClientNotFound
-	}
-
-	conns, found := getClientConnectionPaths(marshaler, opts.args.ClientID, opts.accessibleState)
-	if !found {
-		conns = []string{}
-	}
-	conns = append(conns, connectionID)
-	clientPaths := connectiontypes.ClientPaths{Paths: conns}
-	bz := marshaler.MustMarshal(&clientPaths)
-
-	stateDB.SetPrecompileState(common.BytesToAddress(hosttypes.ClientConnectionsKey(opts.args.ClientID)), bz)
 	return connectionID, nil
 }
 
@@ -240,7 +225,7 @@ func _connOpenAck(opts *callOpts[ConnOpenAckInput]) error {
 	expectedCounterparty := connectiontypes.NewCounterparty(connection.ClientId, opts.args.ConnectionID, commitmenttypes.NewMerklePrefix([]byte("ibc")))
 	expectedConnection := connectiontypes.NewConnectionEnd(connectiontypes.TRYOPEN, connection.Counterparty.ClientId, expectedCounterparty, []*connectiontypes.Version{&version}, connection.DelayPeriod)
 
-	if err := connectionVerefication(connection, expectedConnection, *proofHeight, opts.accessibleState, marshaler, string(opts.args.CounterpartyConnectionID), opts.args.ProofTry); err != nil {
+	if err := connectionVerification(connection, expectedConnection, *proofHeight, opts.accessibleState, marshaler, string(opts.args.CounterpartyConnectionID), opts.args.ProofTry); err != nil {
 		return err
 	}
 
@@ -297,7 +282,7 @@ func _connOpenConfirm(opts *callOpts[ConnOpenConfirmInput]) error {
 	expectedCounterparty := connectiontypes.NewCounterparty(connection.ClientId, opts.args.ConnectionID, commitmenttypes.NewMerklePrefix([]byte("ibc")))
 	expectedConnection := connectiontypes.NewConnectionEnd(connectiontypes.OPEN, connection.Counterparty.ClientId, expectedCounterparty, connection.Versions, connection.DelayPeriod)
 
-	if err := connectionVerefication(*connection, expectedConnection, *proofHeight, opts.accessibleState, marshaler, opts.args.ConnectionID, opts.args.ProofAck); err != nil {
+	if err := connectionVerification(*connection, expectedConnection, *proofHeight, opts.accessibleState, marshaler, opts.args.ConnectionID, opts.args.ProofAck); err != nil {
 		return err
 	}
 
@@ -363,22 +348,21 @@ func clientVerification(
 ) error {
 	clientID := connection.GetClientID()
 
-	clientStatePath := fmt.Sprintf("clients/%s/clientState", clientID)
-
-	clientStateByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(clientStatePath)))
-	clientStateExp, err := clienttypes.UnmarshalClientState(marshaler, clientStateByte)
+	targetClientState, found, err := getClientState(accessibleState.GetStateDB(), clientID)
 	if err != nil {
-		return fmt.Errorf("error unmarshalling client state file, err: %w", err)
+		return fmt.Errorf("error loading client state, err: %w", err)
 	}
-	targetClientState := clientStateExp.(*ibctm.ClientState)
+	if !found {
+		return fmt.Errorf("client state not found in database")
+	}
 
-	consensusStatePath := fmt.Sprintf("clients/%s/consensusStates/%s", clientID, targetClientState.GetLatestHeight())
-	consensusStateByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(consensusStatePath)))
-	consensusStateExp, err := clienttypes.UnmarshalConsensusState(marshaler, consensusStateByte)
+	consensusState, found, err := getConsensusState(accessibleState.GetStateDB(), clientID, targetClientState.GetLatestHeight())
 	if err != nil {
-		return fmt.Errorf("error unmarshalling consensus state file, err: %w", err)
+		return fmt.Errorf("error loading consensus state, err: %w", err)
 	}
-	consensusState := consensusStateExp.(*ibctm.ConsensusState)
+	if !found {
+		return fmt.Errorf("consensus state not found in database")
+	}
 
 	merklePath := commitmenttypes.NewMerklePath(hosttypes.FullClientStatePath(connection.GetCounterparty().GetClientID()))
 	merklePath, err = commitmenttypes.ApplyPrefix(connection.GetCounterparty().GetPrefix(), merklePath)
@@ -406,7 +390,7 @@ func clientVerification(
 	return err
 }
 
-func connectionVerefication(
+func connectionVerification(
 	connection connectiontypes.ConnectionEnd,
 	connectionEnd connectiontypes.ConnectionEnd,
 	height exported.Height,
@@ -417,21 +401,21 @@ func connectionVerefication(
 ) error {
 	clientID := connection.GetClientID()
 
-	clientStatePath := fmt.Sprintf("clients/%s/clientState", clientID)
-	clientStateByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(clientStatePath)))
-	clientStateExp, err := clienttypes.UnmarshalClientState(marshaler, clientStateByte)
+	clientState, found, err := getClientState(accessibleState.GetStateDB(), clientID)
 	if err != nil {
-		return fmt.Errorf("error unmarshalling client state file, err: %w", err)
+		return fmt.Errorf("error loading client state, err: %w", err)
 	}
-	clientState := clientStateExp.(*ibctm.ClientState)
+	if !found {
+		return fmt.Errorf("client state not found in database")
+	}
 
-	consensusStatePath := fmt.Sprintf("clients/%s/consensusStates/%s", clientID, clientState.GetLatestHeight())
-	consensusStateByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(consensusStatePath)))
-	consensusStateExp, err := clienttypes.UnmarshalConsensusState(marshaler, consensusStateByte)
+	consensusState, found, err := getConsensusState(accessibleState.GetStateDB(), clientID, clientState.GetLatestHeight())
 	if err != nil {
-		return fmt.Errorf("error unmarshalling consensus state file, err: %w", err)
+		return fmt.Errorf("error loading consensus state, err: %w", err)
 	}
-	consensusState := consensusStateExp.(*ibctm.ConsensusState)
+	if !found {
+		return fmt.Errorf("consensus state not found in database")
+	}
 
 	merklePath := commitmenttypes.NewMerklePath(hosttypes.ConnectionPath(connectionID))
 	merklePath, err = commitmenttypes.ApplyPrefix(connection.GetCounterparty().GetPrefix(), merklePath)

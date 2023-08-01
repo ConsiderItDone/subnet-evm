@@ -233,7 +233,6 @@ func connOpenTry(accessibleState contract.AccessibleState, caller common.Address
 		return nil, remainingGas, err
 	}
 
-	// CUSTOM CODE STARTS HERE
 	connectionID, err := _connOpenTry(&callOpts[ConnOpenTryInput]{
 		accessibleState: accessibleState,
 		caller:          caller,
