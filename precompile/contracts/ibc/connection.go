@@ -87,7 +87,7 @@ func connOpenAck(accessibleState contract.AccessibleState, caller common.Address
 	}
 
 	// this function does not return an output, leave this one as is
-	packedOutput := []byte{}
+	var packedOutput []byte = nil
 
 	// Return the packed output and the remaining gas
 	return packedOutput, remainingGas, nil

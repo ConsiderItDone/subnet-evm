@@ -173,12 +173,12 @@ func _connOpenTry(opts *callOpts[ConnOpenTryInput]) (string, error) {
 	}
 
 	proofHeight := &clienttypes.Height{}
-	if err := marshaler.UnmarshalInterface(opts.args.ProofHeight, proofHeight); err != nil {
+	if err := proofHeight.Unmarshal(opts.args.ProofHeight); err != nil {
 		return "", fmt.Errorf("error unmarshalling proofHeight: %w", err)
 	}
 
 	consensusHeight := &clienttypes.Height{}
-	if err = marshaler.UnmarshalInterface(opts.args.ConsensusHeight, consensusHeight); err != nil {
+	if err := consensusHeight.Unmarshal(opts.args.ConsensusHeight); err != nil {
 		return "", fmt.Errorf("error unmarshalling consensusHeight: %w", err)
 	}
 
