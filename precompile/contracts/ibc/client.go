@@ -11,7 +11,6 @@ import (
 	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
 	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
 	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
-	"github.com/cosmos/ibc-go/v7/modules/core/exported"
 	ibctm "github.com/cosmos/ibc-go/v7/modules/light-clients/07-tendermint"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -147,34 +146,9 @@ func createClient(accessibleState contract.AccessibleState, caller common.Addres
 		return nil, remainingGas, err
 	}
 
-	clientType := inputStruct.ClientType
-
-	// supports only Tendermint for now
-	if clientType != exported.Tendermint {
-		return nil, remainingGas, ErrWrongClientType
-	}
-
-	// generate clientID
-	clientId, err := generateClientIdentifier(accessibleState.GetStateDB(), clientType)
+	clientId, err := _createClient(accessibleState.GetStateDB(), inputStruct)
 	if err != nil {
 		return nil, remainingGas, err
-	}
-
-	clientState := &ibctm.ClientState{}
-	err = clientState.Unmarshal(inputStruct.ClientState)
-	if err != nil {
-		return nil, remainingGas, fmt.Errorf("error unmarshalling client state: %w", err)
-	}
-
-	err = storeClientState(accessibleState.GetStateDB(), clientId, clientState)
-	if err != nil {
-		return nil, remainingGas, fmt.Errorf("error unmarshalling client state: %w", err)
-	}
-
-	consensusState := &ibctm.ConsensusState{}
-	err = consensusState.Unmarshal(inputStruct.ConsensusState)
-	if err != nil {
-		return nil, 0, fmt.Errorf("error unmarshalling client state: %w", err)
 	}
 
 	// emit event
@@ -238,7 +212,7 @@ func updateClient(accessibleState contract.AccessibleState, caller common.Addres
 	}
 
 	// this function does not return an output, leave this one as is
-	packedOutput := []byte{}
+	var packedOutput []byte = nil
 
 	// Return the packed output and the remaining gas
 	return packedOutput, remainingGas, nil
@@ -286,7 +260,7 @@ func upgradeClient(accessibleState contract.AccessibleState, caller common.Addre
 	}
 
 	// this function does not return an output, leave this one as is
-	packedOutput := []byte{}
+	var packedOutput []byte = nil
 
 	// Return the packed output and the remaining gas
 	return packedOutput, remainingGas, nil

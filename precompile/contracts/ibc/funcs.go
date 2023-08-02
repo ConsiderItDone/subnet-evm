@@ -34,6 +34,49 @@ type callOpts[T any] struct {
 	args            T
 }
 
+func _createClient(db contract.StateDB, inputStruct CreateClientInput) (string, error) {
+	clientType := inputStruct.ClientType
+
+	// supports only Tendermint for now
+	if clientType != exported.Tendermint {
+		return "", ErrWrongClientType
+	}
+
+	// generate clientID
+	clientId, err := generateClientIdentifier(db, clientType)
+	if err != nil {
+		return "", err
+	}
+
+	clientState := &ibctm.ClientState{}
+	err = clientState.Unmarshal(inputStruct.ClientState)
+	if err != nil {
+		return "", fmt.Errorf("error unmarshalling client state: %w", err)
+	}
+
+	consensusState := &ibctm.ConsensusState{}
+	err = consensusState.Unmarshal(inputStruct.ConsensusState)
+	if err != nil {
+		return "", fmt.Errorf("error unmarshalling client state: %w", err)
+	}
+
+	err = storeClientState(db, clientId, clientState)
+	if err != nil {
+		return "", fmt.Errorf("error unmarshalling client state: %w", err)
+	}
+
+	// store ConsensusStateBytes
+	consensusStateByte, err := consensusState.Marshal()
+	if err != nil {
+		return "", errors.New("consensusState marshaler error")
+	}
+
+	consensusStatePath := fmt.Sprintf("clients/%s/consensusStates/%s", clientId, clientState.GetLatestHeight())
+	db.SetPrecompileState(common.BytesToAddress([]byte(consensusStatePath)), consensusStateByte)
+
+	return clientId, nil
+}
+
 func _connOpenInit(opts *callOpts[ConnOpenInitInput]) (string, error) {
 	stateDB := opts.accessibleState.GetStateDB()
 
