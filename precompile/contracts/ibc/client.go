@@ -11,8 +11,11 @@ import (
 	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
 	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
 	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
+	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
+	"github.com/cosmos/ibc-go/v7/modules/core/exported"
 	ibctm "github.com/cosmos/ibc-go/v7/modules/light-clients/07-tendermint"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/ava-labs/subnet-evm/vmerrs"
@@ -85,23 +88,24 @@ func generateClientIdentifier(db contract.StateDB, clientType string) (string, e
 	return clientId, nil
 }
 
+func calculateKey(path []byte) string {
+	return crypto.Keccak256Hash(crypto.Keccak256Hash(path).Bytes()).Hex()
+}
+
 func storeClientState(db contract.StateDB, clientId string, clientState *ibctm.ClientState) error {
 	bz, err := clientState.Marshal()
 	if err != nil {
 		return err
 	}
-	clientStatePath := fmt.Sprintf("clients/%s/clientState", clientId)
-	db.SetPrecompileState(common.BytesToAddress([]byte(clientStatePath)), bz)
-
-	//log.Info("Set IBC client state", "len", len(bz), "path", clientStatePath, "data", bz)
+	key := calculateKey(host.FullClientStateKey(clientId))
+	db.SetPrecompileState(common.BytesToAddress([]byte(key)), bz)
 
 	return nil
 }
 
 func getClientState(db contract.StateDB, clientId string) (*ibctm.ClientState, bool, error) {
-	clientStatePath := fmt.Sprintf("clients/%s/clientState", clientId)
-	bz := db.GetPrecompileState(common.BytesToAddress([]byte(clientStatePath)))
-	//log.Info("Getting IBC client state", "len", len(bz), "path", clientStatePath, "data", bz)
+	key := calculateKey(host.FullClientStateKey(clientId))
+	bz := db.GetPrecompileState(common.BytesToAddress([]byte(key)))
 
 	if len(bz) == 0 {
 		return nil, false, nil
@@ -114,6 +118,34 @@ func getClientState(db contract.StateDB, clientId string) (*ibctm.ClientState, b
 	}
 
 	return clientState, true, nil
+}
+
+func storeConsensusState(db contract.StateDB, clientId string, consensusState *ibctm.ConsensusState, height exported.Height) error {
+	bz, err := consensusState.Marshal()
+	if err != nil {
+		return err
+	}
+	key := calculateKey(host.FullConsensusStateKey(clientId, height))
+	db.SetPrecompileState(common.BytesToAddress([]byte(key)), bz)
+
+	return nil
+}
+
+func getConsensusState(db contract.StateDB, clientId string, height exported.Height) (*ibctm.ConsensusState, bool, error) {
+	key := calculateKey(host.FullConsensusStateKey(clientId, height))
+	found := db.Exist(common.BytesToAddress([]byte(key)))
+	if !found {
+		return nil, false, nil
+	}
+
+	bz := db.GetPrecompileState(common.BytesToAddress([]byte(key)))
+	consensusState := &ibctm.ConsensusState{}
+	err := consensusState.Unmarshal(bz)
+	if err != nil {
+		return nil, false, err
+	}
+
+	return consensusState, true, nil
 }
 
 //func storeClientState(db contract.StateDB, clientState *ibctm.ClientState) error {
@@ -146,9 +178,39 @@ func createClient(accessibleState contract.AccessibleState, caller common.Addres
 		return nil, remainingGas, err
 	}
 
-	clientId, err := _createClient(accessibleState.GetStateDB(), inputStruct)
+	clientType := inputStruct.ClientType
+
+	// supports only Tendermint for now
+	if clientType != exported.Tendermint {
+		return nil, remainingGas, ErrWrongClientType
+	}
+
+	// generate clientID
+	clientId, err := generateClientIdentifier(accessibleState.GetStateDB(), clientType)
 	if err != nil {
 		return nil, remainingGas, err
+	}
+
+	clientState := &ibctm.ClientState{}
+	err = clientState.Unmarshal(inputStruct.ClientState)
+	if err != nil {
+		return nil, remainingGas, fmt.Errorf("error unmarshalling client state: %w", err)
+	}
+
+	err = storeClientState(accessibleState.GetStateDB(), clientId, clientState)
+	if err != nil {
+		return nil, remainingGas, fmt.Errorf("error storing client state: %w", err)
+	}
+
+	consensusState := &ibctm.ConsensusState{}
+	err = consensusState.Unmarshal(inputStruct.ConsensusState)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error unmarshalling consensus state: %w", err)
+	}
+
+	err = storeConsensusState(accessibleState.GetStateDB(), clientId, consensusState, clientState.GetLatestHeight())
+	if err != nil {
+		return nil, remainingGas, fmt.Errorf("error storing consensus state: %w", err)
 	}
 
 	// emit event
@@ -212,7 +274,7 @@ func updateClient(accessibleState contract.AccessibleState, caller common.Addres
 	}
 
 	// this function does not return an output, leave this one as is
-	var packedOutput []byte = nil
+	packedOutput := []byte{}
 
 	// Return the packed output and the remaining gas
 	return packedOutput, remainingGas, nil
@@ -260,7 +322,7 @@ func upgradeClient(accessibleState contract.AccessibleState, caller common.Addre
 	}
 
 	// this function does not return an output, leave this one as is
-	var packedOutput []byte = nil
+	packedOutput := []byte{}
 
 	// Return the packed output and the remaining gas
 	return packedOutput, remainingGas, nil

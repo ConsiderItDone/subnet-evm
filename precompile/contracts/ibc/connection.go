@@ -87,7 +87,7 @@ func connOpenAck(accessibleState contract.AccessibleState, caller common.Address
 	}
 
 	// this function does not return an output, leave this one as is
-	var packedOutput []byte = nil
+	packedOutput := []byte{}
 
 	// Return the packed output and the remaining gas
 	return packedOutput, remainingGas, nil
@@ -233,7 +233,6 @@ func connOpenTry(accessibleState contract.AccessibleState, caller common.Address
 		return nil, remainingGas, err
 	}
 
-	// CUSTOM CODE STARTS HERE
 	connectionID, err := _connOpenTry(&callOpts[ConnOpenTryInput]{
 		accessibleState: accessibleState,
 		caller:          caller,
