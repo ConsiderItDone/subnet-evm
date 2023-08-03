@@ -143,13 +143,8 @@ func TestConnOpenTry(t *testing.T) {
 		path               *ibctesting.Path
 		delayPeriod        uint64
 		versions           []exported.Version
-		counterparty       connectiontypes.Counterparty
 		consensusHeight    clienttypes.Height
 		counterpartyClient exported.ClientState
-		proofInit          []byte
-		proofClient        []byte
-		proofHeight        clienttypes.Height
-		proofConsensus     []byte
 	)
 
 	res, err := PackConnOpenTryOutput("connection-0")
@@ -164,50 +159,49 @@ func TestConnOpenTry(t *testing.T) {
 			},
 			ExpectedRes: res,
 		},
-		/*
-			"success with delay period": {
-				BeforeHook: func(t testing.TB, state contract.StateDB) {
-					require.NoError(t, path.EndpointA.ConnOpenInit())
+		//"success with delay period": {
+		//	BeforeHook: func(t testing.TB, state contract.StateDB) {
+		//		require.NoError(t, path.EndpointA.ConnOpenInit())
+		//
+		//		delayPeriod = uint64(time.Hour.Nanoseconds())
+		//
+		//		// set delay period on counterparty to non-zero value
+		//		conn := path.EndpointA.GetConnection()
+		//		conn.DelayPeriod = delayPeriod
+		//		chainA.App.GetIBCKeeper().ConnectionKeeper.SetConnection(chainA.GetContext(), path.EndpointA.ConnectionID, conn)
+		//
+		//		// commit in order for proof to return correct value
+		//		coordinator.CommitBlock(chainA)
+		//		require.NoError(t, path.EndpointB.UpdateClient())
+		//
+		//		// retrieve client state of chainA to pass as counterpartyClient
+		//		counterpartyClient = chainA.GetClientState(path.EndpointA.ClientID)
+		//	},
+		//	ExpectedRes: res,
+		//},
+		"invalid counterparty client": {
+			BeforeHook: func(t testing.TB, state contract.StateDB) {
+				require.NoError(t, path.EndpointA.ConnOpenInit())
 
-					delayPeriod = uint64(time.Hour.Nanoseconds())
+				// retrieve client state of chainB to pass as counterpartyClient
+				counterpartyClient = chainA.GetClientState(path.EndpointA.ClientID)
 
-					// set delay period on counterparty to non-zero value
-					conn := path.EndpointA.GetConnection()
-					conn.DelayPeriod = delayPeriod
-					chainA.App.GetIBCKeeper().ConnectionKeeper.SetConnection(chainA.GetContext(), path.EndpointA.ConnectionID, conn)
+				// Set an invalid client of chainA on chainB
+				tmClient, ok := counterpartyClient.(*ibctm.ClientState)
+				require.True(t, ok)
+				tmClient.ChainId = "wrongchainid"
 
-					// commit in order for proof to return correct value
-					coordinator.CommitBlock(chainA)
-					require.NoError(t, path.EndpointB.UpdateClient())
-
-					// retrieve client state of chainA to pass as counterpartyClient
-					counterpartyClient = chainA.GetClientState(path.EndpointA.ClientID)
-				},
-				ExpectedRes: res,
+				chainA.App.GetIBCKeeper().ClientKeeper.SetClientState(chainA.GetContext(), path.EndpointA.ClientID, tmClient)
 			},
-			"invalid counterparty client": {
-				BeforeHook: func(t testing.TB, state contract.StateDB) {
-					require.NoError(t, path.EndpointA.ConnOpenInit())
-
-					// retrieve client state of chainB to pass as counterpartyClient
-					counterpartyClient = chainA.GetClientState(path.EndpointA.ClientID)
-
-					// Set an invalid client of chainA on chainB
-					tmClient, ok := counterpartyClient.(*ibctm.ClientState)
-					require.True(t, ok)
-					tmClient.ChainId = "wrongchainid"
-
-					chainA.App.GetIBCKeeper().ClientKeeper.SetClientState(chainA.GetContext(), path.EndpointA.ClientID, tmClient)
-				},
-				ExpectedErr: "",
-			},
-		*/
+			ExpectedErr: "error clientVerification: chained membership proof failed to verify membership of value",
+		},
 		"counterparty versions is empty": {
 			BeforeHook: func(t testing.TB, state contract.StateDB) {
 				require.NoError(t, path.EndpointA.ConnOpenInit())
 
 				// retrieve client state of chainA to pass as counterpartyClient
 				counterpartyClient = chainA.GetClientState(path.EndpointA.ClientID)
+
 				versions = nil
 			},
 			ExpectedErr: "error PickVersion",
@@ -222,66 +216,51 @@ func TestConnOpenTry(t *testing.T) {
 				version := connectiontypes.NewVersion("0.0", nil)
 				versions = []exported.Version{version}
 			},
-			ExpectedErr: "error PickVersion",
+			ExpectedErr: "error PickVersion err: failed to find a matching counterparty version",
 		},
-		/*
-			"connection state verification failed": {
-				BeforeHook: func(t testing.TB, state contract.StateDB) {
-					// chainA connection not created
-				  // retrieve client state of chainA to pass as counterpartyClient
-					counterpartyClient = chainA.GetClientState(path.EndpointA.ClientID)
-				},
-				ExpectedErr: "",
+		"connection state verification failed": {
+			BeforeHook: func(t testing.TB, state contract.StateDB) {
+				// chainA connection not created
+
+				// retrieve client state of chainA to pass as counterpartyClient
+				counterpartyClient = chainA.GetClientState(path.EndpointA.ClientID)
 			},
-			"client state verification failed": {
-				BeforeHook: func(t testing.TB, state contract.StateDB) {
-					require.NoError(t, path.EndpointA.ConnOpenInit())
+			ExpectedErr: "error connectionVerification: chained membership proof contains nonexistence proof",
+		},
+		"client state verification failed": {
+			BeforeHook: func(t testing.TB, state contract.StateDB) {
+				require.NoError(t, path.EndpointA.ConnOpenInit())
 
-					// retrieve client state of chainA to pass as counterpartyClient
-					counterpartyClient = chainA.GetClientState(path.EndpointA.ClientID)
+				// retrieve client state of chainA to pass as counterpartyClient
+				counterpartyClient = chainA.GetClientState(path.EndpointA.ClientID)
 
-					// modify counterparty client without setting in store so it still passes validate but fails proof verification
-					tmClient, ok := counterpartyClient.(*ibctm.ClientState)
-					require.True(t, ok)
-
-					tmClient.LatestHeight = tmClient.LatestHeight.Increment().(clienttypes.Height)
-				},
-				ExpectedErr: "",
+				// modify counterparty client without setting in store so it still passes validate but fails proof verification
+				tmClient, ok := counterpartyClient.(*ibctm.ClientState)
+				require.True(t, ok)
+				tmClient.LatestHeight = tmClient.LatestHeight.Increment().(clienttypes.Height)
+				counterpartyClient = tmClient
 			},
-		*/
-	}
-
-	inputFn := func(t testing.TB) []byte {
-		counterpartyByte, err := counterparty.Marshal()
-		require.NoError(t, err)
-
-		clientStateByte, err := clienttypes.MarshalClientState(marshaler, counterpartyClient)
-		require.NoError(t, err)
-
-		versionsByte, err := json.Marshal(connectiontypes.ExportedVersionsToProto(versions))
-		require.NoError(t, err)
-
-		proofHeightByte, err := marshaler.Marshal(&proofHeight)
-		require.NoError(t, err)
-
-		consensusHeightByte, err := marshaler.Marshal(&consensusHeight)
-		require.NoError(t, err)
-
-		input, err := PackConnOpenTry(ConnOpenTryInput{
-			Counterparty:         counterpartyByte,
-			DelayPeriod:          uint32(delayPeriod),
-			ClientID:             path.EndpointB.ClientID,
-			ClientState:          clientStateByte,
-			CounterpartyVersions: versionsByte,
-			ProofInit:            proofInit,
-			ProofClient:          proofClient,
-			ProofConsensus:       proofConsensus,
-			ProofHeight:          proofHeightByte,
-			ConsensusHeight:      consensusHeightByte,
-		})
-		require.NoError(t, err)
-
-		return input
+			ExpectedErr: "error clientVerification: chained membership proof failed to verify membership",
+		},
+		//"consensus state verification failed": {
+		//	BeforeHook: func(t testing.TB, state contract.StateDB) {
+		//		// retrieve client state of chainA to pass as counterpartyClient
+		//		counterpartyClient = chainA.GetClientState(path.EndpointA.ClientID)
+		//
+		//		// give chainA wrong consensus state for chainB
+		//		consState, found := chainA.App.GetIBCKeeper().ClientKeeper.GetLatestClientConsensusState(chainA.GetContext(), path.EndpointA.ClientID)
+		//		require.True(t, found)
+		//
+		//		tmConsState, ok := consState.(*ibctm.ConsensusState)
+		//		require.True(t, ok)
+		//
+		//		tmConsState.Timestamp = time.Now()
+		//		chainA.App.GetIBCKeeper().ClientKeeper.SetClientConsensusState(chainA.GetContext(), path.EndpointA.ClientID, counterpartyClient.GetLatestHeight(), tmConsState)
+		//
+		//		require.NoError(t, path.EndpointA.ConnOpenInit())
+		//	},
+		//	ExpectedErr: "error clientVerification",
+		//},
 	}
 
 	for name, test := range tests {
@@ -301,64 +280,91 @@ func TestConnOpenTry(t *testing.T) {
 			path = ibctesting.NewPath(chainA, chainB)
 			coordinator.SetupClients(path)
 
-			orgBeforeHook := test.BeforeHook
-			test.BeforeHook = func(t testing.TB, state contract.StateDB) {
-				orgBeforeHook(t, state)
-				counterparty = connectiontypes.NewCounterparty(path.EndpointA.ClientID, path.EndpointA.ConnectionID, chainA.GetPrefix())
+			if test.BeforeHook != nil {
+				test.BeforeHook(t, statedb)
+				test.BeforeHook = nil
+			}
 
-				// ensure client is up to date to receive proof
-				require.NoError(t, path.EndpointB.UpdateClient())
+			counterparty := connectiontypes.NewCounterparty(path.EndpointA.ClientID, path.EndpointA.ConnectionID, chainA.GetPrefix())
 
-				connectionKey := host.ConnectionKey(path.EndpointA.ConnectionID)
-				proofInit, proofHeight = chainA.QueryProof(connectionKey)
-				fmt.Printf("proofInit %#v\n", proofInit)
-				fmt.Printf("proofHeight %#v\n", proofHeight)
-				if consensusHeight.IsZero() {
-					// retrieve consensus state height to provide proof for
-					consensusHeight = counterpartyClient.GetLatestHeight().(clienttypes.Height)
-				}
+			// ensure client is up to date to receive proof
+			require.NoError(t, path.EndpointB.UpdateClient())
 
-				consensusKey := host.FullConsensusStateKey(path.EndpointA.ClientID, consensusHeight)
-				proofConsensus, _ = chainA.QueryProof(consensusKey)
-				fmt.Printf("proofConsensus %#v\n", proofConsensus)
+			connectionKey := host.ConnectionKey(path.EndpointA.ConnectionID)
+			proofInit, proofHeight := chainA.QueryProof(connectionKey)
+			fmt.Printf("proofInit %#v\n", proofInit)
+			fmt.Printf("proofHeight %#v\n", proofHeight)
+			if consensusHeight.IsZero() {
+				// retrieve consensus state height to provide proof for
+				consensusHeight = counterpartyClient.GetLatestHeight().(clienttypes.Height)
+			}
+			consensusKey := host.FullConsensusStateKey(path.EndpointA.ClientID, consensusHeight)
+			proofConsensus, _ := chainA.QueryProof(consensusKey)
+			fmt.Printf("proofConsensus %#v\n", proofConsensus)
 
-				// retrieve proof of counterparty clientstate on chainA
-				clientKey := host.FullClientStateKey(path.EndpointA.ClientID)
-				proofClient, _ = chainA.QueryProof(clientKey)
-				fmt.Printf("proofClient %#v\n", proofClient)
+			// retrieve proof of counterparty clientstate on chainA
+			clientKey := host.FullClientStateKey(path.EndpointA.ClientID)
+			proofClient, _ := chainA.QueryProof(clientKey)
+			fmt.Printf("proofClient %#v\n", proofClient)
 
-				connection, _ := chainB.App.GetIBCKeeper().ConnectionKeeper.GetConnection(chainB.GetContext(), path.EndpointB.ConnectionID)
-				connectionByte := marshaler.MustMarshal(&connection)
-				connectionsPath := fmt.Sprintf("connections/%s", path.EndpointB.ConnectionID)
-				statedb.SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
+			counterpartyByte, _ := counterparty.Marshal()
+			fmt.Printf("counterparty %#v\n", counterpartyByte)
 
-				cs, _ := chainB.App.GetIBCKeeper().ClientKeeper.GetClientState(chainB.GetContext(), path.EndpointB.ClientID)
-				cStore := chainB.App.GetIBCKeeper().ClientKeeper.ClientStore(chainB.GetContext(), path.EndpointB.ClientID)
+			clientStateByte, _ := clienttypes.MarshalClientState(marshaler, counterpartyClient)
+			fmt.Printf("clientState %#v\n", clientStateByte)
 
-				if cs != nil {
-					clientState := cs.(*ibctm.ClientState)
-					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
-					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
-					clientStateByte := clienttypes.MustMarshalClientState(marshaler, cs)
+			versionsByte, _ := json.Marshal(connectiontypes.ExportedVersionsToProto(versions))
+			fmt.Printf("versions %#v\n", versionsByte)
 
-					clientStatePath := fmt.Sprintf("clients/%s/clientState", path.EndpointB.ClientID)
-					state.SetPrecompileState(
-						common.BytesToAddress([]byte(clientStatePath)),
-						clientStateByte,
-					)
-					consensusStateByte := clienttypes.MustMarshalConsensusState(marshaler, consensusState)
-					consensusStatePath := fmt.Sprintf("clients/%s/consensusStates/%s", path.EndpointB.ClientID, clientState.GetLatestHeight())
-					state.SetPrecompileState(
-						common.BytesToAddress([]byte(consensusStatePath)),
-						consensusStateByte,
-					)
-				}
+			proofHeightByte, _ := marshaler.MarshalInterface(&proofHeight)
+			fmt.Printf("proofHeightByte %#v\n", proofHeightByte)
+
+			consensusHeightByte, _ := marshaler.MarshalInterface(&consensusHeight)
+			fmt.Printf("consensusHeightByte %#v\n", consensusHeightByte)
+
+			input, err := PackConnOpenTry(ConnOpenTryInput{
+				Counterparty:         counterpartyByte,
+				DelayPeriod:          uint32(delayPeriod),
+				ClientID:             path.EndpointB.ClientID,
+				ClientState:          clientStateByte,
+				CounterpartyVersions: versionsByte,
+				ProofInit:            proofInit,
+				ProofClient:          proofClient,
+				ProofConsensus:       proofConsensus,
+				ProofHeight:          proofHeightByte,
+				ConsensusHeight:      consensusHeightByte,
+			})
+			require.NoError(t, err)
+
+			connection, _ := chainB.App.GetIBCKeeper().ConnectionKeeper.GetConnection(chainB.GetContext(), path.EndpointB.ConnectionID)
+			connectionByte := marshaler.MustMarshal(&connection)
+			connectionsPath := fmt.Sprintf("connections/%s", path.EndpointB.ConnectionID)
+			statedb.SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
+
+			cs, _ := chainB.App.GetIBCKeeper().ClientKeeper.GetClientState(chainB.GetContext(), path.EndpointB.ClientID)
+			cStore := chainB.App.GetIBCKeeper().ClientKeeper.ClientStore(chainB.GetContext(), path.EndpointB.ClientID)
+			if cs != nil {
+				clientState := cs.(*ibctm.ClientState)
+				clientStateByte, _ := clientState.Marshal()
+				statedb.SetPrecompileState(
+					clientStateKey(path.EndpointB.ClientID),
+					clientStateByte,
+				)
+
+				bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
+				exConsensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
+				consensusState := exConsensusState.(*ibctm.ConsensusState)
+				consensusStateByte, _ := consensusState.Marshal()
+				statedb.SetPrecompileState(
+					consensusStateKey(path.EndpointB.ClientID, clientState.GetLatestHeight()),
+					consensusStateByte,
+				)
 			}
 
 			test.Caller = common.Address{1}
 			test.SuppliedGas = ConnOpenTryGasCost
 			test.ReadOnly = false
-			test.InputFn = inputFn
+			test.Input = input
 			test.Run(t, Module, statedb)
 		})
 	}
