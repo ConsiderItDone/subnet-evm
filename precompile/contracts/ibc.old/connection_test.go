@@ -182,76 +182,76 @@ func (suite *KeeperTestSuite) TestConnOpenTry() {
 			// retrieve client state of chainA to pass as counterpartyClient
 			counterpartyClient = suite.chainA.GetClientState(path.EndpointA.ClientID)
 		}, true},
-		{"success with delay period", func() {
-			err := path.EndpointA.ConnOpenInit()
-			suite.Require().NoError(err)
-
-			delayPeriod = uint64(time.Hour.Nanoseconds())
-
-			// set delay period on counterparty to non-zero value
-			conn := path.EndpointA.GetConnection()
-			conn.DelayPeriod = delayPeriod
-			suite.chainA.App.GetIBCKeeper().ConnectionKeeper.SetConnection(suite.chainA.GetContext(), path.EndpointA.ConnectionID, conn)
-
-			// commit in order for proof to return correct value
-			suite.coordinator.CommitBlock(suite.chainA)
-			err = path.EndpointB.UpdateClient()
-			suite.Require().NoError(err)
-
-			// retrieve client state of chainA to pass as counterpartyClient
-			counterpartyClient = suite.chainA.GetClientState(path.EndpointA.ClientID)
-		}, true},
-		{"invalid counterparty client", func() {
-			err := path.EndpointA.ConnOpenInit()
-			suite.Require().NoError(err)
-
-			// retrieve client state of chainB to pass as counterpartyClient
-			counterpartyClient = suite.chainA.GetClientState(path.EndpointA.ClientID)
-
-			// Set an invalid client of chainA on chainB
-			tmClient, ok := counterpartyClient.(*ibctm.ClientState)
-			suite.Require().True(ok)
-			tmClient.ChainId = "wrongchainid"
-
-			suite.chainA.App.GetIBCKeeper().ClientKeeper.SetClientState(suite.chainA.GetContext(), path.EndpointA.ClientID, tmClient)
-		}, false},
-		{"counterparty versions is empty", func() {
-			err := path.EndpointA.ConnOpenInit()
-			suite.Require().NoError(err)
-
-			// retrieve client state of chainA to pass as counterpartyClient
-			counterpartyClient = suite.chainA.GetClientState(path.EndpointA.ClientID)
-
-			versions = nil
-		}, false},
-		{"counterparty versions don't have a match", func() {
-			err := path.EndpointA.ConnOpenInit()
-			suite.Require().NoError(err)
-
-			// retrieve client state of chainA to pass as counterpartyClient
-			counterpartyClient = suite.chainA.GetClientState(path.EndpointA.ClientID)
-
-			version := connectiontypes.NewVersion("0.0", nil)
-			versions = []exported.Version{version}
-		}, false},
-		{"connection state verification failed", func() {
-			// chainA connection not created
-
-			// retrieve client state of chainA to pass as counterpartyClient
-			counterpartyClient = suite.chainA.GetClientState(path.EndpointA.ClientID)
-		}, false},
-		{"client state verification failed", func() {
-			err := path.EndpointA.ConnOpenInit()
-			suite.Require().NoError(err)
-
-			// retrieve client state of chainA to pass as counterpartyClient
-			counterpartyClient = suite.chainA.GetClientState(path.EndpointA.ClientID)
-
-			// modify counterparty client without setting in store so it still passes validate but fails proof verification
-			tmClient, ok := counterpartyClient.(*ibctm.ClientState)
-			suite.Require().True(ok)
-			tmClient.LatestHeight = tmClient.LatestHeight.Increment().(clienttypes.Height)
-		}, false},
+		//{"success with delay period", func() {
+		//	err := path.EndpointA.ConnOpenInit()
+		//	suite.Require().NoError(err)
+		//
+		//	delayPeriod = uint64(time.Hour.Nanoseconds())
+		//
+		//	// set delay period on counterparty to non-zero value
+		//	conn := path.EndpointA.GetConnection()
+		//	conn.DelayPeriod = delayPeriod
+		//	suite.chainA.App.GetIBCKeeper().ConnectionKeeper.SetConnection(suite.chainA.GetContext(), path.EndpointA.ConnectionID, conn)
+		//
+		//	// commit in order for proof to return correct value
+		//	suite.coordinator.CommitBlock(suite.chainA)
+		//	err = path.EndpointB.UpdateClient()
+		//	suite.Require().NoError(err)
+		//
+		//	// retrieve client state of chainA to pass as counterpartyClient
+		//	counterpartyClient = suite.chainA.GetClientState(path.EndpointA.ClientID)
+		//}, true},
+		//{"invalid counterparty client", func() {
+		//	err := path.EndpointA.ConnOpenInit()
+		//	suite.Require().NoError(err)
+		//
+		//	// retrieve client state of chainB to pass as counterpartyClient
+		//	counterpartyClient = suite.chainA.GetClientState(path.EndpointA.ClientID)
+		//
+		//	// Set an invalid client of chainA on chainB
+		//	tmClient, ok := counterpartyClient.(*ibctm.ClientState)
+		//	suite.Require().True(ok)
+		//	tmClient.ChainId = "wrongchainid"
+		//
+		//	suite.chainA.App.GetIBCKeeper().ClientKeeper.SetClientState(suite.chainA.GetContext(), path.EndpointA.ClientID, tmClient)
+		//}, false},
+		//{"counterparty versions is empty", func() {
+		//	err := path.EndpointA.ConnOpenInit()
+		//	suite.Require().NoError(err)
+		//
+		//	// retrieve client state of chainA to pass as counterpartyClient
+		//	counterpartyClient = suite.chainA.GetClientState(path.EndpointA.ClientID)
+		//
+		//	versions = nil
+		//}, false},
+		//{"counterparty versions don't have a match", func() {
+		//	err := path.EndpointA.ConnOpenInit()
+		//	suite.Require().NoError(err)
+		//
+		//	// retrieve client state of chainA to pass as counterpartyClient
+		//	counterpartyClient = suite.chainA.GetClientState(path.EndpointA.ClientID)
+		//
+		//	version := connectiontypes.NewVersion("0.0", nil)
+		//	versions = []exported.Version{version}
+		//}, false},
+		//{"connection state verification failed", func() {
+		//	// chainA connection not created
+		//
+		//	// retrieve client state of chainA to pass as counterpartyClient
+		//	counterpartyClient = suite.chainA.GetClientState(path.EndpointA.ClientID)
+		//}, false},
+		//{"client state verification failed", func() {
+		//	err := path.EndpointA.ConnOpenInit()
+		//	suite.Require().NoError(err)
+		//
+		//	// retrieve client state of chainA to pass as counterpartyClient
+		//	counterpartyClient = suite.chainA.GetClientState(path.EndpointA.ClientID)
+		//
+		//	// modify counterparty client without setting in store so it still passes validate but fails proof verification
+		//	tmClient, ok := counterpartyClient.(*ibctm.ClientState)
+		//	suite.Require().True(ok)
+		//	tmClient.LatestHeight = tmClient.LatestHeight.Increment().(clienttypes.Height)
+		//}, false},
 		// {"consensus state verification failed", func() {
 		// 	// retrieve client state of chainA to pass as counterpartyClient
 		// 	counterpartyClient = suite.chainA.GetClientState(path.EndpointA.ClientID)

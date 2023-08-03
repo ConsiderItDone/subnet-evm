@@ -40,7 +40,7 @@ var (
 	testClientHeight = tmClientTypes.NewHeight(0, 5)
 )
 
-func RunIBCTests(ctx context.Context) {
+func initIBCTest(ctx context.Context) (ethclient.Client, *contractBind.Contract, *bind.TransactOpts) {
 	log.Info("Executing IBC tests on a new blockchain")
 
 	genesisFilePath := "./tests/precompile/genesis/ibc.json"
@@ -58,6 +58,12 @@ func RunIBCTests(ctx context.Context) {
 	auth, err := bind.NewKeyedTransactorWithChainID(testKey, chainId)
 	gomega.Expect(err).Should(gomega.BeNil())
 
+	return ethClient, ibcContract, auth
+}
+
+func RunIBCCreateClientTests(ctx context.Context) {
+	ethClient, ibcContract, auth := initIBCTest(ctx)
+
 	log.Info("Starting IBC tests")
 
 	// create tendermint client
@@ -66,10 +72,40 @@ func RunIBCTests(ctx context.Context) {
 
 	log.Info("Create Client tx", "hash", createClientTx.Hash(), "blockNumber", receipt.BlockNumber.Uint64(), "clientId", clientId)
 
-	//createClientTx2, receipt2, clientId2 := createClient(ctx, ethClient, ibcContract, auth)
-	//gomega.Expect(clientId2).Should(gomega.Equal("07-tendermint-1"))
-	//
-	//log.Info("Create Client tx2", "hash", createClientTx2.Hash(), "blockNumber", receipt2.BlockNumber.Uint64(), "clientId", clientId2)
+	createClientTx2, receipt2, clientId2 := createClient(ctx, ethClient, ibcContract, auth)
+	gomega.Expect(clientId2).Should(gomega.Equal("07-tendermint-1"))
+
+	log.Info("Create Client tx2", "hash", createClientTx2.Hash(), "blockNumber", receipt2.BlockNumber.Uint64(), "clientId", clientId2)
+}
+
+func RunIBCConnectionOpenInitTests(ctx context.Context) {
+	ethClient, ibcContract, auth := initIBCTest(ctx)
+
+	log.Info("Starting IBC tests")
+
+	// create tendermint client
+	createClientTx, receipt, clientId := createClient(ctx, ethClient, ibcContract, auth)
+	gomega.Expect(clientId).Should(gomega.Equal("07-tendermint-0"))
+
+	log.Info("Create Client tx", "hash", createClientTx.Hash(), "blockNumber", receipt.BlockNumber.Uint64(), "clientId", clientId)
+
+	// connection open init
+	connOpenInitTx, connOpenInitReceipt, connectionId, clientId2 := connectionOpenInit(ctx, ethClient, ibcContract, auth, clientId)
+	gomega.Expect(clientId).Should(gomega.Equal(clientId2))
+
+	log.Info("ConnOpenInit tx", "hash", connOpenInitTx.Hash(), "blockNumber", connOpenInitReceipt.BlockNumber.Uint64(), "connectionId", connectionId)
+}
+
+func RunIBCConnectionOpenTryTests(ctx context.Context) {
+	ethClient, ibcContract, auth := initIBCTest(ctx)
+
+	log.Info("Starting IBC tests")
+
+	// create tendermint client
+	createClientTx, receipt, clientId := createClient(ctx, ethClient, ibcContract, auth)
+	gomega.Expect(clientId).Should(gomega.Equal("07-tendermint-0"))
+
+	log.Info("Create Client tx", "hash", createClientTx.Hash(), "blockNumber", receipt.BlockNumber.Uint64(), "clientId", clientId)
 
 	// connection open init
 	connOpenInitTx, connOpenInitReceipt, connectionId, clientId2 := connectionOpenInit(ctx, ethClient, ibcContract, auth, clientId)
