@@ -16,7 +16,6 @@ import (
 	cosmostypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/std"
 	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
-	"github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
 	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
 	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
 	"github.com/cosmos/ibc-go/v7/modules/core/exported"
@@ -42,8 +41,8 @@ const (
 
 var (
 	privVal                   = ibctestingmock.NewPV()
-	testClientHeight          = types.NewHeight(0, 5)
-	testClientHeightRevision1 = types.NewHeight(1, 5)
+	testClientHeight          = clienttypes.NewHeight(0, 5)
+	testClientHeightRevision1 = clienttypes.NewHeight(1, 5)
 
 	validator  *tmtypes.Validator
 	validators *tmtypes.ValidatorSet
@@ -186,6 +185,7 @@ func TestUpdateClient(t *testing.T) {
 				// clientState should not be updated
 				updateHeader = createPastUpdateFn(fillHeight, trustedHeight)
 			},
+			ExpectedRes: make([]byte, 0),
 		},
 		"misbehaviour detection: conflicting header": {
 			BeforeHook: func(t testing.TB, state contract.StateDB) {
@@ -346,6 +346,7 @@ func TestUpgradeClient(t *testing.T) {
 				proofUpgradedClient, _ = chainB.QueryUpgradeProof(upgradetypes.UpgradedClientKey(int64(lastHeight.GetRevisionHeight())), cs.GetLatestHeight().GetRevisionHeight())
 				proofUpgradedConsState, _ = chainB.QueryUpgradeProof(upgradetypes.UpgradedConsStateKey(int64(lastHeight.GetRevisionHeight())), cs.GetLatestHeight().GetRevisionHeight())
 			},
+			ExpectedRes: make([]byte, 0),
 		},
 		"client state not found": {
 			BeforeHook: func(t testing.TB, state contract.StateDB) {
