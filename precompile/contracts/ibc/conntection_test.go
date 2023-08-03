@@ -668,3 +668,114 @@ func TestConnOpenAck(t *testing.T) {
 		})
 	}
 }
+
+func TestConnOpenConfirm(t *testing.T) {
+	coordinator := ibctesting.NewCoordinator(t, 2)
+	chainA := coordinator.GetChain(ibctesting.GetChainID(1))
+	chainB := coordinator.GetChain(ibctesting.GetChainID(2))
+
+	var path *ibctesting.Path
+
+	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+
+	std.RegisterInterfaces(interfaceRegistry)
+	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
+
+	tests := map[string]testutils.PrecompileTest{
+		"success": {
+			BeforeHook: func(t testing.TB, state contract.StateDB) {
+				path.EndpointA.ConnOpenInit()
+				path.EndpointB.ConnOpenTry()
+				path.EndpointA.ConnOpenAck()
+			},
+			ExpectedRes: make([]byte, 0),
+		},
+		"connection not found": {
+			ExpectedErr: "connection state is not TRYOPEN",
+		},
+		"chain B's connection state is not TRYOPEN": {
+			BeforeHook: func(t testing.TB, state contract.StateDB) {
+				coordinator.CreateConnections(path)
+			},
+			ExpectedErr: "connection state is not TRYOPEN",
+		},
+	}
+
+	for name, test := range tests {
+		test := test
+		t.Run(name, func(t *testing.T) {
+			statedb := state.NewTestStateDB(t)
+			statedb.Finalise(true)
+
+			coordinator = ibctesting.NewCoordinator(t, 2)
+			chainA = coordinator.GetChain(ibctesting.GetChainID(1))
+			chainB = coordinator.GetChain(ibctesting.GetChainID(2))
+			path = ibctesting.NewPath(chainA, chainB)
+			coordinator.SetupClients(path)
+
+			if test.BeforeHook != nil {
+				test.BeforeHook(t, statedb)
+				test.BeforeHook = nil
+			}
+
+			require.NoError(t, path.EndpointB.UpdateClient())
+
+			connectionKey := host.ConnectionKey(path.EndpointA.ConnectionID)
+			proofAck, proofHeight := chainA.QueryProof(connectionKey)
+
+			proofHeightByte, err := marshaler.Marshal(&proofHeight)
+			require.NoError(t, err)
+
+			input, err := PackConnOpenConfirm(ConnOpenConfirmInput{
+				ConnectionID: path.EndpointB.ConnectionID,
+				ProofAck:     proofAck,
+				ProofHeight:  proofHeightByte,
+			})
+			require.NoError(t, err)
+
+			connection, _ := chainB.App.GetIBCKeeper().ConnectionKeeper.GetConnection(chainB.GetContext(), path.EndpointB.ConnectionID)
+			connectionByte := marshaler.MustMarshal(&connection)
+			connectionsPath := fmt.Sprintf("connections/%s", path.EndpointB.ConnectionID)
+			statedb.SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
+
+			cs, _ := chainB.App.GetIBCKeeper().ClientKeeper.GetClientState(chainB.GetContext(), path.EndpointB.ClientID)
+			cStore := chainB.App.GetIBCKeeper().ClientKeeper.ClientStore(chainB.GetContext(), path.EndpointB.ClientID)
+
+			if cs != nil {
+				clientState := cs.(*ibctm.ClientState)
+				bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
+				exConsensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
+				consensusState := exConsensusState.(*ibctm.ConsensusState)
+				clientStateByte, _ := clientState.Marshal()
+
+				clientStatePath := fmt.Sprintf("clients/%s/clientState", connection.GetClientID())
+				statedb.SetPrecompileState(
+					common.BytesToAddress([]byte(clientStatePath)),
+					clientStateByte,
+				)
+				statedb.SetPrecompileState(
+					clientStateKey(connection.GetClientID()),
+					clientStateByte,
+				)
+
+				consensusStateByte, _ := consensusState.Marshal()
+				consensusStatePath := fmt.Sprintf("clients/%s/consensusStates/%s", connection.GetClientID(), clientState.GetLatestHeight())
+				statedb.SetPrecompileState(
+					common.BytesToAddress([]byte(consensusStatePath)),
+					consensusStateByte,
+				)
+				statedb.SetPrecompileState(
+					consensusStateKey(connection.GetClientID(), clientState.GetLatestHeight()),
+					consensusStateByte,
+				)
+			}
+
+			test.Caller = common.Address{1}
+			test.SuppliedGas = ConnOpenConfirmGasCost
+			test.ReadOnly = false
+			test.Input = input
+			test.Run(t, Module, statedb)
+		})
+	}
+}
