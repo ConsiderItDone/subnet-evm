@@ -744,27 +744,16 @@ func TestConnOpenConfirm(t *testing.T) {
 
 			if cs != nil {
 				clientState := cs.(*ibctm.ClientState)
-				bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
-				exConsensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
-				consensusState := exConsensusState.(*ibctm.ConsensusState)
 				clientStateByte, _ := clientState.Marshal()
-
-				clientStatePath := fmt.Sprintf("clients/%s/clientState", connection.GetClientID())
-				statedb.SetPrecompileState(
-					common.BytesToAddress([]byte(clientStatePath)),
-					clientStateByte,
-				)
 				statedb.SetPrecompileState(
 					clientStateKey(connection.GetClientID()),
 					clientStateByte,
 				)
 
+				bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
+				exConsensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
+				consensusState := exConsensusState.(*ibctm.ConsensusState)
 				consensusStateByte, _ := consensusState.Marshal()
-				consensusStatePath := fmt.Sprintf("clients/%s/consensusStates/%s", connection.GetClientID(), clientState.GetLatestHeight())
-				statedb.SetPrecompileState(
-					common.BytesToAddress([]byte(consensusStatePath)),
-					consensusStateByte,
-				)
 				statedb.SetPrecompileState(
 					consensusStateKey(connection.GetClientID(), clientState.GetLatestHeight()),
 					consensusStateByte,
