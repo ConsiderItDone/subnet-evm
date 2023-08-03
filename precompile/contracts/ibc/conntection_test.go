@@ -22,6 +22,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func clientStateKey(clientId string) common.Address {
+	return common.BytesToAddress([]byte(
+		calculateKey(host.FullClientStateKey(clientId)),
+	))
+}
+
 func TestConnOpenInit(t *testing.T) {
 	coordinator := ibctesting.NewCoordinator(t, 2)
 	chainA := coordinator.GetChain(ibctesting.GetChainID(1))
@@ -103,9 +109,8 @@ func TestConnOpenInit(t *testing.T) {
 			cs, _ := chainA.App.GetIBCKeeper().ClientKeeper.GetClientState(chainA.GetContext(), path.EndpointA.ClientID)
 
 			clientStateByte, _ := cs.(*ibctm.ClientState).Marshal()
-			clientStatePath := fmt.Sprintf("clients/%s/clientState", path.EndpointA.ClientID)
 			statedb.SetPrecompileState(
-				common.BytesToAddress([]byte(clientStatePath)),
+				clientStateKey(path.EndpointA.ClientID),
 				clientStateByte,
 			)
 
