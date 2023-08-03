@@ -28,6 +28,12 @@ func clientStateKey(clientId string) common.Address {
 	))
 }
 
+func consensusStateKey(clientId string, height exported.Height) common.Address {
+	return common.BytesToAddress([]byte(
+		calculateKey(host.FullConsensusStateKey(clientId, height)),
+	))
+}
+
 func TestConnOpenInit(t *testing.T) {
 	coordinator := ibctesting.NewCoordinator(t, 2)
 	chainA := coordinator.GetChain(ibctesting.GetChainID(1))
@@ -389,6 +395,7 @@ func TestConnOpenAck(t *testing.T) {
 				// retrieve client state of chainB to pass as counterpartyClient
 				counterpartyClient = chainB.GetClientState(path.EndpointB.ClientID)
 			},
+			ExpectedRes: make([]byte, 0),
 		},
 		"invalid counterparty client": {
 			BeforeHook: func(t testing.TB, state contract.StateDB) {
@@ -621,19 +628,18 @@ func TestConnOpenAck(t *testing.T) {
 
 				if cs != nil {
 					clientState := cs.(*ibctm.ClientState)
-					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
-					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
-					clientStateByte := clienttypes.MustMarshalClientState(marshaler, cs)
-
-					clientStatePath := fmt.Sprintf("clients/%s/clientState", connection.GetClientID())
+					clientStateByte, _ := clientState.Marshal()
 					state.SetPrecompileState(
-						common.BytesToAddress([]byte(clientStatePath)),
+						clientStateKey(connection.GetClientID()),
 						clientStateByte,
 					)
-					consensusStateByte := clienttypes.MustMarshalConsensusState(marshaler, consensusState)
-					consensusStatePath := fmt.Sprintf("clients/%s/consensusStates/%s", connection.GetClientID(), clientState.GetLatestHeight())
+
+					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
+					rawConsensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
+					consensusState := rawConsensusState.(*ibctm.ConsensusState)
+					consensusStateByte, _ := consensusState.Marshal()
 					state.SetPrecompileState(
-						common.BytesToAddress([]byte(consensusStatePath)),
+						consensusStateKey(connection.GetClientID(), clientState.GetLatestHeight()),
 						consensusStateByte,
 					)
 				}
