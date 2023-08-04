@@ -57,4 +57,39 @@ interface IIBC {
   ) external;
 
   function connOpenConfirm(string memory connectionID, bytes memory proofAck, bytes memory proofHeight) external;
+
+  function chanOpenInit(string memory portID, bytes memory channel) external;
+
+  function chanOpenTry(
+    string memory portID,
+    bytes memory channel,
+    string memory counterpartyVersion,
+    bytes memory proofInit,
+    bytes memory proofHeight
+  ) external returns (string memory channelID);
+
+  function channelOpenAck(
+    string memory portID,
+    string memory channelID,
+    string memory counterpartyChannelID,
+    string memory counterpartyVersion,
+    bytes memory proofTry,
+    bytes memory proofHeight
+  ) external;
+
+  function channelOpenConfirm(
+    string memory portID,
+    string memory channelID,
+    bytes memory proofAck,
+    bytes memory proofHeight
+  ) external;
+
+  function channelCloseInit(string memory portID, string memory channelID) external;
+
+  function channelCloseConfirm(
+    string memory portID,
+    string memory channelID,
+    bytes memory proofInit,
+    bytes memory proofHeight
+  ) external;
 }
