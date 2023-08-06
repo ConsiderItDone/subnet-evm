@@ -21,6 +21,7 @@ const (
 	// You should set a gas cost for each function in your contract.
 	// Generally, you should not set gas costs very low as this may cause your network to be vulnerable to DoS attacks.
 	// There are some predefined gas costs in contract/utils.go that you can use.
+	BindPortGasCost            uint64 = 1 /* SET A GAS COST HERE */
 	ChanOpenInitGasCost        uint64 = 1 /* SET A GAS COST HERE */
 	ChanOpenTryGasCost         uint64 = 1 /* SET A GAS COST HERE */
 	ChannelCloseConfirmGasCost uint64 = 1 /* SET A GAS COST HERE */
@@ -67,6 +68,7 @@ func createIBCPrecompile() contract.StatefulPrecompiledContract {
 	var functions []*contract.StatefulPrecompileFunction
 
 	abiFunctionMap := map[string]contract.RunStatefulPrecompileFunc{
+		"bindPort":            bindPort,
 		"chanOpenInit":        chanOpenInit,
 		"chanOpenTry":         chanOpenTry,
 		"channelCloseConfirm": channelCloseConfirm,

@@ -92,4 +92,6 @@ interface IIBC {
     bytes memory proofInit,
     bytes memory proofHeight
   ) external;
+
+  function bindPort(string memory portID) external;
 }
