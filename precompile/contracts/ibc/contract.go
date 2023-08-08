@@ -22,19 +22,24 @@ const (
 	// Generally, you should not set gas costs very low as this may cause your network to be vulnerable to DoS attacks.
 	// There are some predefined gas costs in contract/utils.go that you can use.
 	BindPortGasCost            uint64 = 1 /* SET A GAS COST HERE */
+  
+	CreateClientGasCost  uint64 = 1
+	UpdateClientGasCost  uint64 = 1
+	UpgradeClientGasCost uint64 = 1
+
+	ConnOpenAckGasCost         uint64 = 1 /* SET A GAS COST HERE */
+	ConnOpenConfirmGasCost     uint64 = 1 /* SET A GAS COST HERE */
+	ConnOpenInitGasCost        uint64 = 1 /* SET A GAS COST HERE */
+	ConnOpenTryGasCost         uint64 = 1 /* SET A GAS COST HERE */
+  
 	ChanOpenInitGasCost        uint64 = 1 /* SET A GAS COST HERE */
 	ChanOpenTryGasCost         uint64 = 1 /* SET A GAS COST HERE */
 	ChannelCloseConfirmGasCost uint64 = 1 /* SET A GAS COST HERE */
 	ChannelCloseInitGasCost    uint64 = 1 /* SET A GAS COST HERE */
 	ChannelOpenAckGasCost      uint64 = 1 /* SET A GAS COST HERE */
 	ChannelOpenConfirmGasCost  uint64 = 1 /* SET A GAS COST HERE */
-	ConnOpenAckGasCost         uint64 = 1 /* SET A GAS COST HERE */
-	ConnOpenConfirmGasCost     uint64 = 1 /* SET A GAS COST HERE */
-	ConnOpenInitGasCost        uint64 = 1 /* SET A GAS COST HERE */
-	ConnOpenTryGasCost         uint64 = 1 /* SET A GAS COST HERE */
-	CreateClientGasCost        uint64 = 1 /* SET A GAS COST HERE */
-	UpdateClientGasCost        uint64 = 1 /* SET A GAS COST HERE */
-	UpgradeClientGasCost       uint64 = 1 /* SET A GAS COST HERE */
+
+	SendPacketGasCost      uint64 = 1
 )
 
 // CUSTOM CODE STARTS HERE

@@ -214,11 +214,9 @@ func createClient(accessibleState contract.AccessibleState, caller common.Addres
 	}
 
 	// emit event
-	topics := make([]common.Hash, 1)
-	topics[0] = GeneratedClientIdentifier.ID
-	data, err := GeneratedClientIdentifier.Inputs.Pack(clientId)
+	topics, data, err := IBCABI.PackEvent("ClientCreated", clientId)
 	if err != nil {
-		return nil, remainingGas, err
+		return nil, remainingGas, fmt.Errorf("error packing event: %w", err)
 	}
 	blockNumber := accessibleState.GetBlockContext().Number().Uint64()
 	accessibleState.GetStateDB().AddLog(ContractAddress, topics, data, blockNumber)

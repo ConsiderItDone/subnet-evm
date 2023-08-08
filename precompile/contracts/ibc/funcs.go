@@ -93,11 +93,9 @@ func _connOpenInit(opts *callOpts[ConnOpenInitInput]) (string, error) {
 	stateDB.SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
 
 	// emit event
-	topics := make([]common.Hash, 1)
-	topics[0] = GeneratedConnectionIdentifier.ID
-	data, err := GeneratedConnectionIdentifier.Inputs.Pack(opts.args.ClientID, connectionID)
+	topics, data, err := IBCABI.PackEvent(GeneratedConnectionIdentifier.RawName, opts.args.ClientID, connectionID)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("error packing event: %w", err)
 	}
 	blockNumber := opts.accessibleState.GetBlockContext().Number().Uint64()
 	opts.accessibleState.GetStateDB().AddLog(ContractAddress, topics, data, blockNumber)
