@@ -6,6 +6,33 @@ interface IIBC {
   event ConnectionCreated(string clientId, string connectionId);
   event ChannelCreated(string clientId, string connectionId);
 
+  struct Height {
+      uint64 revisionNumber;
+      uint64 revisionHeight;
+  }
+
+  struct Packet {
+      uint64 sequence;
+      string sourcePort;
+      string sourceChannel;
+      string destinationPort;
+      string destinationChannel;
+      bytes data;
+      Height timeoutHeight;
+      uint64 timeoutTimestamp;
+  }
+
+  function OnRecvPacket(Packet memory packet, bytes memory relayer) external;
+
+  function SendPacket(
+      uint64 channelCapability,
+      string memory sourcePort,
+      string memory sourceChannel,
+      Height memory timeoutHeight,
+      uint64 timeoutTimestamp,
+      bytes memory data
+  ) external;
+
   // Create IBC Client
   function createClient(
     string memory clientType,

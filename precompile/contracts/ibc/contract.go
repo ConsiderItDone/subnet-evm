@@ -25,6 +25,7 @@ const (
 	ConnOpenConfirmGasCost uint64 = 1
 	ConnOpenInitGasCost    uint64 = 1
 	ConnOpenTryGasCost     uint64 = 1
+	SendPacketGasCost      uint64 = 1
 )
 
 // CUSTOM CODE STARTS HERE

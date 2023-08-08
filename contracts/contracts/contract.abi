@@ -53,6 +53,128 @@
   {
     "inputs": [
       {
+        "components": [
+          {
+            "internalType": "uint64",
+            "name": "sequence",
+            "type": "uint64"
+          },
+          {
+            "internalType": "string",
+            "name": "sourcePort",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "sourceChannel",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "destinationPort",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "destinationChannel",
+            "type": "string"
+          },
+          {
+            "internalType": "bytes",
+            "name": "data",
+            "type": "bytes"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint64",
+                "name": "revisionNumber",
+                "type": "uint64"
+              },
+              {
+                "internalType": "uint64",
+                "name": "revisionHeight",
+                "type": "uint64"
+              }
+            ],
+            "internalType": "struct IIBC.Height",
+            "name": "timeoutHeight",
+            "type": "tuple"
+          },
+          {
+            "internalType": "uint64",
+            "name": "timeoutTimestamp",
+            "type": "uint64"
+          }
+        ],
+        "internalType": "struct IIBC.Packet",
+        "name": "packet",
+        "type": "tuple"
+      },
+      {
+        "internalType": "bytes",
+        "name": "relayer",
+        "type": "bytes"
+      }
+    ],
+    "name": "OnRecvPacket",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint64",
+        "name": "channelCapability",
+        "type": "uint64"
+      },
+      {
+        "internalType": "string",
+        "name": "sourcePort",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "sourceChannel",
+        "type": "string"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint64",
+            "name": "revisionNumber",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "revisionHeight",
+            "type": "uint64"
+          }
+        ],
+        "internalType": "struct IIBC.Height",
+        "name": "timeoutHeight",
+        "type": "tuple"
+      },
+      {
+        "internalType": "uint64",
+        "name": "timeoutTimestamp",
+        "type": "uint64"
+      },
+      {
+        "internalType": "bytes",
+        "name": "data",
+        "type": "bytes"
+      }
+    ],
+    "name": "SendPacket",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "string",
         "name": "connectionID",
         "type": "string"
