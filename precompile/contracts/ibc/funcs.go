@@ -556,6 +556,11 @@ func _chanOpenInit(opts *callOpts[ChanOpenInitInput]) error {
 
 	channelID := generateChannelIdentifier(opts.accessibleState)
 
+	err = makeCapability(opts.accessibleState.GetStateDB(), opts.args.PortID, channelID)
+	if err != nil {
+		return err
+	}
+
 	channelNew := channeltypes.NewChannel(channeltypes.INIT, channel.Ordering, channel.Counterparty, channel.ConnectionHops, channel.Version)
 	bz := marshaler.MustMarshal(&channelNew)
 	opts.accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.ChannelKey(opts.args.PortID, channelID))), bz)
@@ -665,6 +670,11 @@ func _chanOpenTry(opts *callOpts[ChanOpenTryInput]) (string, error) {
 		return "", fmt.Errorf("connection version %s does not support channel ordering: %s, err: %w", getVersions[0], channel.Ordering.String(), connectiontypes.ErrInvalidVersion)
 	}
 
+	ok, err := getCapability(opts.accessibleState.GetStateDB(), opts.args.PortID, channelID) 
+	if !ok {
+		return "", fmt.Errorf("caller does not own port capability for port ID %s, %w", opts.args.PortID, err)
+	}
+
 	counterpartyHops := []string{connectionEnd.GetCounterparty().GetConnectionID()}
 
 	// expectedCounterpaty is the counterparty of the counterparty's channel end
@@ -765,6 +775,12 @@ func _channelOpenAck(opts *callOpts[ChannelOpenAckInput]) error {
 		opts.args.PortID,
 		opts.args.ChannelID,
 	)
+
+	ok, err := getCapability(opts.accessibleState.GetStateDB(), opts.args.PortID, opts.args.ChannelID) 
+	if !ok {
+		return fmt.Errorf("caller does not own port capability for port ID %s, %w", opts.args.PortID, err)
+	}
+
 	expectedChannel := channeltypes.NewChannel(
 		channeltypes.TRYOPEN, channel.Ordering, expectedCounterparty,
 		counterpartyHops, opts.args.CounterpartyVersion,
@@ -811,6 +827,11 @@ func _channelOpenConfirm(opts *callOpts[ChannelOpenConfirmInput]) error {
 		return err
 	}
 
+	ok, err := getCapability(opts.accessibleState.GetStateDB(), opts.args.PortID, opts.args.ChannelID) 
+	if !ok {
+		return fmt.Errorf("caller does not own port capability for port ID %s, %w", opts.args.PortID, err)
+	}
+	
 	if channel.State != channeltypes.TRYOPEN {
 		return fmt.Errorf("channel state is not TRYOPEN (got %s), err: %w", channel.State.String(), channeltypes.ErrInvalidChannelState)
 	}

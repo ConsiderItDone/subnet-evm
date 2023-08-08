@@ -178,6 +178,19 @@
         "internalType": "string",
         "name": "portID",
         "type": "string"
+      }
+    ],
+    "name": "bindPort",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "portID",
+        "type": "string"
       },
       {
         "internalType": "bytes",

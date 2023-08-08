@@ -21,10 +21,10 @@ const (
 	UpdateClientGasCost  uint64 = 1
 	UpgradeClientGasCost uint64 = 1
 
-	ConnOpenAckGasCost         uint64 = 1 /* SET A GAS COST HERE */
-	ConnOpenConfirmGasCost     uint64 = 1 /* SET A GAS COST HERE */
-	ConnOpenInitGasCost        uint64 = 1 /* SET A GAS COST HERE */
-	ConnOpenTryGasCost         uint64 = 1 /* SET A GAS COST HERE */
+	ConnOpenAckGasCost     uint64 = 1 /* SET A GAS COST HERE */
+	ConnOpenConfirmGasCost uint64 = 1 /* SET A GAS COST HERE */
+	ConnOpenInitGasCost    uint64 = 1 /* SET A GAS COST HERE */
+	ConnOpenTryGasCost     uint64 = 1 /* SET A GAS COST HERE */
 
 	ChanOpenInitGasCost        uint64 = 1 /* SET A GAS COST HERE */
 	ChanOpenTryGasCost         uint64 = 1 /* SET A GAS COST HERE */
@@ -33,7 +33,9 @@ const (
 	ChannelOpenAckGasCost      uint64 = 1 /* SET A GAS COST HERE */
 	ChannelOpenConfirmGasCost  uint64 = 1 /* SET A GAS COST HERE */
 
-	SendPacketGasCost      uint64 = 1
+	BindPortGasCost uint64 = 1 /* SET A GAS COST HERE */
+
+	SendPacketGasCost uint64 = 1
 )
 
 // CUSTOM CODE STARTS HERE
@@ -67,6 +69,7 @@ func createIBCPrecompile() contract.StatefulPrecompiledContract {
 	var functions []*contract.StatefulPrecompileFunction
 
 	abiFunctionMap := map[string]contract.RunStatefulPrecompileFunc{
+		"bindPort":            bindPort,
 		"chanOpenInit":        chanOpenInit,
 		"chanOpenTry":         chanOpenTry,
 		"channelCloseConfirm": channelCloseConfirm,
