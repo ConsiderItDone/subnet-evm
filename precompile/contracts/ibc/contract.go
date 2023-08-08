@@ -21,10 +21,18 @@ const (
 	UpdateClientGasCost  uint64 = 1
 	UpgradeClientGasCost uint64 = 1
 
-	ConnOpenAckGasCost     uint64 = 1
-	ConnOpenConfirmGasCost uint64 = 1
-	ConnOpenInitGasCost    uint64 = 1
-	ConnOpenTryGasCost     uint64 = 1
+	ConnOpenAckGasCost         uint64 = 1 /* SET A GAS COST HERE */
+	ConnOpenConfirmGasCost     uint64 = 1 /* SET A GAS COST HERE */
+	ConnOpenInitGasCost        uint64 = 1 /* SET A GAS COST HERE */
+	ConnOpenTryGasCost         uint64 = 1 /* SET A GAS COST HERE */
+
+	ChanOpenInitGasCost        uint64 = 1 /* SET A GAS COST HERE */
+	ChanOpenTryGasCost         uint64 = 1 /* SET A GAS COST HERE */
+	ChannelCloseConfirmGasCost uint64 = 1 /* SET A GAS COST HERE */
+	ChannelCloseInitGasCost    uint64 = 1 /* SET A GAS COST HERE */
+	ChannelOpenAckGasCost      uint64 = 1 /* SET A GAS COST HERE */
+	ChannelOpenConfirmGasCost  uint64 = 1 /* SET A GAS COST HERE */
+
 	SendPacketGasCost      uint64 = 1
 )
 
@@ -59,13 +67,19 @@ func createIBCPrecompile() contract.StatefulPrecompiledContract {
 	var functions []*contract.StatefulPrecompileFunction
 
 	abiFunctionMap := map[string]contract.RunStatefulPrecompileFunc{
-		"connOpenAck":     connOpenAck,
-		"connOpenConfirm": connOpenConfirm,
-		"connOpenInit":    connOpenInit,
-		"connOpenTry":     connOpenTry,
-		"createClient":    createClient,
-		"updateClient":    updateClient,
-		"upgradeClient":   upgradeClient,
+		"chanOpenInit":        chanOpenInit,
+		"chanOpenTry":         chanOpenTry,
+		"channelCloseConfirm": channelCloseConfirm,
+		"channelCloseInit":    channelCloseInit,
+		"channelOpenAck":      channelOpenAck,
+		"channelOpenConfirm":  channelOpenConfirm,
+		"connOpenAck":         connOpenAck,
+		"connOpenConfirm":     connOpenConfirm,
+		"connOpenInit":        connOpenInit,
+		"connOpenTry":         connOpenTry,
+		"createClient":        createClient,
+		"updateClient":        updateClient,
+		"upgradeClient":       upgradeClient,
 	}
 
 	for name, function := range abiFunctionMap {
