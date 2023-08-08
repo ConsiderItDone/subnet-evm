@@ -6,9 +6,11 @@ package ibc
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/ava-labs/subnet-evm/core/state"
+	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/ava-labs/subnet-evm/precompile/testutils"
 	"github.com/ava-labs/subnet-evm/vmerrs"
 	"github.com/ethereum/go-ethereum/common"
@@ -22,6 +24,8 @@ import (
 // allowlist, readOnly behaviour, and gas cost. You should write your own
 // tests for specific cases.
 func TestPortDefault(t *testing.T) {
+	moduleName := "testModule"
+
 	tests := map[string]testutils.PrecompileTest{
 		"readOnly bindPort should fail": {
 			Caller: common.Address{1},
@@ -51,19 +55,6 @@ func TestPortDefault(t *testing.T) {
 			ReadOnly:    false,
 			ExpectedErr: vmerrs.ErrOutOfGas.Error(),
 		},
-	}
-	// Run tests.
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
-			test.Run(t, Module, state.NewTestStateDB(t))
-		})
-	}
-}
-
-func TestPort(t *testing.T) {
-	moduleName := "testModule"
-
-	tests := map[string]testutils.PrecompileTest{
 		"Port already bound": {
 			Caller: common.Address{1},
 			InputFn: func(t testing.TB) []byte {
@@ -73,17 +64,43 @@ func TestPort(t *testing.T) {
 				require.NoError(t, err)
 				return input
 			},
+			BeforeHook: func(t testing.TB, state contract.StateDB) {
+				storePortID(state, moduleName, common.BytesToAddress([]byte("some_address")))
+			},
+			AfterHook: func(t testing.TB, state contract.StateDB) {
+				out, ok, err := getPort(state, moduleName)
+				if !ok || err != nil || !reflect.DeepEqual(out, common.BytesToAddress([]byte("some_address"))) {
+					t.Error("Port address has been changed")
+				}
+			},
 			SuppliedGas: BindPortGasCost,
 			ReadOnly:    false,
 			ExpectedErr: fmt.Sprintf("port with portID: %s already bound", moduleName),
+		},
+		"Port successfully bound": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// set test input to a value here
+				input, err := PackBindPort(moduleName)
+				require.NoError(t, err)
+				return input
+			},
+			AfterHook: func(t testing.TB, state contract.StateDB) {
+				out, ok, err := getPort(state, moduleName)
+				if !ok || err != nil || !reflect.DeepEqual(out, common.Address{1}) {
+					t.Errorf("Invalid port address out: %s not equal address: %s", out, common.Address{1})
+				}
+			},
+			SuppliedGas: BindPortGasCost,
+			ReadOnly:    false,
+			ExpectedRes: []byte{},
 		},
 	}
 	// Run tests.
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			db := state.NewTestStateDB(t)
-			db.SetPrecompileState(common.BytesToAddress([]byte(moduleName)), []byte("some_address"))
-			test.Run(t, Module, db)
+			test.Run(t, Module, state.NewTestStateDB(t))
 		})
 	}
 }

@@ -50,7 +50,7 @@ func bindPort(accessibleState contract.AccessibleState, caller common.Address, a
 	portID := inputStruct
 
 	_, ok, _ := getPort(accessibleState.GetStateDB(), portID)
-	if !ok {
+	if ok {
 		return nil, remainingGas, fmt.Errorf("port with portID: %s already bound", portID)
 	}
 	err = storePortID(accessibleState.GetStateDB(), portID, caller)
@@ -88,7 +88,7 @@ func getPort(db contract.StateDB, portID string) (common.Address, bool, error) {
 		return common.Address{}, false, fmt.Errorf("Lenght of data by this portID: %s, not equal AddressLength", portID)
 	}
 
-	return common.BytesToAddress([]byte(key)), true, nil
+	return common.BytesToAddress([]byte(bz)), true, nil
 }
 
 func makeCapability(db contract.StateDB, portID, channelID string) error {
