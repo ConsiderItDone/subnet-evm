@@ -271,9 +271,9 @@ func RunTestIbcConnectionOpenAck(t *testing.T) {
 func RunTestIncChannelOpenInit(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-
-	require.NoError(t, path.EndpointB.ConnOpenConfirm())
+	require.NoError(t, path.EndpointA.ConnOpenAck())
 	require.NoError(t, path.EndpointA.UpdateClient())
+	require.NoError(t, path.EndpointB.ConnOpenConfirm())
 	require.NoError(t, path.EndpointB.UpdateClient())
 
 	counterparty := channeltypes.NewCounterparty(ibctesting.MockPort, ibctesting.FirstChannelID)
@@ -293,8 +293,8 @@ func RunTestIncChannelOpenAck(t *testing.T) {
 	defer cancel()
 
 	require.NoError(t, path.EndpointA.ChanOpenInit())
-	require.NoError(t, path.EndpointB.ConnOpenTry())
 	require.NoError(t, path.EndpointA.UpdateClient())
+	require.NoError(t, path.EndpointB.ChanOpenTry())
 	require.NoError(t, path.EndpointB.UpdateClient())
 
 	channelKey := host.ChannelKey(path.EndpointB.ChannelConfig.PortID, ibctesting.FirstChannelID)
