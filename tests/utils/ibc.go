@@ -35,6 +35,7 @@ import (
 	"github.com/ava-labs/subnet-evm/plugin/evm"
 	"github.com/ava-labs/subnet-evm/precompile/contracts/ibc"
 	contractBind "github.com/ava-labs/subnet-evm/tests/precompile/contract"
+	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
 )
 
 const (
@@ -194,8 +195,8 @@ func RunTestIbcConnectionOpenInit(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	counterparty := connectiontypes.NewCounterparty(path.EndpointB.ClientID, path.EndpointB.ConnectionID, chainB.GetPrefix())
-	counterpartybyte, err := marshaler.MarshalInterface(&counterparty)
+	counterparty := connectiontypes.NewCounterparty(path.EndpointB.ClientID, path.EndpointB.ConnectionID, commitmenttypes.NewMerklePrefix([]byte("ibc")))
+	counterpartybyte, err := counterparty.Marshal()
 	require.NoError(t, err)
 
 	version := connectiontypes.ExportedVersionsToProto(connectiontypes.GetCompatibleVersions())[0]
@@ -212,7 +213,6 @@ func RunTestIbcConnectionOpenInit(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, clientIdA, ev.ClientId)
 	assert.Equal(t, connectionId0, ev.ConnectionId)
-
 }
 
 func RunTestIbcConnectionOpenAck(t *testing.T) {
@@ -223,7 +223,7 @@ func RunTestIbcConnectionOpenAck(t *testing.T) {
 	require.NoError(t, path.EndpointB.ConnOpenTry())
 
 	counterpartyClient := chainB.GetClientState(path.EndpointB.ClientID)
-	require.NoError(t, path.EndpointA.UpdateClient())
+	updateClient(t, path.EndpointA)
 
 	connectionKey := host.ConnectionKey(path.EndpointB.ConnectionID)
 	proofTry, proofHeight := chainB.QueryProof(connectionKey)
@@ -272,11 +272,11 @@ func RunTestIncChannelOpenInit(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	require.NoError(t, path.EndpointA.ConnOpenAck())
-	require.NoError(t, path.EndpointA.UpdateClient())
+	updateClient(t, path.EndpointA)
 	require.NoError(t, path.EndpointB.ConnOpenConfirm())
-	require.NoError(t, path.EndpointB.UpdateClient())
+	updateClient(t, path.EndpointB)
 
-	counterparty := channeltypes.NewCounterparty(ibctesting.MockPort, ibctesting.FirstChannelID)
+	counterparty := channeltypes.NewCounterparty(path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID)
 	channel := channeltypes.NewChannel(channeltypes.INIT, channeltypes.ORDERED, counterparty, []string{path.EndpointB.ConnectionID}, path.EndpointA.ChannelConfig.Version)
 	channelByte, err := marshaler.Marshal(&channel)
 	require.NoError(t, err)
@@ -293,9 +293,9 @@ func RunTestIncChannelOpenAck(t *testing.T) {
 	defer cancel()
 
 	require.NoError(t, path.EndpointA.ChanOpenInit())
-	require.NoError(t, path.EndpointA.UpdateClient())
+	updateClient(t, path.EndpointA)
 	require.NoError(t, path.EndpointB.ChanOpenTry())
-	require.NoError(t, path.EndpointB.UpdateClient())
+	updateClient(t, path.EndpointB)
 
 	channelKey := host.ChannelKey(path.EndpointB.ChannelConfig.PortID, ibctesting.FirstChannelID)
 	proof, proofHeight := chainB.QueryProof(channelKey)
@@ -316,6 +316,27 @@ func RunTestIncChannelOpenAck(t *testing.T) {
 	re, err := waitForReceiptAndGet(ctx, ethClient, tx)
 	require.NoError(t, err)
 	t.Log(spew.Sdump(re.Logs))
+}
+
+func updateClient(t *testing.T, endpoint *ibctesting.Endpoint) {
+	require.NoError(t, endpoint.UpdateClient())
+
+	trustedHeight, ok := chainA.GetClientState(endpoint.ClientID).GetLatestHeight().(clienttypes.Height)
+	require.True(t, ok)
+
+	header, err := endpoint.Chain.ConstructUpdateTMClientHeaderWithTrustedHeight(endpoint.Counterparty.Chain, endpoint.ClientID, trustedHeight)
+	require.NoError(t, err)
+
+	msg, err := header.Marshal()
+	require.NoError(t, err)
+
+	tx, err := ibcContract.UpdateClient(auth, endpoint.ClientID, msg)
+	require.NoError(t, err)
+
+	re, err := waitForReceiptAndGet(context.Background(), ethClient, tx)
+	require.NoError(t, err)
+
+	t.Logf("'%s' updated: %#v", endpoint.ClientID, re.Logs)
 }
 
 func waitForReceiptAndGet(ctx context.Context, client ethclient.Client, tx *types.Transaction) (*types.Receipt, error) {

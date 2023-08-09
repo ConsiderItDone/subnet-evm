@@ -109,7 +109,7 @@ func _connOpenTry(opts *callOpts[ConnOpenTryInput]) (string, error) {
 	stateDB := opts.accessibleState.GetStateDB()
 
 	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
-
+	clienttypes.RegisterInterfaces(interfaceRegistry)
 	std.RegisterInterfaces(interfaceRegistry)
 	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
 	marshaler := codec.NewProtoCodec(interfaceRegistry)
@@ -131,12 +131,12 @@ func _connOpenTry(opts *callOpts[ConnOpenTryInput]) (string, error) {
 	}
 
 	proofHeight := &clienttypes.Height{}
-	if err := marshaler.UnmarshalInterface(opts.args.ProofHeight, proofHeight); err != nil {
+	if err := proofHeight.Unmarshal(opts.args.ProofHeight); err != nil {
 		return "", fmt.Errorf("error unmarshalling proofHeight: %w", err)
 	}
 
 	consensusHeight := &clienttypes.Height{}
-	if err = marshaler.UnmarshalInterface(opts.args.ConsensusHeight, consensusHeight); err != nil {
+	if err = consensusHeight.Unmarshal(opts.args.ConsensusHeight); err != nil {
 		return "", fmt.Errorf("error unmarshalling consensusHeight: %w", err)
 	}
 
@@ -227,12 +227,12 @@ func _connOpenAck(opts *callOpts[ConnOpenAckInput]) error {
 	expectedConnection := connectiontypes.NewConnectionEnd(connectiontypes.TRYOPEN, connection.Counterparty.ClientId, expectedCounterparty, []*connectiontypes.Version{&version}, connection.DelayPeriod)
 
 	if err := connectionVerification(connection, expectedConnection, *proofHeight, opts.accessibleState, marshaler, string(opts.args.CounterpartyConnectionID), opts.args.ProofTry); err != nil {
-		return err
+		return fmt.Errorf("connection verification failed: %w", err)
 	}
 
 	// Check that ChainB stored the clientState provided in the msg
 	if err := clientVerification(connection, clientState, *proofHeight, opts.accessibleState, marshaler, opts.args.ProofClient); err != nil {
-		return err
+		return fmt.Errorf("client verification failed: %w", err)
 	}
 
 	// Update connection state to Open
@@ -421,7 +421,7 @@ func connectionVerification(
 	merklePath := commitmenttypes.NewMerklePath(hosttypes.ConnectionPath(connectionID))
 	merklePath, err = commitmenttypes.ApplyPrefix(connection.GetCounterparty().GetPrefix(), merklePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("can't apply prefix %s: %w", connection.GetCounterparty().GetPrefix(), err)
 	}
 
 	bz, err := marshaler.Marshal(&connectionEnd)
