@@ -581,21 +581,21 @@ func channelStateVerification(
 ) error {
 	clientID := connection.GetClientID()
 
-	clientStatePath := fmt.Sprintf("clients/%s/clientState", clientID)
-	clientStateByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(clientStatePath)))
-	clientStateExp, err := clienttypes.UnmarshalClientState(marshaler, clientStateByte)
+	clientState, clientStateFound, err := getClientState(accessibleState.GetStateDB(), clientID)
 	if err != nil {
-		return fmt.Errorf("error unmarshalling client state file, err: %w", err)
+		return fmt.Errorf("can't read client state: %w", err)
 	}
-	clientState := clientStateExp.(*ibctm.ClientState)
+	if !clientStateFound {
+		return fmt.Errorf("client state not found: %s", clientID)
+	}
 
-	consensusStatePath := fmt.Sprintf("clients/%s/consensusStates/%s", clientID, clientState.GetLatestHeight())
-	consensusStateByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(consensusStatePath)))
-	consensusStateExp, err := clienttypes.UnmarshalConsensusState(marshaler, consensusStateByte)
+	consensusState, consensusStateFound, err := getConsensusState(accessibleState.GetStateDB(), clientID, clientState.GetLatestHeight())
 	if err != nil {
-		return fmt.Errorf("error unmarshalling consensus state file, err: %w", err)
+		return fmt.Errorf("can't read consensus state: %w", err)
 	}
-	consensusState := consensusStateExp.(*ibctm.ConsensusState)
+	if !consensusStateFound {
+		return fmt.Errorf("consensus state not found: %s", clientID)
+	}
 
 	merklePath := commitmenttypes.NewMerklePath(hosttypes.ChannelPath(portID, channelID))
 	merklePath, err = commitmenttypes.ApplyPrefix(connection.GetCounterparty().GetPrefix(), merklePath)
