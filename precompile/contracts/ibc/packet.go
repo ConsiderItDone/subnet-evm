@@ -37,6 +37,13 @@ type SendPacketInput struct {
 	Data              []byte
 }
 
+type RecvPacketInput struct {
+	Packet          Packet
+	ProofCommitment []byte
+	ProofHeight     Height
+	Signer          string
+}
+
 // PackOnRecvPacket packs [inputStruct] of type OnRecvPacketInput into the appropriate arguments for OnRecvPacket.
 func PackOnRecvPacket(inputStruct OnRecvPacketInput) ([]byte, error) {
 	return IBCABI.Pack("OnRecvPacket", inputStruct.Packet, inputStruct.Relayer)
@@ -71,8 +78,21 @@ func sendPacket(accessibleState contract.AccessibleState, caller common.Address,
 		return nil, remainingGas, err
 	}
 
-	// CUSTOM CODE STARTS HERE
-	_ = inputStruct // CUSTOM CODE OPERATES ON INPUT
+	if err := _sendPacket(&callOpts[SendPacketInput]{
+		accessibleState: accessibleState,
+		caller:          caller,
+		addr:            addr,
+		suppliedGas:     suppliedGas,
+		readOnly:        readOnly,
+		args:            inputStruct,
+	}); 
+	
+	
+	
+	err != nil {
+		return nil, remainingGas, err
+	}
+
 	// this function does not return an output, leave this one as is
 	packedOutput := []byte{}
 
