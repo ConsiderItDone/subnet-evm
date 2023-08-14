@@ -157,7 +157,7 @@ func RunTestIbcCreateClient(t *testing.T) {
 	clientStateByteA, err := clientStateA.(*ibctm.ClientState).Marshal()
 	require.NoError(t, err)
 
-	consensusStateA, foundA := chainA.App.GetIBCKeeper().ClientKeeper.GetLatestClientConsensusState(chainA.GetContext(), path.EndpointB.ClientID)
+	consensusStateA, foundA := chainA.App.GetIBCKeeper().ClientKeeper.GetLatestClientConsensusState(chainA.GetContext(), path.EndpointA.ClientID)
 	require.True(t, foundA)
 	consensusStateByteA, err := consensusStateA.(*ibctm.ConsensusState).Marshal()
 	require.NoError(t, err)
@@ -283,9 +283,8 @@ func RunTestIncChannelOpenInit(t *testing.T) {
 
 	tx, err := ibcContract.ChanOpenInit(auth, path.EndpointA.ChannelConfig.PortID, channelByte)
 	require.NoError(t, err)
-	re, err := waitForReceiptAndGet(ctx, ethClient, tx)
+	_, err = waitForReceiptAndGet(ctx, ethClient, tx)
 	require.NoError(t, err)
-	t.Log(spew.Sdump(re.Logs))
 }
 
 func RunTestIncChannelOpenAck(t *testing.T) {
@@ -299,8 +298,7 @@ func RunTestIncChannelOpenAck(t *testing.T) {
 
 	channelKey := host.ChannelKey(path.EndpointB.ChannelConfig.PortID, ibctesting.FirstChannelID)
 	proof, proofHeight := chainB.QueryProof(channelKey)
-
-	proofHeightByte, err := marshaler.Marshal(&proofHeight)
+	proofHeightByte, err := proofHeight.Marshal()
 	require.NoError(t, err)
 
 	tx, err := ibcContract.ChannelOpenAck(
@@ -313,9 +311,8 @@ func RunTestIncChannelOpenAck(t *testing.T) {
 		proofHeightByte,
 	)
 	require.NoError(t, err)
-	re, err := waitForReceiptAndGet(ctx, ethClient, tx)
+	_, err = waitForReceiptAndGet(ctx, ethClient, tx)
 	require.NoError(t, err)
-	t.Log(spew.Sdump(re.Logs))
 }
 
 func updateClient(t *testing.T, endpoint *ibctesting.Endpoint) {
