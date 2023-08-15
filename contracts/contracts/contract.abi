@@ -10,15 +10,15 @@
       },
       {
         "indexed": false,
-        "internalType": "uint64",
+        "internalType": "uint256",
         "name": "timeoutTimestamp",
-        "type": "uint64"
+        "type": "uint256"
       },
       {
         "indexed": false,
-        "internalType": "uint64",
+        "internalType": "uint256",
         "name": "sequence",
-        "type": "uint64"
+        "type": "uint256"
       },
       {
         "indexed": false,
@@ -77,15 +77,76 @@
       },
       {
         "indexed": false,
-        "internalType": "uint64",
+        "internalType": "uint256",
         "name": "timeoutTimestamp",
-        "type": "uint64"
+        "type": "uint256"
       },
       {
         "indexed": false,
-        "internalType": "uint64",
+        "internalType": "uint256",
         "name": "sequence",
-        "type": "uint64"
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "sourcePort",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "sourceChannel",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "destPort",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "destChannel",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "error",
+        "type": "string"
+      }
+    ],
+    "name": "AcknowledgementError",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "bytes",
+        "name": "data",
+        "type": "bytes"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "timeoutHeight",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "timeoutTimestamp",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "sequence",
+        "type": "uint256"
       },
       {
         "indexed": false,
@@ -195,15 +256,15 @@
       },
       {
         "indexed": false,
-        "internalType": "uint64",
+        "internalType": "uint256",
         "name": "timeoutTimestamp",
-        "type": "uint64"
+        "type": "uint256"
       },
       {
         "indexed": false,
-        "internalType": "uint64",
+        "internalType": "uint256",
         "name": "sequence",
-        "type": "uint64"
+        "type": "uint256"
       },
       {
         "indexed": false,
@@ -256,15 +317,15 @@
       },
       {
         "indexed": false,
-        "internalType": "uint64",
+        "internalType": "uint256",
         "name": "timeoutTimestamp",
-        "type": "uint64"
+        "type": "uint256"
       },
       {
         "indexed": false,
-        "internalType": "uint64",
+        "internalType": "uint256",
         "name": "sequence",
-        "type": "uint64"
+        "type": "uint256"
       },
       {
         "indexed": false,
@@ -311,15 +372,15 @@
       },
       {
         "indexed": false,
-        "internalType": "uint64",
+        "internalType": "uint256",
         "name": "timeoutTimestamp",
-        "type": "uint64"
+        "type": "uint256"
       },
       {
         "indexed": false,
-        "internalType": "uint64",
+        "internalType": "uint256",
         "name": "sequence",
-        "type": "uint64"
+        "type": "uint256"
       },
       {
         "indexed": false,
@@ -362,258 +423,140 @@
     "type": "event"
   },
   {
+    "anonymous": false,
     "inputs": [
       {
-        "components": [
-          {
-            "components": [
-              {
-                "internalType": "uint64",
-                "name": "sequence",
-                "type": "uint64"
-              },
-              {
-                "internalType": "string",
-                "name": "sourcePort",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "sourceChannel",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "destinationPort",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "destinationChannel",
-                "type": "string"
-              },
-              {
-                "internalType": "bytes",
-                "name": "data",
-                "type": "bytes"
-              },
-              {
-                "components": [
-                  {
-                    "internalType": "uint64",
-                    "name": "revisionNumber",
-                    "type": "uint64"
-                  },
-                  {
-                    "internalType": "uint64",
-                    "name": "revisionHeight",
-                    "type": "uint64"
-                  }
-                ],
-                "internalType": "struct Height",
-                "name": "timeoutHeight",
-                "type": "tuple"
-              },
-              {
-                "internalType": "uint64",
-                "name": "timeoutTimestamp",
-                "type": "uint64"
-              }
-            ],
-            "internalType": "struct Packet",
-            "name": "packet",
-            "type": "tuple"
-          },
-          {
-            "internalType": "bytes",
-            "name": "acknowledgement",
-            "type": "bytes"
-          },
-          {
-            "internalType": "bytes",
-            "name": "proofAcked",
-            "type": "bytes"
-          },
-          {
-            "components": [
-              {
-                "internalType": "uint64",
-                "name": "revisionNumber",
-                "type": "uint64"
-              },
-              {
-                "internalType": "uint64",
-                "name": "revisionHeight",
-                "type": "uint64"
-              }
-            ],
-            "internalType": "struct Height",
-            "name": "proofHeight",
-            "type": "tuple"
-          },
-          {
-            "internalType": "string",
-            "name": "signer",
-            "type": "string"
-          }
-        ],
-        "internalType": "struct IIBC.MsgAcknowledgement",
-        "name": "message",
-        "type": "tuple"
-      }
-    ],
-    "name": "Acknowledgement",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "components": [
-          {
-            "components": [
-              {
-                "internalType": "uint64",
-                "name": "sequence",
-                "type": "uint64"
-              },
-              {
-                "internalType": "string",
-                "name": "sourcePort",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "sourceChannel",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "destinationPort",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "destinationChannel",
-                "type": "string"
-              },
-              {
-                "internalType": "bytes",
-                "name": "data",
-                "type": "bytes"
-              },
-              {
-                "components": [
-                  {
-                    "internalType": "uint64",
-                    "name": "revisionNumber",
-                    "type": "uint64"
-                  },
-                  {
-                    "internalType": "uint64",
-                    "name": "revisionHeight",
-                    "type": "uint64"
-                  }
-                ],
-                "internalType": "struct Height",
-                "name": "timeoutHeight",
-                "type": "tuple"
-              },
-              {
-                "internalType": "uint64",
-                "name": "timeoutTimestamp",
-                "type": "uint64"
-              }
-            ],
-            "internalType": "struct Packet",
-            "name": "packet",
-            "type": "tuple"
-          },
-          {
-            "internalType": "bytes",
-            "name": "proofCommitment",
-            "type": "bytes"
-          },
-          {
-            "components": [
-              {
-                "internalType": "uint64",
-                "name": "revisionNumber",
-                "type": "uint64"
-              },
-              {
-                "internalType": "uint64",
-                "name": "revisionHeight",
-                "type": "uint64"
-              }
-            ],
-            "internalType": "struct Height",
-            "name": "proofHeight",
-            "type": "tuple"
-          },
-          {
-            "internalType": "string",
-            "name": "signer",
-            "type": "string"
-          }
-        ],
-        "internalType": "struct IIBC.MsgRecvPacket",
-        "name": "message",
-        "type": "tuple"
-      }
-    ],
-    "name": "RecvPacket",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint64",
-        "name": "channelCapability",
-        "type": "uint64"
-      },
-      {
+        "indexed": false,
         "internalType": "string",
         "name": "sourcePort",
         "type": "string"
       },
       {
+        "indexed": false,
         "internalType": "string",
         "name": "sourceChannel",
         "type": "string"
       },
       {
-        "components": [
-          {
-            "internalType": "uint64",
-            "name": "revisionNumber",
-            "type": "uint64"
-          },
-          {
-            "internalType": "uint64",
-            "name": "revisionHeight",
-            "type": "uint64"
-          }
-        ],
-        "internalType": "struct Height",
-        "name": "timeoutHeight",
-        "type": "tuple"
+        "indexed": false,
+        "internalType": "string",
+        "name": "destPort",
+        "type": "string"
       },
       {
-        "internalType": "uint64",
-        "name": "timeoutTimestamp",
-        "type": "uint64"
+        "indexed": false,
+        "internalType": "string",
+        "name": "destChannel",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "ConnectionID",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "ChannelOrdering",
+        "type": "string"
+      }
+    ],
+    "name": "TypeChannelClosed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "clientID",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "clientType",
+        "type": "string"
+      }
+    ],
+    "name": "TypeSubmitMisbehaviour",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "sequence",
+            "type": "uint256"
+          },
+          {
+            "internalType": "string",
+            "name": "sourcePort",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "sourceChannel",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "destinationPort",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "destinationChannel",
+            "type": "string"
+          },
+          {
+            "internalType": "bytes",
+            "name": "data",
+            "type": "bytes"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint256",
+                "name": "revisionNumber",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "revisionHeight",
+                "type": "uint256"
+              }
+            ],
+            "internalType": "struct Height",
+            "name": "timeoutHeight",
+            "type": "tuple"
+          },
+          {
+            "internalType": "uint256",
+            "name": "timeoutTimestamp",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct Packet",
+        "name": "packet",
+        "type": "tuple"
       },
       {
         "internalType": "bytes",
-        "name": "data",
+        "name": "acknowledgement",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "",
         "type": "bytes"
       }
     ],
-    "name": "SendPacket",
+    "name": "OnAcknowledgement",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -623,103 +566,69 @@
       {
         "components": [
           {
-            "components": [
-              {
-                "internalType": "uint64",
-                "name": "sequence",
-                "type": "uint64"
-              },
-              {
-                "internalType": "string",
-                "name": "sourcePort",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "sourceChannel",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "destinationPort",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "destinationChannel",
-                "type": "string"
-              },
-              {
-                "internalType": "bytes",
-                "name": "data",
-                "type": "bytes"
-              },
-              {
-                "components": [
-                  {
-                    "internalType": "uint64",
-                    "name": "revisionNumber",
-                    "type": "uint64"
-                  },
-                  {
-                    "internalType": "uint64",
-                    "name": "revisionHeight",
-                    "type": "uint64"
-                  }
-                ],
-                "internalType": "struct Height",
-                "name": "timeoutHeight",
-                "type": "tuple"
-              },
-              {
-                "internalType": "uint64",
-                "name": "timeoutTimestamp",
-                "type": "uint64"
-              }
-            ],
-            "internalType": "struct Packet",
-            "name": "packet",
-            "type": "tuple"
+            "internalType": "uint256",
+            "name": "sequence",
+            "type": "uint256"
+          },
+          {
+            "internalType": "string",
+            "name": "sourcePort",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "sourceChannel",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "destinationPort",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "destinationChannel",
+            "type": "string"
           },
           {
             "internalType": "bytes",
-            "name": "proofUnreceived",
+            "name": "data",
             "type": "bytes"
           },
           {
             "components": [
               {
-                "internalType": "uint64",
+                "internalType": "uint256",
                 "name": "revisionNumber",
-                "type": "uint64"
+                "type": "uint256"
               },
               {
-                "internalType": "uint64",
+                "internalType": "uint256",
                 "name": "revisionHeight",
-                "type": "uint64"
+                "type": "uint256"
               }
             ],
             "internalType": "struct Height",
-            "name": "proofHeight",
+            "name": "timeoutHeight",
             "type": "tuple"
           },
           {
-            "internalType": "uint64",
-            "name": "nextSequenceRecv",
-            "type": "uint64"
-          },
-          {
-            "internalType": "string",
-            "name": "signer",
-            "type": "string"
+            "internalType": "uint256",
+            "name": "timeoutTimestamp",
+            "type": "uint256"
           }
         ],
-        "internalType": "struct IIBC.MsgTimeout",
-        "name": "message",
+        "internalType": "struct Packet",
+        "name": "packet",
         "type": "tuple"
+      },
+      {
+        "internalType": "bytes",
+        "name": "Relayer",
+        "type": "bytes"
       }
     ],
-    "name": "Timeout",
+    "name": "OnRecvPacket",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -729,108 +638,422 @@
       {
         "components": [
           {
-            "components": [
-              {
-                "internalType": "uint64",
-                "name": "sequence",
-                "type": "uint64"
-              },
-              {
-                "internalType": "string",
-                "name": "sourcePort",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "sourceChannel",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "destinationPort",
-                "type": "string"
-              },
-              {
-                "internalType": "string",
-                "name": "destinationChannel",
-                "type": "string"
-              },
-              {
-                "internalType": "bytes",
-                "name": "data",
-                "type": "bytes"
-              },
-              {
-                "components": [
-                  {
-                    "internalType": "uint64",
-                    "name": "revisionNumber",
-                    "type": "uint64"
-                  },
-                  {
-                    "internalType": "uint64",
-                    "name": "revisionHeight",
-                    "type": "uint64"
-                  }
-                ],
-                "internalType": "struct Height",
-                "name": "timeoutHeight",
-                "type": "tuple"
-              },
-              {
-                "internalType": "uint64",
-                "name": "timeoutTimestamp",
-                "type": "uint64"
-              }
-            ],
-            "internalType": "struct Packet",
-            "name": "packet",
-            "type": "tuple"
-          },
-          {
-            "internalType": "bytes",
-            "name": "proofUnreceived",
-            "type": "bytes"
-          },
-          {
-            "internalType": "bytes",
-            "name": "proofClose",
-            "type": "bytes"
-          },
-          {
-            "components": [
-              {
-                "internalType": "uint64",
-                "name": "revisionNumber",
-                "type": "uint64"
-              },
-              {
-                "internalType": "uint64",
-                "name": "revisionHeight",
-                "type": "uint64"
-              }
-            ],
-            "internalType": "struct Height",
-            "name": "proofHeight",
-            "type": "tuple"
-          },
-          {
-            "internalType": "uint64",
-            "name": "nextSequenceRecv",
-            "type": "uint64"
+            "internalType": "uint256",
+            "name": "sequence",
+            "type": "uint256"
           },
           {
             "internalType": "string",
-            "name": "signer",
+            "name": "sourcePort",
             "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "sourceChannel",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "destinationPort",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "destinationChannel",
+            "type": "string"
+          },
+          {
+            "internalType": "bytes",
+            "name": "data",
+            "type": "bytes"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint256",
+                "name": "revisionNumber",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "revisionHeight",
+                "type": "uint256"
+              }
+            ],
+            "internalType": "struct Height",
+            "name": "timeoutHeight",
+            "type": "tuple"
+          },
+          {
+            "internalType": "uint256",
+            "name": "timeoutTimestamp",
+            "type": "uint256"
           }
         ],
-        "internalType": "struct IIBC.MsgTimeoutOnClose",
-        "name": "message",
+        "internalType": "struct Packet",
+        "name": "packet",
         "type": "tuple"
+      },
+      {
+        "internalType": "bytes",
+        "name": "Relayer",
+        "type": "bytes"
       }
     ],
-    "name": "TimeoutOnClose",
+    "name": "OnTimeout",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "sequence",
+            "type": "uint256"
+          },
+          {
+            "internalType": "string",
+            "name": "sourcePort",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "sourceChannel",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "destinationPort",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "destinationChannel",
+            "type": "string"
+          },
+          {
+            "internalType": "bytes",
+            "name": "data",
+            "type": "bytes"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint256",
+                "name": "revisionNumber",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "revisionHeight",
+                "type": "uint256"
+              }
+            ],
+            "internalType": "struct Height",
+            "name": "timeoutHeight",
+            "type": "tuple"
+          },
+          {
+            "internalType": "uint256",
+            "name": "timeoutTimestamp",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct Packet",
+        "name": "packet",
+        "type": "tuple"
+      },
+      {
+        "internalType": "bytes",
+        "name": "Relayer",
+        "type": "bytes"
+      }
+    ],
+    "name": "OnTimeoutOnClose",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "sequence",
+            "type": "uint256"
+          },
+          {
+            "internalType": "string",
+            "name": "sourcePort",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "sourceChannel",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "destinationPort",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "destinationChannel",
+            "type": "string"
+          },
+          {
+            "internalType": "bytes",
+            "name": "data",
+            "type": "bytes"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint256",
+                "name": "revisionNumber",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "revisionHeight",
+                "type": "uint256"
+              }
+            ],
+            "internalType": "struct Height",
+            "name": "timeoutHeight",
+            "type": "tuple"
+          },
+          {
+            "internalType": "uint256",
+            "name": "timeoutTimestamp",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct Packet",
+        "name": "packet",
+        "type": "tuple"
+      },
+      {
+        "internalType": "bytes",
+        "name": "acknowledgement",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofAcked",
+        "type": "bytes"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "revisionNumber",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "revisionHeight",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct Height",
+        "name": "proofHeight",
+        "type": "tuple"
+      },
+      {
+        "internalType": "string",
+        "name": "signer",
+        "type": "string"
+      }
+    ],
+    "name": "acknowledgement",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "portID",
+        "type": "string"
+      }
+    ],
+    "name": "bindPort",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "portID",
+        "type": "string"
+      },
+      {
+        "internalType": "bytes",
+        "name": "channel",
+        "type": "bytes"
+      }
+    ],
+    "name": "chanOpenInit",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "portID",
+        "type": "string"
+      },
+      {
+        "internalType": "bytes",
+        "name": "channel",
+        "type": "bytes"
+      },
+      {
+        "internalType": "string",
+        "name": "counterpartyVersion",
+        "type": "string"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofInit",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofHeight",
+        "type": "bytes"
+      }
+    ],
+    "name": "chanOpenTry",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "channelID",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "portID",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "channelID",
+        "type": "string"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofInit",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofHeight",
+        "type": "bytes"
+      }
+    ],
+    "name": "channelCloseConfirm",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "portID",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "channelID",
+        "type": "string"
+      }
+    ],
+    "name": "channelCloseInit",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "portID",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "channelID",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "counterpartyChannelID",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "counterpartyVersion",
+        "type": "string"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofTry",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofHeight",
+        "type": "bytes"
+      }
+    ],
+    "name": "channelOpenAck",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "portID",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "channelID",
+        "type": "string"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofAck",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofHeight",
+        "type": "bytes"
+      }
+    ],
+    "name": "channelOpenConfirm",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1042,6 +1265,492 @@
     "inputs": [
       {
         "internalType": "string",
+        "name": "portID",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "channelID",
+        "type": "string"
+      }
+    ],
+    "name": "queryChannel",
+    "outputs": [
+      {
+        "internalType": "bytes",
+        "name": "",
+        "type": "bytes"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "clientId",
+        "type": "string"
+      }
+    ],
+    "name": "queryClientState",
+    "outputs": [
+      {
+        "internalType": "bytes",
+        "name": "",
+        "type": "bytes"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "connectionID",
+        "type": "string"
+      }
+    ],
+    "name": "queryConnection",
+    "outputs": [
+      {
+        "internalType": "bytes",
+        "name": "",
+        "type": "bytes"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "clientId",
+        "type": "string"
+      }
+    ],
+    "name": "queryConsensusState",
+    "outputs": [
+      {
+        "internalType": "bytes",
+        "name": "",
+        "type": "bytes"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "portID",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "channelID",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "sequence",
+        "type": "uint256"
+      }
+    ],
+    "name": "queryPacketAcknowledgement",
+    "outputs": [
+      {
+        "internalType": "bytes",
+        "name": "",
+        "type": "bytes"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "portID",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "channelID",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "sequence",
+        "type": "uint256"
+      }
+    ],
+    "name": "queryPacketCommitment",
+    "outputs": [
+      {
+        "internalType": "bytes",
+        "name": "",
+        "type": "bytes"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "sequence",
+            "type": "uint256"
+          },
+          {
+            "internalType": "string",
+            "name": "sourcePort",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "sourceChannel",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "destinationPort",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "destinationChannel",
+            "type": "string"
+          },
+          {
+            "internalType": "bytes",
+            "name": "data",
+            "type": "bytes"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint256",
+                "name": "revisionNumber",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "revisionHeight",
+                "type": "uint256"
+              }
+            ],
+            "internalType": "struct Height",
+            "name": "timeoutHeight",
+            "type": "tuple"
+          },
+          {
+            "internalType": "uint256",
+            "name": "timeoutTimestamp",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct Packet",
+        "name": "packet",
+        "type": "tuple"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofCommitment",
+        "type": "bytes"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "revisionNumber",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "revisionHeight",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct Height",
+        "name": "proofHeight",
+        "type": "tuple"
+      },
+      {
+        "internalType": "string",
+        "name": "signer",
+        "type": "string"
+      }
+    ],
+    "name": "recvPacket",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "channelCapability",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "sourcePort",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "sourceChannel",
+        "type": "string"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "revisionNumber",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "revisionHeight",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct Height",
+        "name": "timeoutHeight",
+        "type": "tuple"
+      },
+      {
+        "internalType": "uint256",
+        "name": "timeoutTimestamp",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "data",
+        "type": "bytes"
+      }
+    ],
+    "name": "sendPacket",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "sequence",
+            "type": "uint256"
+          },
+          {
+            "internalType": "string",
+            "name": "sourcePort",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "sourceChannel",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "destinationPort",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "destinationChannel",
+            "type": "string"
+          },
+          {
+            "internalType": "bytes",
+            "name": "data",
+            "type": "bytes"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint256",
+                "name": "revisionNumber",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "revisionHeight",
+                "type": "uint256"
+              }
+            ],
+            "internalType": "struct Height",
+            "name": "timeoutHeight",
+            "type": "tuple"
+          },
+          {
+            "internalType": "uint256",
+            "name": "timeoutTimestamp",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct Packet",
+        "name": "packet",
+        "type": "tuple"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofUnreceived",
+        "type": "bytes"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "revisionNumber",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "revisionHeight",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct Height",
+        "name": "proofHeight",
+        "type": "tuple"
+      },
+      {
+        "internalType": "uint256",
+        "name": "nextSequenceRecv",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "signer",
+        "type": "string"
+      }
+    ],
+    "name": "timeout",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "sequence",
+            "type": "uint256"
+          },
+          {
+            "internalType": "string",
+            "name": "sourcePort",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "sourceChannel",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "destinationPort",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "destinationChannel",
+            "type": "string"
+          },
+          {
+            "internalType": "bytes",
+            "name": "data",
+            "type": "bytes"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint256",
+                "name": "revisionNumber",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "revisionHeight",
+                "type": "uint256"
+              }
+            ],
+            "internalType": "struct Height",
+            "name": "timeoutHeight",
+            "type": "tuple"
+          },
+          {
+            "internalType": "uint256",
+            "name": "timeoutTimestamp",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct Packet",
+        "name": "packet",
+        "type": "tuple"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofUnreceived",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proofClose",
+        "type": "bytes"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "revisionNumber",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "revisionHeight",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct Height",
+        "name": "proofHeight",
+        "type": "tuple"
+      },
+      {
+        "internalType": "uint256",
+        "name": "nextSequenceRecv",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "signer",
+        "type": "string"
+      }
+    ],
+    "name": "timeoutOnClose",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
         "name": "clientID",
         "type": "string"
       },
@@ -1062,11 +1771,6 @@
         "internalType": "string",
         "name": "clientID",
         "type": "string"
-      },
-      {
-        "internalType": "bytes",
-        "name": "upgradePath",
-        "type": "bytes"
       },
       {
         "internalType": "bytes",

@@ -226,7 +226,7 @@ func recvPacket(accessibleState contract.AccessibleState, caller common.Address,
 			fmt.Sprintf("%s", err),
 		)
 		if err != nil {
-			return nil, remainingGas,  fmt.Errorf("error packing event: %w", err)
+			return nil, remainingGas, fmt.Errorf("error packing event: %w", err)
 		}
 		blockNumber := accessibleState.GetBlockContext().Number().Uint64()
 		accessibleState.GetStateDB().AddLog(ContractAddress, topics, data, blockNumber)
