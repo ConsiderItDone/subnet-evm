@@ -2,6 +2,8 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"math/big"
 	"os"
 	"testing"
@@ -215,6 +217,68 @@ func RunTestIbcConnectionOpenInit(t *testing.T) {
 	assert.Equal(t, connectionId0, ev.ConnectionId)
 }
 
+func RunTestIbcConnectionOpenTry(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	require.NoError(t, path.EndpointA.ConnOpenInit())
+
+	counterpartyClient := chainA.GetClientState(path.EndpointA.ClientID)
+	counterparty := connectiontypes.NewCounterparty(path.EndpointA.ClientID, path.EndpointA.ConnectionID, chainA.GetPrefix())
+
+	updateClient(t, path.EndpointB)
+
+	connectionKey := host.ConnectionKey(path.EndpointA.ConnectionID)
+	proofInit, proofHeight := chainA.QueryProof(connectionKey)
+	fmt.Printf("proofInit %#v\n", proofInit)
+	fmt.Printf("proofHeight %#v\n", proofHeight)
+
+	versions := connectiontypes.GetCompatibleVersions()
+	consensusHeight := counterpartyClient.GetLatestHeight().(clienttypes.Height)
+
+	consensusKey := host.FullConsensusStateKey(path.EndpointA.ClientID, consensusHeight)
+	proofConsensus, _ := chainA.QueryProof(consensusKey)
+	fmt.Printf("proofConsensus %#v\n", proofConsensus)
+
+	// retrieve proof of counterparty clientstate on chainA
+	clientKey := host.FullClientStateKey(path.EndpointA.ClientID)
+	proofClient, _ := chainA.QueryProof(clientKey)
+	fmt.Printf("proofClient %#v\n", proofClient)
+
+	counterpartyByte, _ := counterparty.Marshal()
+	fmt.Printf("counterparty %#v\n", counterpartyByte)
+
+	clientStateByte, _ := clienttypes.MarshalClientState(marshaler, counterpartyClient)
+	fmt.Printf("clientState %#v\n", clientStateByte)
+
+	versionsByte, _ := json.Marshal(connectiontypes.ExportedVersionsToProto(versions))
+	fmt.Printf("versions %#v\n", versionsByte)
+
+	proofHeightByte, _ := marshaler.MarshalInterface(&proofHeight)
+	fmt.Printf("proofHeightByte %#v\n", proofHeightByte)
+
+	consensusHeightByte, _ := marshaler.MarshalInterface(&consensusHeight)
+	fmt.Printf("consensusHeightByte %#v\n", consensusHeightByte)
+
+	tx, err := ibcContract.ConnOpenTry(
+		auth,
+		counterpartyByte,
+		0,
+		path.EndpointB.ClientID,
+		clientStateByte,
+		versionsByte,
+		proofInit,
+		proofClient,
+		proofConsensus,
+		proofHeightByte,
+		consensusHeightByte,
+	)
+	require.NoError(t, err)
+	re, err := waitForReceiptAndGet(ctx, ethClient, tx)
+	require.NoError(t, err)
+	t.Log(spew.Sdump(re.Logs))
+}
+
 func RunTestIbcConnectionOpenAck(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -262,6 +326,27 @@ func RunTestIbcConnectionOpenAck(t *testing.T) {
 		proofHeightByte,
 		consensusHeightByte,
 	)
+	require.NoError(t, err)
+	re, err := waitForReceiptAndGet(ctx, ethClient, tx)
+	require.NoError(t, err)
+	t.Log(spew.Sdump(re.Logs))
+}
+
+func RunTestIbcConnectionOpenConfirm(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	require.NoError(t, path.EndpointB.ConnOpenTry())
+	require.NoError(t, path.EndpointA.ConnOpenAck())
+	updateClient(t, path.EndpointB)
+
+	connectionKey := host.ConnectionKey(path.EndpointA.ConnectionID)
+	proofAck, proofHeight := chainA.QueryProof(connectionKey)
+
+	proofHeightByte, err := marshaler.Marshal(&proofHeight)
+	require.NoError(t, err)
+
+	tx, err := ibcContract.ConnOpenConfirm(auth, path.EndpointB.ConnectionID, proofAck, proofHeightByte)
 	require.NoError(t, err)
 	re, err := waitForReceiptAndGet(ctx, ethClient, tx)
 	require.NoError(t, err)

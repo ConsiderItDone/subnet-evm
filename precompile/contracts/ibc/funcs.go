@@ -173,6 +173,13 @@ func _connOpenTry(opts *callOpts[ConnOpenTryInput]) (string, error) {
 		return "", fmt.Errorf("error connectionVerification: %w", err)
 	}
 
+	connectionByte, err := marshaler.Marshal(&connection)
+	if err != nil {
+		return "", fmt.Errorf("connection marshaler error: %w", err)
+	}
+	connectionsPath := fmt.Sprintf("connections/%s", connectionID)
+	stateDB.SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
+
 	return connectionID, nil
 }
 
