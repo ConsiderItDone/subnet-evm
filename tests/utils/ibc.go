@@ -272,11 +272,11 @@ func RunTestIncChannelOpenInit(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	require.NoError(t, path.EndpointA.ConnOpenAck())
-	updateClient(t, path.EndpointA)
 	require.NoError(t, path.EndpointB.ConnOpenConfirm())
-	updateClient(t, path.EndpointB)
 
-	counterparty := channeltypes.NewCounterparty(path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID)
+	path.SetChannelOrdered()
+
+	counterparty := channeltypes.NewCounterparty(ibctesting.MockPort, ibctesting.FirstChannelID)
 	channel := channeltypes.NewChannel(channeltypes.INIT, channeltypes.ORDERED, counterparty, []string{path.EndpointB.ConnectionID}, path.EndpointA.ChannelConfig.Version)
 	channelByte, err := marshaler.Marshal(&channel)
 	require.NoError(t, err)
@@ -292,20 +292,22 @@ func RunTestIncChannelOpenAck(t *testing.T) {
 	defer cancel()
 
 	require.NoError(t, path.EndpointA.ChanOpenInit())
-	updateClient(t, path.EndpointA)
 	require.NoError(t, path.EndpointB.ChanOpenTry())
-	updateClient(t, path.EndpointB)
+
+	if path.EndpointA.ClientID != "" {
+		updateClient(t, path.EndpointA)
+	}
 
 	channelKey := host.ChannelKey(path.EndpointB.ChannelConfig.PortID, ibctesting.FirstChannelID)
 	proof, proofHeight := chainB.QueryProof(channelKey)
-	proofHeightByte, err := proofHeight.Marshal()
+	proofHeightByte, err := marshaler.Marshal(&proofHeight)
 	require.NoError(t, err)
 
 	tx, err := ibcContract.ChannelOpenAck(
 		auth,
 		path.EndpointA.ChannelConfig.PortID,
 		path.EndpointA.ChannelID,
-		path.EndpointB.ChannelID,
+		ibctesting.FirstChannelID,
 		path.EndpointB.ChannelConfig.Version,
 		proof,
 		proofHeightByte,
