@@ -296,21 +296,21 @@ func _connOpenConfirm(opts *callOpts[ConnOpenConfirmInput]) error {
 
 	clientID := connection.GetClientID()
 
-	clientStatePath := fmt.Sprintf("clients/%s/clientState", clientID)
-	clientStateByte := stateDB.GetPrecompileState(common.BytesToAddress([]byte(clientStatePath)))
-	clientStateExp, err := clienttypes.UnmarshalClientState(marshaler, clientStateByte)
+	clientState, found, err := getClientState(stateDB, clientID)
 	if err != nil {
-		return fmt.Errorf("error unmarshalling client state file, err: %w", err)
+		return fmt.Errorf("error loading client state, err: %w", err)
 	}
-	clientState := clientStateExp.(*ibctm.ClientState)
+	if !found {
+		return fmt.Errorf("client state not found in database")
+	}
 
-	consensusStatePath := fmt.Sprintf("clients/%s/consensusStates/%s", clientID, clientState.GetLatestHeight())
-	consensusStateByte := stateDB.GetPrecompileState(common.BytesToAddress([]byte(consensusStatePath)))
-	consensusStateExp, err := clienttypes.UnmarshalConsensusState(marshaler, consensusStateByte)
+	consensusState, found, err := getConsensusState(stateDB, clientID, clientState.GetLatestHeight())
 	if err != nil {
-		return fmt.Errorf("error unmarshalling consensus state file, err: %w", err)
+		return fmt.Errorf("can't get consensus state: %w", err)
 	}
-	consensusState := consensusStateExp.(*ibctm.ConsensusState)
+	if !found {
+		return fmt.Errorf("consensus state not found: %s", clientID)
+	}
 
 	merklePath := commitmenttypes.NewMerklePath(hosttypes.ConnectionPath(opts.args.ConnectionID))
 	merklePath, err = commitmenttypes.ApplyPrefix(connection.GetCounterparty().GetPrefix(), merklePath)
