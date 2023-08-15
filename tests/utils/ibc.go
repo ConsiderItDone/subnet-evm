@@ -372,6 +372,39 @@ func RunTestIncChannelOpenInit(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func RunTestIncChannelOpenTry(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	require.NoError(t, path.EndpointB.ConnOpenConfirm())
+	path.SetChannelOrdered()
+	require.NoError(t, path.EndpointA.ChanOpenInit())
+	chainB.CreatePortCapability(chainB.GetSimApp().ScopedIBCMockKeeper, ibctesting.MockPort)
+	updateClient(t, path.EndpointB)
+
+	counterparty := channeltypes.NewCounterparty(path.EndpointB.ChannelConfig.PortID, ibctesting.FirstChannelID)
+	channel := channeltypes.NewChannel(channeltypes.INIT, channeltypes.ORDERED, counterparty, []string{path.EndpointB.ConnectionID}, path.EndpointA.ChannelConfig.Version)
+	channelByte, err := marshaler.Marshal(&channel)
+	require.NoError(t, err)
+
+	channelKey := host.ChannelKey(counterparty.PortId, counterparty.ChannelId)
+	proof, proofHeight := chainA.QueryProof(channelKey)
+
+	consensusHeightByte, err := proofHeight.Marshal()
+	require.NoError(t, err)
+	tx, err := ibcContract.ChanOpenTry(
+		auth,
+		path.EndpointB.ChannelConfig.PortID,
+		channelByte,
+		path.EndpointA.ChannelConfig.Version,
+		proof,
+		consensusHeightByte,
+	)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, tx)
+	require.NoError(t, err)
+}
+
 func RunTestIncChannelOpenAck(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -396,6 +429,32 @@ func RunTestIncChannelOpenAck(t *testing.T) {
 		path.EndpointB.ChannelConfig.Version,
 		proof,
 		proofHeightByte,
+	)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, tx)
+	require.NoError(t, err)
+}
+
+func RunTestIncChannelOpenConfirm(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	require.NoError(t, path.EndpointB.ChanOpenTry())
+	require.NoError(t, path.EndpointA.ChanOpenAck())
+	updateClient(t, path.EndpointB)
+
+	channelKey := host.ChannelKey(path.EndpointA.ChannelConfig.PortID, ibctesting.FirstChannelID)
+	proof, proofHeight := chainA.QueryProof(channelKey)
+
+	consensusHeightByte, err := marshaler.Marshal(&proofHeight)
+	require.NoError(t, err)
+
+	tx, err := ibcContract.ChannelOpenConfirm(
+		auth,
+		path.EndpointB.ChannelConfig.PortID,
+		ibctesting.FirstChannelID,
+		proof,
+		consensusHeightByte,
 	)
 	require.NoError(t, err)
 	_, err = waitForReceiptAndGet(ctx, ethClient, tx)
