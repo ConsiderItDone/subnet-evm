@@ -1,6 +1,9 @@
 package ibc
 
 import (
+	"fmt"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/ava-labs/subnet-evm/accounts/abi"
@@ -131,13 +134,11 @@ func sendPacket(accessibleState contract.AccessibleState, caller common.Address,
 
 // UnpackRecvPacketInput attempts to unpack [input] into the IIBCMsgRecvPacket type argument
 // assumes that [input] does not include selector (omits first 4 func signature bytes)
-func UnpackRecvPacketInput(input []byte) (*MsgRecvPacket, error) {
-	res, err := IBCABI.UnpackInput("RecvPacket", input)
-	if err != nil {
-		return nil, err
-	}
-	unpacked := abi.ConvertType(res[0], new(MsgRecvPacket)).(*MsgRecvPacket)
-	return unpacked, nil
+func UnpackRecvPacketInput(input []byte) (RecvPacketInput, error) {
+	inputStruct := RecvPacketInput{}
+	err := IBCABI.UnpackInputIntoInterface(&inputStruct, "RecvPacket", input)
+
+	return inputStruct, err
 }
 
 // PackRecvPacket packs [message] of type IIBCMsgRecvPacket into the appropriate arguments for RecvPacket.
@@ -162,8 +163,28 @@ func recvPacket(accessibleState contract.AccessibleState, caller common.Address,
 		return nil, remainingGas, err
 	}
 
-	// CUSTOM CODE STARTS HERE
-	_ = inputStruct // CUSTOM CODE OPERATES ON INPUT
+	if err := _recvPacket(&callOpts[RecvPacketInput]{
+		accessibleState: accessibleState,
+		caller:          caller,
+		addr:            addr,
+		suppliedGas:     suppliedGas,
+		readOnly:        readOnly,
+		args:            inputStruct,
+	}); err != nil {
+		return nil, remainingGas, err
+	}
+
+	recvAddr, ok, _ := getPort(accessibleState.GetStateDB(), inputStruct.Packet.DestinationPort)
+	if ok {
+		return nil, remainingGas, fmt.Errorf("port with portID: %s already bound", inputStruct.Packet.DestinationPort)
+	}
+
+	// TODO big.NewInt(0)
+	ret, remainingGas, err = accessibleState.CallFromPrecompile(ContractAddress, recvAddr, inputStruct.Packet.Data, remainingGas, big.NewInt(0))
+
+	// TODO WriteAcknowledgement
+	// err := k.ChannelKeeper.WriteAcknowledgement(ctx, capability, msg.Packet, ack)
+
 	// this function does not return an output, leave this one as is
 	packedOutput := []byte{}
 

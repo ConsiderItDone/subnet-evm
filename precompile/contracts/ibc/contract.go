@@ -61,6 +61,7 @@ var (
 	IBCPrecompile                 = createIBCPrecompile()
 	GeneratedClientIdentifier     = IBCABI.Events["ClientCreated"]
 	GeneratedConnectionIdentifier = IBCABI.Events["ConnectionCreated"]
+	GeneratedPacketIdentifier = IBCABI.Events["PacketSent"]
 
 	ClientSequenceSlot     = common.BytesToHash([]byte("client-sequence"))
 	ConnectionSequenceSlot = common.BytesToHash([]byte("connection-sequence"))
