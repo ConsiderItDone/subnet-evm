@@ -19,72 +19,38 @@ var _ = ginkgo.Describe("[Precompiles]", ginkgo.Ordered, func() {
 
 	// Each ginkgo It node specifies the name of the genesis file (in ./tests/precompile/genesis/)
 	// to use to launch the subnet and the name of the TS test file to run on the subnet (in ./contracts/tests/)
-	//ginkgo.It("contract native minter", ginkgo.Label("Precompile"), ginkgo.Label("ContractNativeMinter"), func() {
-	//	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	//	defer cancel()
-	//
-	//	utils.RunDefaultHardhatTests(ctx, "contract_native_minter")
-	//})
-	//
-	//ginkgo.It("tx allow list", ginkgo.Label("Precompile"), ginkgo.Label("TxAllowList"), func() {
-	//	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	//	defer cancel()
-	//
-	//	utils.RunDefaultHardhatTests(ctx, "tx_allow_list")
-	//})
-	//
-	//ginkgo.It("contract deployer allow list", ginkgo.Label("Precompile"), ginkgo.Label("ContractDeployerAllowList"), func() {
-	//	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	//	defer cancel()
-	//
-	//	utils.RunDefaultHardhatTests(ctx, "contract_deployer_allow_list")
-	//})
-	//
-	//ginkgo.It("fee manager", ginkgo.Label("Precompile"), ginkgo.Label("FeeManager"), func() {
-	//	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	//	defer cancel()
-	//
-	//	utils.RunDefaultHardhatTests(ctx, "fee_manager")
-	//})
-
-	//ginkgo.It("reward manager", ginkgo.Label("Precompile"), ginkgo.Label("RewardManager"), func() {
-	//	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	//	defer cancel()
-	//
-	//	utils.RunDefaultHardhatTests(ctx, "reward_manager")
-	//})
-
-	ginkgo.It("ibc: create client", ginkgo.Label("Precompile"), ginkgo.Label("IBC"), func() {
+	ginkgo.It("contract native minter", ginkgo.Label("Precompile"), ginkgo.Label("ContractNativeMinter"), func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 
-		utils.RunIBCCreateClientTests(ctx)
+		utils.RunDefaultHardhatTests(ctx, "contract_native_minter")
 	})
-	ginkgo.It("ibc: connectionOpenInit", ginkgo.Label("Precompile"), ginkgo.Label("IBC"), func() {
+
+	ginkgo.It("tx allow list", ginkgo.Label("Precompile"), ginkgo.Label("TxAllowList"), func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 
-		utils.RunIBCConnectionOpenInitTests(ctx)
+		utils.RunDefaultHardhatTests(ctx, "tx_allow_list")
 	})
-	ginkgo.It("ibc: connectionOpenTry", ginkgo.Label("Precompile"), ginkgo.Label("IBC"), func() {
+
+	ginkgo.It("contract deployer allow list", ginkgo.Label("Precompile"), ginkgo.Label("ContractDeployerAllowList"), func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 
-		utils.RunIBCConnectionOpenTryTests(ctx)
+		utils.RunDefaultHardhatTests(ctx, "contract_deployer_allow_list")
 	})
 
-	// and then runs the hardhat tests for each one without forcing precompile developers to modify this file.
-	// ADD YOUR PRECOMPILE HERE
-	/*
-		ginkgo.It("your precompile", ginkgo.Label("Precompile"), ginkgo.Label("YourPrecompile"), func() {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-			defer cancel()
+	ginkgo.It("fee manager", ginkgo.Label("Precompile"), ginkgo.Label("FeeManager"), func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
 
-			// Specify the name shared by the genesis file in ./tests/precompile/genesis/{your_precompile}.json
-			// and the test file in ./contracts/tests/{your_precompile}.ts
-			// If you want to use a different test command and genesis path than the defaults, you can
-			// use the utils.RunTestCMD. See utils.RunDefaultHardhatTests for an example.
-			utils.RunDefaultHardhatTests(ctx, "your_precompile")
-		})
-	*/
+		utils.RunDefaultHardhatTests(ctx, "fee_manager")
+	})
+
+	ginkgo.It("reward manager", ginkgo.Label("Precompile"), ginkgo.Label("RewardManager"), func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+
+		utils.RunDefaultHardhatTests(ctx, "reward_manager")
+	})
 })
