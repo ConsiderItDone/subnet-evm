@@ -21,21 +21,25 @@ const (
 	UpdateClientGasCost  uint64 = 1
 	UpgradeClientGasCost uint64 = 1
 
-	ConnOpenAckGasCost     uint64 = 1 /* SET A GAS COST HERE */
-	ConnOpenConfirmGasCost uint64 = 1 /* SET A GAS COST HERE */
-	ConnOpenInitGasCost    uint64 = 1 /* SET A GAS COST HERE */
-	ConnOpenTryGasCost     uint64 = 1 /* SET A GAS COST HERE */
+	ConnOpenAckGasCost     uint64 = 1
+	ConnOpenConfirmGasCost uint64 = 1
+	ConnOpenInitGasCost    uint64 = 1
+	ConnOpenTryGasCost     uint64 = 1
 
-	ChanOpenInitGasCost        uint64 = 1 /* SET A GAS COST HERE */
-	ChanOpenTryGasCost         uint64 = 1 /* SET A GAS COST HERE */
-	ChannelCloseConfirmGasCost uint64 = 1 /* SET A GAS COST HERE */
-	ChannelCloseInitGasCost    uint64 = 1 /* SET A GAS COST HERE */
-	ChannelOpenAckGasCost      uint64 = 1 /* SET A GAS COST HERE */
-	ChannelOpenConfirmGasCost  uint64 = 1 /* SET A GAS COST HERE */
+	ChanOpenInitGasCost        uint64 = 1
+	ChanOpenTryGasCost         uint64 = 1
+	ChannelCloseConfirmGasCost uint64 = 1
+	ChannelCloseInitGasCost    uint64 = 1
+	ChannelOpenAckGasCost      uint64 = 1
+	ChannelOpenConfirmGasCost  uint64 = 1
 
-	BindPortGasCost uint64 = 1 /* SET A GAS COST HERE */
+	BindPortGasCost uint64 = 1
 
-	SendPacketGasCost uint64 = 1
+	RecvPacketGasCost      uint64 = 1
+	SendPacketGasCost      uint64 = 1
+	AcknowledgementGasCost uint64 = 1
+	TimeoutGasCost         uint64 = 1
+	TimeoutOnCloseGasCost  uint64 = 1
 )
 
 // CUSTOM CODE STARTS HERE
@@ -84,6 +88,10 @@ func createIBCPrecompile() contract.StatefulPrecompiledContract {
 		"createClient":        createClient,
 		"updateClient":        updateClient,
 		"upgradeClient":       upgradeClient,
+		"recvPacket":          recvPacket,
+		"sendPacket":          sendPacket,
+		"timeout":             timeout,
+		"timeoutOnClose":      timeoutOnClose,
 	}
 
 	for name, function := range abiFunctionMap {
