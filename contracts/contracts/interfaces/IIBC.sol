@@ -114,8 +114,6 @@ interface IIBC {
 
   function RecvPacket(MsgRecvPacket memory message) external;
 
-  function OnRecvPacket(Packet memory packet, bytes memory relayer) external;
-
   function SendPacket(
       uint64 channelCapability,
       string memory sourcePort,
