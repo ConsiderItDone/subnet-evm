@@ -7,12 +7,11 @@ package ibc
 import (
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/stretchr/testify/require"
-
 	"github.com/ava-labs/subnet-evm/core/state"
 	"github.com/ava-labs/subnet-evm/precompile/testutils"
 	"github.com/ava-labs/subnet-evm/vmerrs"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/require"
 )
 
 // TestRun tests the Run function of the precompile contract.
@@ -23,6 +22,174 @@ import (
 // tests for specific cases.
 func TestRun(t *testing.T) {
 	tests := map[string]testutils.PrecompileTest{
+		"readOnly chanOpenInit should fail": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := ChanOpenInitInput{}
+				input, err := PackChanOpenInit(testInput)
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: ChanOpenInitGasCost,
+			ReadOnly:    true,
+			ExpectedErr: vmerrs.ErrWriteProtection.Error(),
+		},
+		"insufficient gas for chanOpenInit should fail": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := ChanOpenInitInput{}
+				input, err := PackChanOpenInit(testInput)
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: ChanOpenInitGasCost - 1,
+			ReadOnly:    false,
+			ExpectedErr: vmerrs.ErrOutOfGas.Error(),
+		},
+		"readOnly chanOpenTry should fail": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := ChanOpenTryInput{}
+				input, err := PackChanOpenTry(testInput)
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: ChanOpenTryGasCost,
+			ReadOnly:    true,
+			ExpectedErr: vmerrs.ErrWriteProtection.Error(),
+		},
+		"insufficient gas for chanOpenTry should fail": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := ChanOpenTryInput{}
+				input, err := PackChanOpenTry(testInput)
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: ChanOpenTryGasCost - 1,
+			ReadOnly:    false,
+			ExpectedErr: vmerrs.ErrOutOfGas.Error(),
+		},
+		"readOnly channelCloseConfirm should fail": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := ChannelCloseConfirmInput{}
+				input, err := PackChannelCloseConfirm(testInput)
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: ChannelCloseConfirmGasCost,
+			ReadOnly:    true,
+			ExpectedErr: vmerrs.ErrWriteProtection.Error(),
+		},
+		"insufficient gas for channelCloseConfirm should fail": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := ChannelCloseConfirmInput{}
+				input, err := PackChannelCloseConfirm(testInput)
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: ChannelCloseConfirmGasCost - 1,
+			ReadOnly:    false,
+			ExpectedErr: vmerrs.ErrOutOfGas.Error(),
+		},
+		"readOnly channelCloseInit should fail": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := ChannelCloseInitInput{}
+				input, err := PackChannelCloseInit(testInput)
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: ChannelCloseInitGasCost,
+			ReadOnly:    true,
+			ExpectedErr: vmerrs.ErrWriteProtection.Error(),
+		},
+		"insufficient gas for channelCloseInit should fail": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := ChannelCloseInitInput{}
+				input, err := PackChannelCloseInit(testInput)
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: ChannelCloseInitGasCost - 1,
+			ReadOnly:    false,
+			ExpectedErr: vmerrs.ErrOutOfGas.Error(),
+		},
+		"readOnly channelOpenAck should fail": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := ChannelOpenAckInput{}
+				input, err := PackChannelOpenAck(testInput)
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: ChannelOpenAckGasCost,
+			ReadOnly:    true,
+			ExpectedErr: vmerrs.ErrWriteProtection.Error(),
+		},
+		"insufficient gas for channelOpenAck should fail": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := ChannelOpenAckInput{}
+				input, err := PackChannelOpenAck(testInput)
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: ChannelOpenAckGasCost - 1,
+			ReadOnly:    false,
+			ExpectedErr: vmerrs.ErrOutOfGas.Error(),
+		},
+		"readOnly channelOpenConfirm should fail": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := ChannelOpenConfirmInput{}
+				input, err := PackChannelOpenConfirm(testInput)
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: ChannelOpenConfirmGasCost,
+			ReadOnly:    true,
+			ExpectedErr: vmerrs.ErrWriteProtection.Error(),
+		},
+		"insufficient gas for channelOpenConfirm should fail": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// populate test input here
+				testInput := ChannelOpenConfirmInput{}
+				input, err := PackChannelOpenConfirm(testInput)
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: ChannelOpenConfirmGasCost - 1,
+			ReadOnly:    false,
+			ExpectedErr: vmerrs.ErrOutOfGas.Error(),
+		},
 		"readOnly connOpenAck should fail": {
 			Caller: common.Address{1},
 			InputFn: func(t testing.TB) []byte {

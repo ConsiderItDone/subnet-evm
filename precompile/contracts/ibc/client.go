@@ -214,11 +214,9 @@ func createClient(accessibleState contract.AccessibleState, caller common.Addres
 	}
 
 	// emit event
-	topics := make([]common.Hash, 1)
-	topics[0] = GeneratedClientIdentifier.ID
-	data, err := GeneratedClientIdentifier.Inputs.Pack(clientId)
+	topics, data, err := IBCABI.PackEvent("ClientCreated", clientId)
 	if err != nil {
-		return nil, remainingGas, err
+		return nil, remainingGas, fmt.Errorf("error packing event: %w", err)
 	}
 	blockNumber := accessibleState.GetBlockContext().Number().Uint64()
 	accessibleState.GetStateDB().AddLog(ContractAddress, topics, data, blockNumber)
@@ -331,22 +329,20 @@ func upgradeClient(accessibleState contract.AccessibleState, caller common.Addre
 func _updateClient(opts *callOpts[UpdateClientInput]) error {
 	stateDB := opts.accessibleState.GetStateDB()
 
-	clientStatePath := fmt.Sprintf("clients/%s/clientState", opts.args.ClientID)
-	found := stateDB.Exist(common.BytesToAddress([]byte(clientStatePath)))
+	clientState, found, err := getClientState(stateDB, opts.args.ClientID)
+	if err != nil {
+		return fmt.Errorf("can't get client state: %w", err)
+	}
 	if !found {
-		return fmt.Errorf("cannot update client with ID %s", opts.args.ClientID)
+		return fmt.Errorf("client state not found: %s", opts.args.ClientID)
 	}
 
-	clientStateByte := stateDB.GetPrecompileState(common.BytesToAddress([]byte(clientStatePath)))
-	clientState := &ibctm.ClientState{}
-	if err := clientState.Unmarshal(clientStateByte); err != nil {
-		return err
+	consensusState, found, err := getConsensusState(stateDB, opts.args.ClientID, clientState.GetLatestHeight())
+	if err != nil {
+		return fmt.Errorf("can't get consensus state: %w", err)
 	}
-
-	consensusStatePath := fmt.Sprintf("clients/%s/consensusStates/%s", opts.args.ClientID, clientState.GetLatestHeight())
-	found = stateDB.Exist(common.BytesToAddress([]byte(consensusStatePath)))
 	if !found {
-		return fmt.Errorf("cannot update consensusState with ID %s", opts.args.ClientID)
+		return fmt.Errorf("consensus state not found: %s", opts.args.ClientID)
 	}
 
 	clientMessage := &ibctm.Header{}
@@ -354,19 +350,19 @@ func _updateClient(opts *callOpts[UpdateClientInput]) error {
 		return fmt.Errorf("error unmarshalling client state file: %w", err)
 	}
 
-	consensusState := &ibctm.ConsensusState{
-		Timestamp:          clientMessage.GetTime(),
-		Root:               commitmenttypes.NewMerkleRoot(clientMessage.Header.GetAppHash()),
-		NextValidatorsHash: clientMessage.Header.NextValidatorsHash,
-	}
-	// store ConsensusStateBytes
-	consensusStateByte, err := consensusState.Marshal()
-	if err != nil {
-		return errors.New("consensusState marshaler error")
+	clientState.LatestHeight = clientMessage.GetHeight().(clienttypes.Height)
+	consensusState.Timestamp = clientMessage.GetTime()
+	consensusState.Root = commitmenttypes.NewMerkleRoot(clientMessage.Header.GetAppHash())
+	consensusState.NextValidatorsHash = clientMessage.Header.NextValidatorsHash
+
+	if err := storeClientState(stateDB, opts.args.ClientID, clientState); err != nil {
+		return fmt.Errorf("can't update client state: %w", err)
 	}
 
-	consensusStatePath = fmt.Sprintf("clients/%s/consensusStates/%s", opts.args.ClientID, clientMessage.GetHeight())
-	stateDB.SetPrecompileState(common.BytesToAddress([]byte(consensusStatePath)), consensusStateByte)
+	if err := storeConsensusState(stateDB, opts.args.ClientID, consensusState, clientState.GetLatestHeight()); err != nil {
+		return fmt.Errorf("can't update consensus state: %w", err)
+	}
+
 	return nil
 }
 

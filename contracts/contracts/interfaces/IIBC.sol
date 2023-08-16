@@ -6,6 +6,33 @@ interface IIBC {
   event ConnectionCreated(string clientId, string connectionId);
   event ChannelCreated(string clientId, string connectionId);
 
+  struct Height {
+      uint64 revisionNumber;
+      uint64 revisionHeight;
+  }
+
+  struct Packet {
+      uint64 sequence;
+      string sourcePort;
+      string sourceChannel;
+      string destinationPort;
+      string destinationChannel;
+      bytes data;
+      Height timeoutHeight;
+      uint64 timeoutTimestamp;
+  }
+
+  function OnRecvPacket(Packet memory packet, bytes memory relayer) external;
+
+  function SendPacket(
+      uint64 channelCapability,
+      string memory sourcePort,
+      string memory sourceChannel,
+      Height memory timeoutHeight,
+      uint64 timeoutTimestamp,
+      bytes memory data
+  ) external;
+
   // Create IBC Client
   function createClient(
     string memory clientType,
@@ -57,4 +84,41 @@ interface IIBC {
   ) external;
 
   function connOpenConfirm(string memory connectionID, bytes memory proofAck, bytes memory proofHeight) external;
+
+  function chanOpenInit(string memory portID, bytes memory channel) external;
+
+  function chanOpenTry(
+    string memory portID,
+    bytes memory channel,
+    string memory counterpartyVersion,
+    bytes memory proofInit,
+    bytes memory proofHeight
+  ) external returns (string memory channelID);
+
+  function channelOpenAck(
+    string memory portID,
+    string memory channelID,
+    string memory counterpartyChannelID,
+    string memory counterpartyVersion,
+    bytes memory proofTry,
+    bytes memory proofHeight
+  ) external;
+
+  function channelOpenConfirm(
+    string memory portID,
+    string memory channelID,
+    bytes memory proofAck,
+    bytes memory proofHeight
+  ) external;
+
+  function channelCloseInit(string memory portID, string memory channelID) external;
+
+  function channelCloseConfirm(
+    string memory portID,
+    string memory channelID,
+    bytes memory proofInit,
+    bytes memory proofHeight
+  ) external;
+
+  function bindPort(string memory portID) external;
 }

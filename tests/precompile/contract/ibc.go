@@ -30,7 +30,7 @@ var (
 
 // ContractMetaData contains all meta data concerning the Contract contract.
 var ContractMetaData = &bind.MetaData{
-	ABI: "[{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"string\",\"name\":\"clientId\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"connectionId\",\"type\":\"string\"}],\"name\":\"ChannelCreated\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"string\",\"name\":\"clientId\",\"type\":\"string\"}],\"name\":\"ClientCreated\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"string\",\"name\":\"clientId\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"connectionId\",\"type\":\"string\"}],\"name\":\"ConnectionCreated\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"connectionID\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"clientState\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"version\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"counterpartyConnectionID\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofTry\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofClient\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofConsensus\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofHeight\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"consensusHeight\",\"type\":\"bytes\"}],\"name\":\"connOpenAck\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"connectionID\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"proofAck\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofHeight\",\"type\":\"bytes\"}],\"name\":\"connOpenConfirm\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"clientID\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"counterparty\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"version\",\"type\":\"bytes\"},{\"internalType\":\"uint32\",\"name\":\"delayPeriod\",\"type\":\"uint32\"}],\"name\":\"connOpenInit\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"connectionID\",\"type\":\"string\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes\",\"name\":\"counterparty\",\"type\":\"bytes\"},{\"internalType\":\"uint32\",\"name\":\"delayPeriod\",\"type\":\"uint32\"},{\"internalType\":\"string\",\"name\":\"clientID\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"clientState\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"counterpartyVersions\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofInit\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofClient\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofConsensus\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofHeight\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"consensusHeight\",\"type\":\"bytes\"}],\"name\":\"connOpenTry\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"connectionID\",\"type\":\"string\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"clientType\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"clientState\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"consensusState\",\"type\":\"bytes\"}],\"name\":\"createClient\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"clientID\",\"type\":\"string\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"clientID\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"clientMessage\",\"type\":\"bytes\"}],\"name\":\"updateClient\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"clientID\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"upgradePath\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"upgradedClien\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"upgradedConsState\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofUpgradeClient\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofUpgradeConsState\",\"type\":\"bytes\"}],\"name\":\"upgradeClient\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
+	ABI: "[{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"string\",\"name\":\"clientId\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"connectionId\",\"type\":\"string\"}],\"name\":\"ChannelCreated\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"string\",\"name\":\"clientId\",\"type\":\"string\"}],\"name\":\"ClientCreated\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"string\",\"name\":\"clientId\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"connectionId\",\"type\":\"string\"}],\"name\":\"ConnectionCreated\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"portID\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"channel\",\"type\":\"bytes\"}],\"name\":\"chanOpenInit\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"portID\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"channel\",\"type\":\"bytes\"},{\"internalType\":\"string\",\"name\":\"counterpartyVersion\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"proofInit\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofHeight\",\"type\":\"bytes\"}],\"name\":\"chanOpenTry\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"channelID\",\"type\":\"string\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"portID\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"channelID\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"proofInit\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofHeight\",\"type\":\"bytes\"}],\"name\":\"channelCloseConfirm\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"portID\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"channelID\",\"type\":\"string\"}],\"name\":\"channelCloseInit\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"portID\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"channelID\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"counterpartyChannelID\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"counterpartyVersion\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"proofTry\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofHeight\",\"type\":\"bytes\"}],\"name\":\"channelOpenAck\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"portID\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"channelID\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"proofAck\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofHeight\",\"type\":\"bytes\"}],\"name\":\"channelOpenConfirm\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"connectionID\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"clientState\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"version\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"counterpartyConnectionID\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofTry\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofClient\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofConsensus\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofHeight\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"consensusHeight\",\"type\":\"bytes\"}],\"name\":\"connOpenAck\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"connectionID\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"proofAck\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofHeight\",\"type\":\"bytes\"}],\"name\":\"connOpenConfirm\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"clientID\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"counterparty\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"version\",\"type\":\"bytes\"},{\"internalType\":\"uint32\",\"name\":\"delayPeriod\",\"type\":\"uint32\"}],\"name\":\"connOpenInit\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"connectionID\",\"type\":\"string\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes\",\"name\":\"counterparty\",\"type\":\"bytes\"},{\"internalType\":\"uint32\",\"name\":\"delayPeriod\",\"type\":\"uint32\"},{\"internalType\":\"string\",\"name\":\"clientID\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"clientState\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"counterpartyVersions\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofInit\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofClient\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofConsensus\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofHeight\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"consensusHeight\",\"type\":\"bytes\"}],\"name\":\"connOpenTry\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"connectionID\",\"type\":\"string\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"clientType\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"clientState\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"consensusState\",\"type\":\"bytes\"}],\"name\":\"createClient\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"clientID\",\"type\":\"string\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"clientID\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"clientMessage\",\"type\":\"bytes\"}],\"name\":\"updateClient\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"clientID\",\"type\":\"string\"},{\"internalType\":\"bytes\",\"name\":\"upgradePath\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"upgradedClien\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"upgradedConsState\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofUpgradeClient\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofUpgradeConsState\",\"type\":\"bytes\"}],\"name\":\"upgradeClient\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
 }
 
 // ContractABI is the input ABI used to generate the binding from.
@@ -177,6 +177,132 @@ func (_Contract *ContractTransactorRaw) Transfer(opts *bind.TransactOpts) (*type
 // Transact invokes the (paid) contract method with params as input values.
 func (_Contract *ContractTransactorRaw) Transact(opts *bind.TransactOpts, method string, params ...interface{}) (*types.Transaction, error) {
 	return _Contract.Contract.contract.Transact(opts, method, params...)
+}
+
+// ChanOpenInit is a paid mutator transaction binding the contract method 0xa718c941.
+//
+// Solidity: function chanOpenInit(string portID, bytes channel) returns()
+func (_Contract *ContractTransactor) ChanOpenInit(opts *bind.TransactOpts, portID string, channel []byte) (*types.Transaction, error) {
+	return _Contract.contract.Transact(opts, "chanOpenInit", portID, channel)
+}
+
+// ChanOpenInit is a paid mutator transaction binding the contract method 0xa718c941.
+//
+// Solidity: function chanOpenInit(string portID, bytes channel) returns()
+func (_Contract *ContractSession) ChanOpenInit(portID string, channel []byte) (*types.Transaction, error) {
+	return _Contract.Contract.ChanOpenInit(&_Contract.TransactOpts, portID, channel)
+}
+
+// ChanOpenInit is a paid mutator transaction binding the contract method 0xa718c941.
+//
+// Solidity: function chanOpenInit(string portID, bytes channel) returns()
+func (_Contract *ContractTransactorSession) ChanOpenInit(portID string, channel []byte) (*types.Transaction, error) {
+	return _Contract.Contract.ChanOpenInit(&_Contract.TransactOpts, portID, channel)
+}
+
+// ChanOpenTry is a paid mutator transaction binding the contract method 0x0ce2b1f6.
+//
+// Solidity: function chanOpenTry(string portID, bytes channel, string counterpartyVersion, bytes proofInit, bytes proofHeight) returns(string channelID)
+func (_Contract *ContractTransactor) ChanOpenTry(opts *bind.TransactOpts, portID string, channel []byte, counterpartyVersion string, proofInit []byte, proofHeight []byte) (*types.Transaction, error) {
+	return _Contract.contract.Transact(opts, "chanOpenTry", portID, channel, counterpartyVersion, proofInit, proofHeight)
+}
+
+// ChanOpenTry is a paid mutator transaction binding the contract method 0x0ce2b1f6.
+//
+// Solidity: function chanOpenTry(string portID, bytes channel, string counterpartyVersion, bytes proofInit, bytes proofHeight) returns(string channelID)
+func (_Contract *ContractSession) ChanOpenTry(portID string, channel []byte, counterpartyVersion string, proofInit []byte, proofHeight []byte) (*types.Transaction, error) {
+	return _Contract.Contract.ChanOpenTry(&_Contract.TransactOpts, portID, channel, counterpartyVersion, proofInit, proofHeight)
+}
+
+// ChanOpenTry is a paid mutator transaction binding the contract method 0x0ce2b1f6.
+//
+// Solidity: function chanOpenTry(string portID, bytes channel, string counterpartyVersion, bytes proofInit, bytes proofHeight) returns(string channelID)
+func (_Contract *ContractTransactorSession) ChanOpenTry(portID string, channel []byte, counterpartyVersion string, proofInit []byte, proofHeight []byte) (*types.Transaction, error) {
+	return _Contract.Contract.ChanOpenTry(&_Contract.TransactOpts, portID, channel, counterpartyVersion, proofInit, proofHeight)
+}
+
+// ChannelCloseConfirm is a paid mutator transaction binding the contract method 0x460d68fa.
+//
+// Solidity: function channelCloseConfirm(string portID, string channelID, bytes proofInit, bytes proofHeight) returns()
+func (_Contract *ContractTransactor) ChannelCloseConfirm(opts *bind.TransactOpts, portID string, channelID string, proofInit []byte, proofHeight []byte) (*types.Transaction, error) {
+	return _Contract.contract.Transact(opts, "channelCloseConfirm", portID, channelID, proofInit, proofHeight)
+}
+
+// ChannelCloseConfirm is a paid mutator transaction binding the contract method 0x460d68fa.
+//
+// Solidity: function channelCloseConfirm(string portID, string channelID, bytes proofInit, bytes proofHeight) returns()
+func (_Contract *ContractSession) ChannelCloseConfirm(portID string, channelID string, proofInit []byte, proofHeight []byte) (*types.Transaction, error) {
+	return _Contract.Contract.ChannelCloseConfirm(&_Contract.TransactOpts, portID, channelID, proofInit, proofHeight)
+}
+
+// ChannelCloseConfirm is a paid mutator transaction binding the contract method 0x460d68fa.
+//
+// Solidity: function channelCloseConfirm(string portID, string channelID, bytes proofInit, bytes proofHeight) returns()
+func (_Contract *ContractTransactorSession) ChannelCloseConfirm(portID string, channelID string, proofInit []byte, proofHeight []byte) (*types.Transaction, error) {
+	return _Contract.Contract.ChannelCloseConfirm(&_Contract.TransactOpts, portID, channelID, proofInit, proofHeight)
+}
+
+// ChannelCloseInit is a paid mutator transaction binding the contract method 0x7eb320da.
+//
+// Solidity: function channelCloseInit(string portID, string channelID) returns()
+func (_Contract *ContractTransactor) ChannelCloseInit(opts *bind.TransactOpts, portID string, channelID string) (*types.Transaction, error) {
+	return _Contract.contract.Transact(opts, "channelCloseInit", portID, channelID)
+}
+
+// ChannelCloseInit is a paid mutator transaction binding the contract method 0x7eb320da.
+//
+// Solidity: function channelCloseInit(string portID, string channelID) returns()
+func (_Contract *ContractSession) ChannelCloseInit(portID string, channelID string) (*types.Transaction, error) {
+	return _Contract.Contract.ChannelCloseInit(&_Contract.TransactOpts, portID, channelID)
+}
+
+// ChannelCloseInit is a paid mutator transaction binding the contract method 0x7eb320da.
+//
+// Solidity: function channelCloseInit(string portID, string channelID) returns()
+func (_Contract *ContractTransactorSession) ChannelCloseInit(portID string, channelID string) (*types.Transaction, error) {
+	return _Contract.Contract.ChannelCloseInit(&_Contract.TransactOpts, portID, channelID)
+}
+
+// ChannelOpenAck is a paid mutator transaction binding the contract method 0xbd6f4bde.
+//
+// Solidity: function channelOpenAck(string portID, string channelID, string counterpartyChannelID, string counterpartyVersion, bytes proofTry, bytes proofHeight) returns()
+func (_Contract *ContractTransactor) ChannelOpenAck(opts *bind.TransactOpts, portID string, channelID string, counterpartyChannelID string, counterpartyVersion string, proofTry []byte, proofHeight []byte) (*types.Transaction, error) {
+	return _Contract.contract.Transact(opts, "channelOpenAck", portID, channelID, counterpartyChannelID, counterpartyVersion, proofTry, proofHeight)
+}
+
+// ChannelOpenAck is a paid mutator transaction binding the contract method 0xbd6f4bde.
+//
+// Solidity: function channelOpenAck(string portID, string channelID, string counterpartyChannelID, string counterpartyVersion, bytes proofTry, bytes proofHeight) returns()
+func (_Contract *ContractSession) ChannelOpenAck(portID string, channelID string, counterpartyChannelID string, counterpartyVersion string, proofTry []byte, proofHeight []byte) (*types.Transaction, error) {
+	return _Contract.Contract.ChannelOpenAck(&_Contract.TransactOpts, portID, channelID, counterpartyChannelID, counterpartyVersion, proofTry, proofHeight)
+}
+
+// ChannelOpenAck is a paid mutator transaction binding the contract method 0xbd6f4bde.
+//
+// Solidity: function channelOpenAck(string portID, string channelID, string counterpartyChannelID, string counterpartyVersion, bytes proofTry, bytes proofHeight) returns()
+func (_Contract *ContractTransactorSession) ChannelOpenAck(portID string, channelID string, counterpartyChannelID string, counterpartyVersion string, proofTry []byte, proofHeight []byte) (*types.Transaction, error) {
+	return _Contract.Contract.ChannelOpenAck(&_Contract.TransactOpts, portID, channelID, counterpartyChannelID, counterpartyVersion, proofTry, proofHeight)
+}
+
+// ChannelOpenConfirm is a paid mutator transaction binding the contract method 0x9c110621.
+//
+// Solidity: function channelOpenConfirm(string portID, string channelID, bytes proofAck, bytes proofHeight) returns()
+func (_Contract *ContractTransactor) ChannelOpenConfirm(opts *bind.TransactOpts, portID string, channelID string, proofAck []byte, proofHeight []byte) (*types.Transaction, error) {
+	return _Contract.contract.Transact(opts, "channelOpenConfirm", portID, channelID, proofAck, proofHeight)
+}
+
+// ChannelOpenConfirm is a paid mutator transaction binding the contract method 0x9c110621.
+//
+// Solidity: function channelOpenConfirm(string portID, string channelID, bytes proofAck, bytes proofHeight) returns()
+func (_Contract *ContractSession) ChannelOpenConfirm(portID string, channelID string, proofAck []byte, proofHeight []byte) (*types.Transaction, error) {
+	return _Contract.Contract.ChannelOpenConfirm(&_Contract.TransactOpts, portID, channelID, proofAck, proofHeight)
+}
+
+// ChannelOpenConfirm is a paid mutator transaction binding the contract method 0x9c110621.
+//
+// Solidity: function channelOpenConfirm(string portID, string channelID, bytes proofAck, bytes proofHeight) returns()
+func (_Contract *ContractTransactorSession) ChannelOpenConfirm(portID string, channelID string, proofAck []byte, proofHeight []byte) (*types.Transaction, error) {
+	return _Contract.Contract.ChannelOpenConfirm(&_Contract.TransactOpts, portID, channelID, proofAck, proofHeight)
 }
 
 // ConnOpenAck is a paid mutator transaction binding the contract method 0x528d5cd3.
