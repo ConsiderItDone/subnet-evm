@@ -294,19 +294,19 @@ func _connOpenConfirm(opts *callOpts[ConnOpenConfirmInput]) error {
 
 	clientID := connection.GetClientID()
 
-	clientState, found, err := getClientState(stateDB, clientID)
+	clientState, clientStateFound, err := getClientState(stateDB, clientID)
 	if err != nil {
 		return fmt.Errorf("error loading client state, err: %w", err)
 	}
-	if !found {
-		return fmt.Errorf("client state not found in database")
+	if !clientStateFound {
+		return fmt.Errorf("client state not found: %s", clientID)
 	}
 
-	consensusState, found, err := getConsensusState(stateDB, clientID, clientState.GetLatestHeight())
+	consensusState, consensusStateFound, err := getConsensusState(stateDB, clientID, clientState.GetLatestHeight())
 	if err != nil {
 		return fmt.Errorf("can't get consensus state: %w", err)
 	}
-	if !found {
+	if !consensusStateFound {
 		return fmt.Errorf("consensus state not found: %s", clientID)
 	}
 
@@ -679,7 +679,7 @@ func _chanOpenTry(opts *callOpts[ChanOpenTryInput]) (string, error) {
 		return "", fmt.Errorf("connection version %s does not support channel ordering: %s, err: %w", getVersions[0], channel.Ordering.String(), connectiontypes.ErrInvalidVersion)
 	}
 
-	ok, err := getCapability(opts.accessibleState.GetStateDB(), opts.args.PortID, channelID) 
+	ok, err := getCapability(opts.accessibleState.GetStateDB(), opts.args.PortID, channelID)
 	if !ok {
 		return "", fmt.Errorf("caller does not own port capability for port ID %s, %w", opts.args.PortID, err)
 	}
@@ -789,7 +789,7 @@ func _channelOpenAck(opts *callOpts[ChannelOpenAckInput]) error {
 		opts.args.ChannelID,
 	)
 
-	ok, err := getCapability(opts.accessibleState.GetStateDB(), opts.args.PortID, opts.args.ChannelID) 
+	ok, err := getCapability(opts.accessibleState.GetStateDB(), opts.args.PortID, opts.args.ChannelID)
 	if !ok {
 		return fmt.Errorf("caller does not own port capability for port ID %s, %w", opts.args.PortID, err)
 	}
@@ -841,11 +841,11 @@ func _channelOpenConfirm(opts *callOpts[ChannelOpenConfirmInput]) error {
 		return err
 	}
 
-	ok, err := getCapability(opts.accessibleState.GetStateDB(), opts.args.PortID, opts.args.ChannelID) 
+	ok, err := getCapability(opts.accessibleState.GetStateDB(), opts.args.PortID, opts.args.ChannelID)
 	if !ok {
 		return fmt.Errorf("caller does not own port capability for port ID %s, %w", opts.args.PortID, err)
 	}
-	
+
 	if channel.State != channeltypes.TRYOPEN {
 		return fmt.Errorf("channel state is not TRYOPEN (got %s), err: %w", channel.State.String(), channeltypes.ErrInvalidChannelState)
 	}
