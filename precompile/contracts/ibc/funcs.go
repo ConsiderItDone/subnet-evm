@@ -533,6 +533,25 @@ func setNextSequenceAck(accessibleState contract.AccessibleState, portID, channe
 	// accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.NextSequenceAckKey(portID, channelID))), b)
 }
 
+// HasPacketAcknowledgement check if the packet ack hash is already on the store
+func hasPacketAcknowledgement(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64) bool {
+	return accessibleState.GetStateDB().Exist(common.BytesToAddress(hosttypes.PacketAcknowledgementKey(portID, channelID, sequence)))
+}
+
+// SetPacketAcknowledgement sets the packet ack hash to the store
+func setPacketAcknowledgement(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64, ackHash []byte) {
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress(hosttypes.PacketAcknowledgementKey(portID, channelID, sequence)), ackHash)
+}
+
+// GetPacketAcknowledgement gets the packet ack hash from the store
+func getPacketAcknowledgement(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64) ([]byte, bool) {
+	bz := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress(hosttypes.PacketAcknowledgementKey(portID, channelID, sequence)))
+	if len(bz) == 0 {
+		return nil, false
+	}
+	return bz, true
+}
+
 // GetPacketReceipt gets a packet receipt from the store
 func GetPacketReceipt(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64) (string, bool) {
 	bz := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(hosttypes.PacketReceiptKey(portID, channelID, sequence))))
@@ -1055,7 +1074,6 @@ func _sendPacket(opts *callOpts[SendPacketInput]) error {
 		return fmt.Errorf("%w, channel is not OPEN (got %s)", channeltypes.ErrInvalidChannelState, channel.State.String())
 	}
 
-	// TODO
 	ok, _ := getCapability(opts.accessibleState.GetStateDB(), opts.args.SourcePort, opts.args.SourceChannel)
 	if !ok {
 		return fmt.Errorf("caller does not own port capability for port ID %s, %w", opts.args.SourcePort, err)
@@ -1204,15 +1222,16 @@ func _recvPacket(opts *callOpts[RecvPacketInput]) error {
 
 	_ = commitment
 	// TODO VerifyPacketCommitment
+	height := clienttypes.Height(opts.args.ProofHeight)
 
 	// verify that the counterparty did commit to sending this packet
-	// if err := k.connectionKeeper.VerifyPacketCommitment(
-	// 	ctx, connectionEnd, proofHeight, proof,
-	// 	packet.GetSourcePort(), packet.GetSourceChannel(), packet.GetSequence(),
-	// 	commitment,
-	// ); err != nil {
-	// 	return errorsmod.Wrap(err, "couldn't verify counterparty packet commitment")
-	// }
+	if err := VerifyPacketCommitment(
+		marshaler, connectionEnd, height, opts.args.ProofCommitment,
+		packet.GetSourcePort(), packet.GetSourceChannel(), packet.GetSequence(),
+		commitment, opts.accessibleState,
+	); err != nil {
+		return fmt.Errorf("%w, couldn't verify counterparty packet commitment", err)
+	}
 
 	switch channel.Ordering {
 	case channeltypes.UNORDERED:
@@ -1269,43 +1288,122 @@ func _recvPacket(opts *callOpts[RecvPacketInput]) error {
 	return nil
 }
 
-// // VerifyPacketCommitment verifies a proof of an outgoing packet commitment at
-// // the specified port, specified channel, and specified sequence.
-// func VerifyPacketCommitment(
-// 	cdc codec.BinaryCodec,
-// 	ctx context.Context,
-// 	connection exported.ConnectionI,
-// 	height exported.Height,
-// 	proof []byte,
-// 	portID,
-// 	channelID string,
-// 	sequence uint64,
-// 	commitmentBytes []byte,
-// ) error {
-// 	clientID := connection.GetClientID()
-// 	clientState, clientStore, err := k.getClientStateAndVerificationStore(ctx, clientID)
-// 	if err != nil {
-// 		return err
-// 	}
+// VerifyPacketCommitment verifies a proof of an outgoing packet commitment at
+// the specified port, specified channel, and specified sequence.
+func VerifyPacketCommitment(
+	cdc codec.BinaryCodec,
+	connection exported.ConnectionI,
+	height exported.Height,
+	proof []byte,
+	portID,
+	channelID string,
+	sequence uint64,
+	commitmentBytes []byte,
+	accessibleState contract.AccessibleState,
+) error {
+	clientID := connection.GetClientID()
 
-// 	// get time and block delays
-// 	timeDelay := connection.GetDelayPeriod()
-// 	// TODO
-// 	blockDelay := 0 //k.getBlockDelay(ctx, connection)
+	clientState, found, err := getClientState(accessibleState.GetStateDB(), clientID)
+	if err != nil {
+		return fmt.Errorf("error loading client state, err: %w", err)
+	}
+	if !found {
+		return fmt.Errorf("client state not found in database")
+	}
 
-// 	merklePath := commitmenttypes.NewMerklePath(host.PacketCommitmentPath(portID, channelID, sequence))
-// 	merklePath, err = commitmenttypes.ApplyPrefix(connection.GetCounterparty().GetPrefix(), merklePath)
-// 	if err != nil {
-// 		return err
-// 	}
+	// get time and block delays
+	timeDelay := connection.GetDelayPeriod()
+	// TODO
+	blockDelay := uint64(0) //k.getBlockDelay(ctx, connection)
 
-// 	if err := clientState.VerifyMembership(
-// 		ctx, clientStore, cdc, height,
-// 		timeDelay, blockDelay,
-// 		proof, merklePath, commitmentBytes,
-// 	); err != nil {
-// 		return errorsmod.Wrapf(err, "failed packet commitment verification for client (%s)", clientID)
-// 	}
+	merklePath := commitmenttypes.NewMerklePath(hosttypes.PacketCommitmentPath(portID, channelID, sequence))
+	merklePath, err = commitmenttypes.ApplyPrefix(connection.GetCounterparty().GetPrefix(), merklePath)
+	if err != nil {
+		return err
+	}
 
-// 	return nil
-// }
+	if err := VerifyMembership(
+		*clientState, cdc, height,
+		timeDelay, blockDelay, accessibleState,
+		proof, merklePath, commitmentBytes,
+	); err != nil {
+		return fmt.Errorf("%w, failed packet commitment verification for client (%s)", err, clientID)
+	}
+	return nil
+}
+
+func writeAcknowledgement(
+	packet Packet,
+	accessibleState contract.AccessibleState,
+) error {
+	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
+	std.RegisterInterfaces(interfaceRegistry)
+	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+
+	channel, err := getChannelState(
+		marshaler,
+		string(hosttypes.ChannelKey(
+			packet.DestinationPort,
+			packet.DestinationChannel,
+		)),
+		accessibleState,
+	)
+	if err != nil {
+		return err
+	}
+
+	if channel.State != channeltypes.OPEN {
+		fmt.Errorf("%w, channel state is not OPEN (got %s)", channeltypes.ErrInvalidChannelState, channel.State.String())
+	}
+
+	if hasPacketAcknowledgement(accessibleState, packet.DestinationPort, packet.DestinationChannel, packet.Sequence) {
+		return channeltypes.ErrAcknowledgementExists
+	}
+
+	// set the acknowledgement so that it can be verified on the other side
+	setPacketAcknowledgement(
+		accessibleState, packet.DestinationPort, packet.DestinationChannel, packet.Sequence,
+		channeltypes.CommitAcknowledgement([]byte{1}),
+	)
+
+	return nil
+}
+
+func VerifyMembership(
+	cs ibctm.ClientState,
+	cdc codec.BinaryCodec,
+	height exported.Height,
+	delayTimePeriod uint64,
+	delayBlockPeriod uint64,
+	accessibleState contract.AccessibleState,
+	proof []byte,
+	path exported.Path,
+	value []byte,
+) error {
+
+	if cs.GetLatestHeight().LT(height) {
+		return fmt.Errorf("client state height < proof height (%d < %d), please ensure the client has been updated", cs.GetLatestHeight(), height)
+	}
+
+	// if err := verifyDelayPeriodPassed(ctx, clientStore, height, delayTimePeriod, delayBlockPeriod); err != nil {
+	// 	return err
+	// }
+
+	var merkleProof commitmenttypes.MerkleProof
+	if err := cdc.Unmarshal(proof, &merkleProof); err != nil {
+		return fmt.Errorf("%w, failed to unmarshal proof into ICS 23 commitment merkle proof", commitmenttypes.ErrInvalidProof)
+	}
+
+	merklePath, ok := path.(commitmenttypes.MerklePath)
+	if !ok {
+		return fmt.Errorf(", expected %T, got %T", commitmenttypes.MerklePath{}, path)
+	}
+
+	consensusState, found, err := getConsensusState(accessibleState.GetStateDB(), cs.ChainId, height)
+	if !found {
+		return fmt.Errorf("%w, %w, please ensure the proof was constructed against a height that exists on the client", clienttypes.ErrConsensusStateNotFound, err)
+	}
+
+	return merkleProof.VerifyMembership(cs.ProofSpecs, consensusState.GetRoot(), merklePath, value)
+}

@@ -179,11 +179,10 @@ func recvPacket(accessibleState contract.AccessibleState, caller common.Address,
 		return nil, remainingGas, fmt.Errorf("port with portID: %s already bound", inputStruct.Packet.DestinationPort)
 	}
 
-	// TODO big.NewInt(0)
 	ret, remainingGas, err = accessibleState.CallFromPrecompile(ContractAddress, recvAddr, inputStruct.Packet.Data, remainingGas, big.NewInt(0))
 
 	// TODO WriteAcknowledgement
-	// err := k.ChannelKeeper.WriteAcknowledgement(ctx, capability, msg.Packet, ack)
+	writeAcknowledgement(inputStruct.Packet, accessibleState)
 
 	// this function does not return an output, leave this one as is
 	packedOutput := []byte{}
