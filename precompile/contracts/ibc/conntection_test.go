@@ -22,18 +22,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func clientStateKey(clientId string) common.Address {
-	return common.BytesToAddress([]byte(
-		calculateKey(host.FullClientStateKey(clientId)),
-	))
-}
-
-func consensusStateKey(clientId string, height exported.Height) common.Address {
-	return common.BytesToAddress([]byte(
-		calculateKey(host.FullConsensusStateKey(clientId, height)),
-	))
-}
-
 func TestConnOpenInit(t *testing.T) {
 	coordinator := ibctesting.NewCoordinator(t, 2)
 	chainA := coordinator.GetChain(ibctesting.GetChainID(1))
@@ -624,30 +612,19 @@ func TestConnOpenAck(t *testing.T) {
 				proofClient, _ = chainB.QueryProof(clientKey)
 
 				connection, _ := chainA.App.GetIBCKeeper().ConnectionKeeper.GetConnection(chainA.GetContext(), path.EndpointA.ConnectionID)
-				connectionByte, _ := marshaler.Marshal(&connection)
-
-				connectionsPath := fmt.Sprintf("connections/%s", path.EndpointA.ConnectionID)
-				state.SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
+				setConnection(state, path.EndpointA.ConnectionID, &connection)
 
 				cs, _ := chainA.App.GetIBCKeeper().ClientKeeper.GetClientState(chainA.GetContext(), connection.GetClientID())
 				cStore := chainA.App.GetIBCKeeper().ClientKeeper.ClientStore(chainA.GetContext(), connection.GetClientID())
 
 				if cs != nil {
 					clientState := cs.(*ibctm.ClientState)
-					clientStateByte, _ := clientState.Marshal()
-					state.SetPrecompileState(
-						clientStateKey(connection.GetClientID()),
-						clientStateByte,
-					)
+					setClientState(state, connection.GetClientID(), clientState)
 
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					rawConsensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					consensusState := rawConsensusState.(*ibctm.ConsensusState)
-					consensusStateByte, _ := consensusState.Marshal()
-					state.SetPrecompileState(
-						consensusStateKey(connection.GetClientID(), clientState.GetLatestHeight()),
-						consensusStateByte,
-					)
+					setConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState)
 				}
 			}
 			test.InputFn = func(t testing.TB) []byte {
@@ -741,29 +718,19 @@ func TestConnOpenConfirm(t *testing.T) {
 			require.NoError(t, err)
 
 			connection, _ := chainB.App.GetIBCKeeper().ConnectionKeeper.GetConnection(chainB.GetContext(), path.EndpointB.ConnectionID)
-			connectionByte := marshaler.MustMarshal(&connection)
-			connectionsPath := fmt.Sprintf("connections/%s", path.EndpointB.ConnectionID)
-			statedb.SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
+			setConnection(statedb, path.EndpointB.ConnectionID, &connection)
 
 			cs, _ := chainB.App.GetIBCKeeper().ClientKeeper.GetClientState(chainB.GetContext(), path.EndpointB.ClientID)
 			cStore := chainB.App.GetIBCKeeper().ClientKeeper.ClientStore(chainB.GetContext(), path.EndpointB.ClientID)
 
 			if cs != nil {
 				clientState := cs.(*ibctm.ClientState)
-				clientStateByte, _ := clientState.Marshal()
-				statedb.SetPrecompileState(
-					clientStateKey(connection.GetClientID()),
-					clientStateByte,
-				)
+				setClientState(statedb, connection.GetClientID(), clientState)
 
 				bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 				exConsensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 				consensusState := exConsensusState.(*ibctm.ConsensusState)
-				consensusStateByte, _ := consensusState.Marshal()
-				statedb.SetPrecompileState(
-					consensusStateKey(connection.GetClientID(), clientState.GetLatestHeight()),
-					consensusStateByte,
-				)
+				setConsensusState(statedb, connection.GetClientID(), clientState.GetLatestHeight(), consensusState)
 			}
 
 			test.Caller = common.Address{1}

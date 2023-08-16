@@ -32,17 +32,14 @@ const (
 	testClientID2 = "07-tendermint-1"
 	testClientID3 = "07-tendermint-2"
 
-	height = 5
-
 	trustingPeriod time.Duration = time.Hour * 24 * 7 * 2
 	ubdPeriod      time.Duration = time.Hour * 24 * 7 * 3
 	maxClockDrift  time.Duration = time.Second * 10
 )
 
 var (
-	privVal                   = ibctestingmock.NewPV()
-	testClientHeight          = clienttypes.NewHeight(0, 5)
-	testClientHeightRevision1 = clienttypes.NewHeight(1, 5)
+	privVal          = ibctestingmock.NewPV()
+	testClientHeight = clienttypes.NewHeight(0, 5)
 
 	validator  *tmtypes.Validator
 	validators *tmtypes.ValidatorSet
@@ -158,25 +155,24 @@ func TestUpdateClient(t *testing.T) {
 				coordinator.CommitBlock(chainB) // this height is filled in by the update below
 
 				require.NoError(t, path.EndpointA.UpdateClient())
-
-				clientStateByte, _ := clientState.(*ibctm.ClientState).Marshal()
-				clientStatePath := fmt.Sprintf("clients/%s/clientState", path.EndpointA.ClientID)
-				state.SetPrecompileState(
-					common.BytesToAddress([]byte(clientStatePath)),
-					clientStateByte,
-				)
+				require.NoError(t, setClientState(
+					state,
+					path.EndpointA.ClientID,
+					clientState.(*ibctm.ClientState),
+				))
 
 				// store previous consensus state
 				prevConsState := &ibctm.ConsensusState{
 					Timestamp:          time.Now(),
 					NextValidatorsHash: chainB.Vals.Hash(),
 				}
-				prevConsStateByte, _ := prevConsState.Marshal()
-				consensusStatePath := fmt.Sprintf("clients/%s/consensusStates/%s", path.EndpointA.ClientID, clientState.GetLatestHeight())
-				state.SetPrecompileState(
-					common.BytesToAddress([]byte(consensusStatePath)),
-					prevConsStateByte,
-				)
+				require.NoError(t, setConsensusState(
+					state,
+					path.EndpointA.ClientID,
+					clientState.GetLatestHeight(),
+					prevConsState,
+				))
+
 				// ensure fill height not set
 				chainA.App.GetIBCKeeper().ClientKeeper.GetClientConsensusState(chainA.GetContext(), path.EndpointA.ClientID, fillHeight)
 				//require.True(t, found)
@@ -216,14 +212,14 @@ func TestUpdateClient(t *testing.T) {
 				conflictConsState.Root = commitmenttypes.NewMerkleRoot([]byte("conflicting apphash"))
 				chainA.App.GetIBCKeeper().ClientKeeper.SetClientConsensusState(chainA.GetContext(), clientID, updateHeader.GetHeight(), conflictConsState)
 			},
-			ExpectedErr: "cannot update client with ID",
+			ExpectedErr: "can't get client state",
 		},
 		"client state not found": {
 			BeforeHook: func(t testing.TB, state contract.StateDB) {
 				updateHeader = createFutureUpdateFn(path.EndpointA.GetClientState().GetLatestHeight().(clienttypes.Height))
 				path.EndpointA.ClientID = ibctesting.InvalidID
 			},
-			ExpectedErr: "cannot update client with ID",
+			ExpectedErr: "can't get client state",
 		},
 		"consensus state not found": {
 			BeforeHook: func(t testing.TB, state contract.StateDB) {
@@ -232,36 +228,34 @@ func TestUpdateClient(t *testing.T) {
 				require.True(t, ok)
 
 				tmClient.LatestHeight = tmClient.LatestHeight.Increment().(clienttypes.Height)
-				clientStateByte, _ := clientState.(*ibctm.ClientState).Marshal()
-				clientStatePath := fmt.Sprintf("clients/%s/clientState", path.EndpointA.ClientID)
-				state.SetPrecompileState(
-					common.BytesToAddress([]byte(clientStatePath)),
-					clientStateByte,
-				)
+				require.NoError(t, setClientState(
+					state,
+					path.EndpointA.ClientID,
+					clientState.(*ibctm.ClientState),
+				))
 				updateHeader = createFutureUpdateFn(clientState.GetLatestHeight().(clienttypes.Height))
 			},
-			ExpectedErr: "cannot update consensusState",
+			ExpectedErr: "can't get consensus state",
 		},
 		"client is not active": {
 			BeforeHook: func(t testing.TB, state contract.StateDB) {
 				clientState := path.EndpointA.GetClientState().(*ibctm.ClientState)
 				clientState.FrozenHeight = clienttypes.NewHeight(1, 1)
-				clientStateByte, _ := clientState.Marshal()
-				clientStatePath := fmt.Sprintf("clients/%s/clientState", path.EndpointA.ClientID)
-				state.SetPrecompileState(
-					common.BytesToAddress([]byte(clientStatePath)),
-					clientStateByte,
-				)
+				require.NoError(t, setClientState(
+					state,
+					path.EndpointA.ClientID,
+					clientState,
+				))
 				updateHeader = createFutureUpdateFn(clientState.GetLatestHeight().(clienttypes.Height))
 			},
-			ExpectedErr: "cannot update consensusState",
+			ExpectedErr: "can't get consensus state",
 		},
 		"invalid header": {
 			BeforeHook: func(t testing.TB, state contract.StateDB) {
 				updateHeader = createFutureUpdateFn(path.EndpointA.GetClientState().GetLatestHeight().(clienttypes.Height))
 				updateHeader.TrustedHeight = updateHeader.TrustedHeight.Increment().(clienttypes.Height)
 			},
-			ExpectedErr: "cannot update client with ID",
+			ExpectedErr: "can't get client state",
 		},
 	}
 
@@ -272,7 +266,7 @@ func TestUpdateClient(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			if name != "misbehaviour detection: conflicting header" {
-				statedb := state.NewTestStateDB(t)
+				statedb = state.NewTestStateDB(t)
 				statedb.Finalise(true)
 			}
 
@@ -299,7 +293,7 @@ func TestUpgradeClient(t *testing.T) {
 		lastHeight                                  exported.Height
 		proofUpgradedClient, proofUpgradedConsState []byte
 		upgradedClientBz, upgradedConsStateBz       []byte
-		clientStatePath, consensusStatePath         string
+		//clientStatePath, consensusStatePath         string
 	)
 
 	inputFn := func(
@@ -369,7 +363,7 @@ func TestUpgradeClient(t *testing.T) {
 
 				path.EndpointA.ClientID = "wrongclientid"
 			},
-			ExpectedErr: "error unmarshalling client state file",
+			ExpectedErr: "can't get client state",
 		},
 		"tendermint client VerifyUpgrade fails": {
 			BeforeHook: func(t testing.TB, state contract.StateDB) {
@@ -438,20 +432,11 @@ func TestUpgradeClient(t *testing.T) {
 
 				if cs != nil {
 					clientState = cs.(*ibctm.ClientState)
+					setClientState(statedb, clientState.ChainId, clientState)
+
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
-					clientStateByte := clienttypes.MustMarshalClientState(marshaler, cs)
-					clientStatePath = fmt.Sprintf("clients/%s/clientState", clientState.ChainId)
-					state.SetPrecompileState(
-						common.BytesToAddress([]byte(clientStatePath)),
-						clientStateByte,
-					)
-					consensusStateByte := clienttypes.MustMarshalConsensusState(marshaler, consensusState)
-					consensusStatePath = fmt.Sprintf("clients/%s/consensusStates/%s", clientState.ChainId, clientState.GetLatestHeight())
-					state.SetPrecompileState(
-						common.BytesToAddress([]byte(consensusStatePath)),
-						consensusStateByte,
-					)
+					setConsensusState(statedb, clientState.ChainId, clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
 				}
 			}
 			test.Caller = common.Address{1}

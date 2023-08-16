@@ -1,21 +1,7 @@
 package ibc
 
 import (
-	"errors"
-	"fmt"
-	"math/big"
-
-	"github.com/cosmos/cosmos-sdk/codec"
-	cosmostypes "github.com/cosmos/cosmos-sdk/codec/types"
-	"github.com/cosmos/cosmos-sdk/std"
-	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
-	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
-	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
-	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
-	"github.com/cosmos/ibc-go/v7/modules/core/exported"
-	ibctm "github.com/cosmos/ibc-go/v7/modules/light-clients/07-tendermint"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/ava-labs/subnet-evm/vmerrs"
@@ -61,108 +47,6 @@ func PackCreateClientOutput(clientID string) ([]byte, error) {
 	return IBCABI.PackOutput("createClient", clientID)
 }
 
-func getStoredNextClientSeq(db contract.StateDB) *big.Int {
-	val := db.GetState(ContractAddress, nextClientSeqStorageKey)
-	return val.Big()
-}
-
-func storeNextClientSeq(db contract.StateDB, value *big.Int) error {
-	if value == nil {
-		return fmt.Errorf("client seq cannot be nil")
-	}
-	db.SetState(ContractAddress, nextClientSeqStorageKey, common.BigToHash(value))
-
-	return nil
-}
-
-func generateClientIdentifier(db contract.StateDB, clientType string) (string, error) {
-	nextClientId := getStoredNextClientSeq(db)
-	clientId := fmt.Sprintf("%s-%d", clientType, nextClientId.Int64())
-
-	nextClientId.Add(nextClientId, big.NewInt(1))
-	err := storeNextClientSeq(db, nextClientId)
-	if err != nil {
-		return "", err
-	}
-
-	return clientId, nil
-}
-
-func calculateKey(path []byte) string {
-	return crypto.Keccak256Hash(crypto.Keccak256Hash(path).Bytes()).Hex()
-}
-
-func storeClientState(db contract.StateDB, clientId string, clientState *ibctm.ClientState) error {
-	bz, err := clientState.Marshal()
-	if err != nil {
-		return err
-	}
-	key := calculateKey(host.FullClientStateKey(clientId))
-	db.SetPrecompileState(common.BytesToAddress([]byte(key)), bz)
-
-	return nil
-}
-
-func getClientState(db contract.StateDB, clientId string) (*ibctm.ClientState, bool, error) {
-	key := calculateKey(host.FullClientStateKey(clientId))
-	bz := db.GetPrecompileState(common.BytesToAddress([]byte(key)))
-
-	if len(bz) == 0 {
-		return nil, false, nil
-	}
-
-	clientState := &ibctm.ClientState{}
-	err := clientState.Unmarshal(bz)
-	if err != nil {
-		return nil, false, err
-	}
-
-	return clientState, true, nil
-}
-
-func storeConsensusState(db contract.StateDB, clientId string, consensusState *ibctm.ConsensusState, height exported.Height) error {
-	bz, err := consensusState.Marshal()
-	if err != nil {
-		return err
-	}
-	key := calculateKey(host.FullConsensusStateKey(clientId, height))
-	db.SetPrecompileState(common.BytesToAddress([]byte(key)), bz)
-
-	return nil
-}
-
-func getConsensusState(db contract.StateDB, clientId string, height exported.Height) (*ibctm.ConsensusState, bool, error) {
-	key := calculateKey(host.FullConsensusStateKey(clientId, height))
-	found := db.Exist(common.BytesToAddress([]byte(key)))
-	if !found {
-		return nil, false, nil
-	}
-
-	bz := db.GetPrecompileState(common.BytesToAddress([]byte(key)))
-	consensusState := &ibctm.ConsensusState{}
-	err := consensusState.Unmarshal(bz)
-	if err != nil {
-		return nil, false, err
-	}
-
-	return consensusState, true, nil
-}
-
-//func storeClientState(db contract.StateDB, clientState *ibctm.ClientState) error {
-//	bz, err := clientState.Marshal()
-//	if err != nil {
-//		return err
-//	}
-//
-//	// storage layout for bytes
-//	// first 32 bytes - length of bytes
-//	// next 32 byte slices - payload
-//	if len(bz) <= 31 {
-//
-//	}
-//	return nil
-//}
-
 func createClient(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
 	if remainingGas, err = contract.DeductGas(suppliedGas, CreateClientGasCost); err != nil {
 		return nil, 0, err
@@ -178,48 +62,18 @@ func createClient(accessibleState contract.AccessibleState, caller common.Addres
 		return nil, remainingGas, err
 	}
 
-	clientType := inputStruct.ClientType
-
-	// supports only Tendermint for now
-	if clientType != exported.Tendermint {
-		return nil, remainingGas, ErrWrongClientType
-	}
-
-	// generate clientID
-	clientId, err := generateClientIdentifier(accessibleState.GetStateDB(), clientType)
+	// CUSTOM CODE STARTS HERE
+	clientId, err := _createClient(&callOpts[CreateClientInput]{
+		accessibleState: accessibleState,
+		caller:          caller,
+		addr:            addr,
+		suppliedGas:     suppliedGas,
+		readOnly:        readOnly,
+		args:            inputStruct,
+	})
 	if err != nil {
 		return nil, remainingGas, err
 	}
-
-	clientState := &ibctm.ClientState{}
-	err = clientState.Unmarshal(inputStruct.ClientState)
-	if err != nil {
-		return nil, remainingGas, fmt.Errorf("error unmarshalling client state: %w", err)
-	}
-
-	err = storeClientState(accessibleState.GetStateDB(), clientId, clientState)
-	if err != nil {
-		return nil, remainingGas, fmt.Errorf("error storing client state: %w", err)
-	}
-
-	consensusState := &ibctm.ConsensusState{}
-	err = consensusState.Unmarshal(inputStruct.ConsensusState)
-	if err != nil {
-		return nil, 0, fmt.Errorf("error unmarshalling consensus state: %w", err)
-	}
-
-	err = storeConsensusState(accessibleState.GetStateDB(), clientId, consensusState, clientState.GetLatestHeight())
-	if err != nil {
-		return nil, remainingGas, fmt.Errorf("error storing consensus state: %w", err)
-	}
-
-	// emit event
-	topics, data, err := IBCABI.PackEvent("ClientCreated", clientId)
-	if err != nil {
-		return nil, remainingGas, fmt.Errorf("error packing event: %w", err)
-	}
-	blockNumber := accessibleState.GetBlockContext().Number().Uint64()
-	accessibleState.GetStateDB().AddLog(ContractAddress, topics, data, blockNumber)
 
 	packedOutput, err := PackCreateClientOutput(clientId)
 	if err != nil {
@@ -324,175 +178,4 @@ func upgradeClient(accessibleState contract.AccessibleState, caller common.Addre
 
 	// Return the packed output and the remaining gas
 	return packedOutput, remainingGas, nil
-}
-
-func _updateClient(opts *callOpts[UpdateClientInput]) error {
-	stateDB := opts.accessibleState.GetStateDB()
-
-	clientState, found, err := getClientState(stateDB, opts.args.ClientID)
-	if err != nil {
-		return fmt.Errorf("can't get client state: %w", err)
-	}
-	if !found {
-		return fmt.Errorf("client state not found: %s", opts.args.ClientID)
-	}
-
-	consensusState, found, err := getConsensusState(stateDB, opts.args.ClientID, clientState.GetLatestHeight())
-	if err != nil {
-		return fmt.Errorf("can't get consensus state: %w", err)
-	}
-	if !found {
-		return fmt.Errorf("consensus state not found: %s", opts.args.ClientID)
-	}
-
-	clientMessage := &ibctm.Header{}
-	if err := clientMessage.Unmarshal(opts.args.ClientMessage); err != nil {
-		return fmt.Errorf("error unmarshalling client state file: %w", err)
-	}
-
-	clientState.LatestHeight = clientMessage.GetHeight().(clienttypes.Height)
-	consensusState.Timestamp = clientMessage.GetTime()
-	consensusState.Root = commitmenttypes.NewMerkleRoot(clientMessage.Header.GetAppHash())
-	consensusState.NextValidatorsHash = clientMessage.Header.NextValidatorsHash
-
-	if err := storeClientState(stateDB, opts.args.ClientID, clientState); err != nil {
-		return fmt.Errorf("can't update client state: %w", err)
-	}
-
-	if err := storeConsensusState(stateDB, opts.args.ClientID, consensusState, clientState.GetLatestHeight()); err != nil {
-		return fmt.Errorf("can't update consensus state: %w", err)
-	}
-
-	return nil
-}
-
-func _upgradeClient(opts *callOpts[UpgradeClientInput]) error {
-	stateDB := opts.accessibleState.GetStateDB()
-
-	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
-	marshaler := codec.NewProtoCodec(interfaceRegistry)
-
-	std.RegisterInterfaces(interfaceRegistry)
-	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
-
-	upgradedClient := &ibctm.ClientState{}
-	if err := upgradedClient.Unmarshal(opts.args.UpgradedClien); err != nil {
-		return fmt.Errorf("error unmarshalling upgraded client: %w", err)
-	}
-
-	upgradedConsState := &ibctm.ConsensusState{}
-	if err := upgradedConsState.Unmarshal(opts.args.UpgradedConsState); err != nil {
-		return fmt.Errorf("error unmarshalling upgraded ConsensusState: %w", err)
-	}
-
-	clientStatePath := fmt.Sprintf("clients/%s/clientState", opts.args.ClientID)
-	clientStateByte := stateDB.GetPrecompileState(common.BytesToAddress([]byte(clientStatePath)))
-	clientStateExp := clienttypes.MustUnmarshalClientState(marshaler, clientStateByte)
-	clientState, ok := clientStateExp.(*ibctm.ClientState)
-	if !ok {
-		return fmt.Errorf("error unmarshalling client state file")
-	}
-
-	consensusStatePath := fmt.Sprintf("clients/%s/consensusStates/%s", opts.args.ClientID, clientState.GetLatestHeight())
-	consensusStateByte := stateDB.GetPrecompileState(common.BytesToAddress([]byte(consensusStatePath)))
-	consensusStateExp := clienttypes.MustUnmarshalConsensusState(marshaler, consensusStateByte)
-	consensusState, ok := consensusStateExp.(*ibctm.ConsensusState)
-	if !ok {
-		return fmt.Errorf("error unmarshalling consensus state file")
-	}
-
-	if len(clientState.UpgradePath) == 0 {
-		return errors.New("cannot upgrade client, no upgrade path set")
-	}
-
-	// last height of current counterparty chain must be client's latest height
-	lastHeight := clientState.GetLatestHeight()
-
-	if !upgradedClient.GetLatestHeight().GT(lastHeight) {
-		return fmt.Errorf("upgraded client height %s must be at greater than current client height %s", upgradedClient.GetLatestHeight(), lastHeight)
-	}
-
-	// unmarshal proofs
-	var merkleProofClient, merkleProofConsState commitmenttypes.MerkleProof
-	if err := marshaler.Unmarshal(opts.args.ProofUpgradeClient, &merkleProofClient); err != nil {
-		return fmt.Errorf("could not unmarshal client merkle proof: %v", err)
-	}
-	if err := marshaler.Unmarshal(opts.args.ProofUpgradeConsState, &merkleProofConsState); err != nil {
-		return fmt.Errorf("could not unmarshal consensus state merkle proof: %v", err)
-	}
-
-	// Verify client proof
-	client := upgradedClient.ZeroCustomFields()
-	bz, err := marshaler.MarshalInterface(client)
-	if err != nil {
-		return fmt.Errorf("could not marshal client state: %v", err)
-	}
-	// copy all elements from upgradePath except final element
-	clientPath := make([]string, len(clientState.UpgradePath)-1)
-	copy(clientPath, clientState.UpgradePath)
-
-	// append lastHeight and `upgradedClient` to last key of upgradePath and use as lastKey of clientPath
-	// this will create the IAVL key that is used to store client in upgrade store
-	lastKey := clientState.UpgradePath[len(clientState.UpgradePath)-1]
-	appendedKey := fmt.Sprintf("%s/%d/%s", lastKey, lastHeight.GetRevisionHeight(), upgradetypes.KeyUpgradedClient)
-
-	clientPath = append(clientPath, appendedKey)
-
-	// construct clientState Merkle path
-	upgradeClientPath := commitmenttypes.NewMerklePath(clientPath...)
-
-	if err := merkleProofClient.VerifyMembership(clientState.ProofSpecs, consensusState.GetRoot(), upgradeClientPath, bz); err != nil {
-		return fmt.Errorf("client state proof failed. Path: %s, err: %v", upgradeClientPath.Pretty(), err)
-	}
-
-	// Verify consensus state proof
-	bz, err = marshaler.MarshalInterface(upgradedConsState)
-	if err != nil {
-		return fmt.Errorf("could not marshal consensus state: %v", err)
-	}
-
-	// copy all elements from upgradePath except final element
-	consPath := make([]string, len(clientState.UpgradePath)-1)
-	copy(consPath, clientState.UpgradePath)
-
-	// append lastHeight and `upgradedClient` to last key of upgradePath and use as lastKey of clientPath
-	// this will create the IAVL key that is used to store client in upgrade store
-	lastKey = clientState.UpgradePath[len(clientState.UpgradePath)-1]
-	appendedKey = fmt.Sprintf("%s/%d/%s", lastKey, lastHeight.GetRevisionHeight(), upgradetypes.KeyUpgradedConsState)
-
-	consPath = append(consPath, appendedKey)
-	// construct consensus state Merkle path
-	upgradeConsStatePath := commitmenttypes.NewMerklePath(consPath...)
-
-	if err := merkleProofConsState.VerifyMembership(clientState.ProofSpecs, consensusState.GetRoot(), upgradeConsStatePath, bz); err != nil {
-		return fmt.Errorf("consensus state proof failed. Path: %s", upgradeConsStatePath.Pretty())
-	}
-
-	newClientState := ibctm.NewClientState(
-		upgradedClient.ChainId, clientState.TrustLevel, clientState.TrustingPeriod, upgradedClient.UnbondingPeriod,
-		clientState.MaxClockDrift, upgradedClient.LatestHeight, upgradedClient.ProofSpecs, upgradedClient.UpgradePath,
-	)
-
-	if err := newClientState.Validate(); err != nil {
-		return fmt.Errorf("updated client state failed basic validation")
-	}
-
-	newConsState := ibctm.NewConsensusState(
-		upgradedConsState.Timestamp, commitmenttypes.NewMerkleRoot([]byte(ibctm.SentinelRoot)), upgradedConsState.NextValidatorsHash,
-	)
-
-	consensusStateByte, err = marshaler.MarshalInterface(newConsState)
-	if err != nil {
-		return errors.New("consensusState marshaler error")
-	}
-	consensusStatePath = fmt.Sprintf("clients/%s/consensusStates/%s", opts.args.ClientID, lastHeight)
-	stateDB.SetPrecompileState(common.BytesToAddress([]byte(consensusStatePath)), consensusStateByte)
-
-	clientStateByte, err = marshaler.MarshalInterface(newClientState)
-	if err != nil {
-		return errors.New("clientState marshaler error")
-	}
-	clientStatePath = fmt.Sprintf("clients/%s/clientState", opts.args.ClientID)
-	stateDB.SetPrecompileState(common.BytesToAddress([]byte(clientStatePath)), clientStateByte)
-	return nil
 }

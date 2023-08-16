@@ -65,11 +65,11 @@ func TestPortDefault(t *testing.T) {
 				return input
 			},
 			BeforeHook: func(t testing.TB, state contract.StateDB) {
-				storePortID(state, moduleName, common.BytesToAddress([]byte("some_address")))
+				setPort(state, moduleName, common.BytesToAddress([]byte("some_address")))
 			},
 			AfterHook: func(t testing.TB, state contract.StateDB) {
-				out, ok, err := getPort(state, moduleName)
-				if !ok || err != nil || !reflect.DeepEqual(out, common.BytesToAddress([]byte("some_address"))) {
+				out, err := getPort(state, moduleName)
+				if err != nil || !reflect.DeepEqual(out, common.BytesToAddress([]byte("some_address"))) {
 					t.Error("Port address has been changed")
 				}
 			},
@@ -87,8 +87,8 @@ func TestPortDefault(t *testing.T) {
 				return input
 			},
 			AfterHook: func(t testing.TB, state contract.StateDB) {
-				out, ok, err := getPort(state, moduleName)
-				if !ok || err != nil || !reflect.DeepEqual(out, common.Address{1}) {
+				out, err := getPort(state, moduleName)
+				if err != nil || !reflect.DeepEqual(out, common.Address{1}) {
 					t.Errorf("Invalid port address out: %s not equal address: %s", out, common.Address{1})
 				}
 			},

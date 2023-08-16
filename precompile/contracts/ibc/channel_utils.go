@@ -20,35 +20,32 @@ import (
 	ibctm "github.com/cosmos/ibc-go/v7/modules/light-clients/07-tendermint"
 )
 
-func generateChannelIdentifier(accessibleState contract.AccessibleState) string {
-	sequence := uint64(0)
-	if accessibleState.GetStateDB().Exist(common.BytesToAddress([]byte("nextChannelSeq"))) {
-		b := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte("nextChannelSeq")))
-		sequence = binary.BigEndian.Uint64(b)
+func makeChannelID(db contract.StateDB) string {
+	chanSeq := uint64(0)
+	if db.Exist(common.BytesToAddress([]byte("nextChannelSeq"))) {
+		b := db.GetPrecompileState(common.BytesToAddress([]byte("nextChannelSeq")))
+		chanSeq = binary.BigEndian.Uint64(b)
 	}
-	channelId := fmt.Sprintf("%s%d", "channel-", sequence)
-	sequence++
 	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, sequence)
-	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte("nextChannelSeq")), b)
-
-	return channelId
+	binary.BigEndian.PutUint64(b, chanSeq+1)
+	db.SetPrecompileState(common.BytesToAddress([]byte("nextChannelSeq")), b)
+	return fmt.Sprintf("%s%d", "channel-", chanSeq)
 }
 
 // setNextSequenceSend sets a channel's next send sequence to the store
 func setNextSequenceSend(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64) {
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, sequence)
-	key := calculateKey([]byte(hosttypes.NextSequenceSendKey(portID, channelID)))
-	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(key)), b)
+	key := calculateKey(hosttypes.NextSequenceSendKey(portID, channelID))
+	accessibleState.GetStateDB().SetPrecompileState(key, b)
 }
 
 // setNextSequenceRecv sets a channel's next receive sequence to the store
 func setNextSequenceRecv(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64) {
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, sequence)
-	key := calculateKey([]byte(hosttypes.NextSequenceRecvKey(portID, channelID)))
-	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(key)), b)
+	key := calculateKey(hosttypes.NextSequenceRecvKey(portID, channelID))
+	accessibleState.GetStateDB().SetPrecompileState(key, b)
 }
 
 // setNextSequenceAck sets a channel's next ack sequence to the store
@@ -56,11 +53,13 @@ func setNextSequenceAck(accessibleState contract.AccessibleState, portID, channe
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, sequence)
 
-	key := calculateKey([]byte(hosttypes.NextSequenceAckKey(portID, channelID)))
-	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(key)), b)
+	key := calculateKey(hosttypes.NextSequenceAckKey(portID, channelID))
+	accessibleState.GetStateDB().SetPrecompileState(key, b)
 }
 
 func _chanOpenInit(opts *callOpts[ChanOpenInitInput]) error {
+	statedb := opts.accessibleState.GetStateDB()
+
 	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
 	std.RegisterInterfaces(interfaceRegistry)
 	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
@@ -72,10 +71,9 @@ func _chanOpenInit(opts *callOpts[ChanOpenInitInput]) error {
 	}
 
 	// connection hop length checked on msg.ValidateBasic()
-	connectionsPath := fmt.Sprintf("connections/%s", channel.ConnectionHops[0])
-	connectionEnd, err := getConnection(marshaler, connectionsPath, opts.accessibleState)
+	connectionEnd, err := getConnection(statedb, channel.ConnectionHops[0])
 	if err != nil {
-		return err
+		return fmt.Errorf("can't read connection: %w", err)
 	}
 
 	getVersions := connectionEnd.GetVersions()
@@ -93,32 +91,24 @@ func _chanOpenInit(opts *callOpts[ChanOpenInitInput]) error {
 		)
 	}
 
-	_, found, err := getClientState(opts.accessibleState.GetStateDB(), connectionEnd.ClientId)
+	_, err = getClientState(statedb, connectionEnd.ClientId)
 	if err != nil {
 		return fmt.Errorf("can't read client state: %w", err)
 	}
-	if !found {
-		return fmt.Errorf("client state not found: %s", connectionEnd.ClientId)
-	}
 
-	channelID := generateChannelIdentifier(opts.accessibleState)
-
-	err = makeCapability(opts.accessibleState.GetStateDB(), opts.args.PortID, channelID)
-	if err != nil {
-		return err
-	}
-
-	channelNew := channeltypes.NewChannel(channeltypes.INIT, channel.Ordering, channel.Counterparty, channel.ConnectionHops, channel.Version)
-	bz, err := channelNew.Marshal()
-	if err != nil {
-		return fmt.Errorf("can't serialize channel state: %w", err)
-	}
-	path := calculateKey(hosttypes.ChannelKey(opts.args.PortID, channelID))
-	opts.accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(path)), bz)
+	channelID := makeChannelID(statedb)
 
 	setNextSequenceSend(opts.accessibleState, opts.args.PortID, channelID, 1)
 	setNextSequenceRecv(opts.accessibleState, opts.args.PortID, channelID, 1)
 	setNextSequenceAck(opts.accessibleState, opts.args.PortID, channelID, 1)
+
+	channelNew := channeltypes.NewChannel(channeltypes.INIT, channel.Ordering, channel.Counterparty, channel.ConnectionHops, channel.Version)
+	if err := setCapability(statedb, opts.args.PortID, channelID); err != nil {
+		return fmt.Errorf("can't store capability: %w", err)
+	}
+	if err := setChannel(statedb, opts.args.PortID, channelID, &channelNew); err != nil {
+		return fmt.Errorf("can't store channel data: %w", err)
+	}
 
 	return nil
 }
@@ -135,20 +125,14 @@ func channelStateVerification(
 ) error {
 	clientID := connection.GetClientID()
 
-	clientState, clientStateFound, err := getClientState(accessibleState.GetStateDB(), clientID)
+	clientState, err := getClientState(accessibleState.GetStateDB(), clientID)
 	if err != nil {
 		return fmt.Errorf("can't read client state: %w", err)
 	}
-	if !clientStateFound {
-		return fmt.Errorf("client state not found: %s", clientID)
-	}
 
-	consensusState, consensusStateFound, err := getConsensusState(accessibleState.GetStateDB(), clientID, clientState.GetLatestHeight())
+	consensusState, err := getConsensusState(accessibleState.GetStateDB(), clientID, clientState.GetLatestHeight())
 	if err != nil {
 		return fmt.Errorf("can't read consensus state: %w", err)
-	}
-	if !consensusStateFound {
-		return fmt.Errorf("consensus state not found: %s", clientID)
 	}
 
 	merklePath := commitmenttypes.NewMerklePath(hosttypes.ChannelPath(portID, channelID))
@@ -175,6 +159,8 @@ func channelStateVerification(
 }
 
 func _chanOpenTry(opts *callOpts[ChanOpenTryInput]) (string, error) {
+	statedb := opts.accessibleState.GetStateDB()
+
 	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
 	std.RegisterInterfaces(interfaceRegistry)
 	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
@@ -195,11 +181,10 @@ func _chanOpenTry(opts *callOpts[ChanOpenTryInput]) (string, error) {
 	}
 
 	// generate a new channel
-	channelID := generateChannelIdentifier(opts.accessibleState)
+	channelID := makeChannelID(statedb)
 
 	// connection hop length checked on msg.ValidateBasic()
-	connectionsPath := fmt.Sprintf("connections/%s", channel.ConnectionHops[0])
-	connectionEnd, err := getConnection(marshaler, connectionsPath, opts.accessibleState)
+	connectionEnd, err := getConnection(statedb, channel.ConnectionHops[0])
 	if err != nil {
 		return "", err
 	}
@@ -244,43 +229,20 @@ func _chanOpenTry(opts *callOpts[ChanOpenTryInput]) (string, error) {
 	setNextSequenceRecv(opts.accessibleState, opts.args.PortID, channelID, 1)
 	setNextSequenceAck(opts.accessibleState, opts.args.PortID, channelID, 1)
 
-	err = makeCapability(opts.accessibleState.GetStateDB(), opts.args.PortID, channelID)
-	if err != nil {
+	channelNew := channeltypes.NewChannel(channeltypes.TRYOPEN, channel.Ordering, channel.Counterparty, channel.ConnectionHops, channel.Version)
+	if err := setCapability(statedb, opts.args.PortID, channelID); err != nil {
 		return "", fmt.Errorf("can't make capability [%s,%s]: %w", opts.args.PortID, channelID, err)
 	}
-
-	channelNew := channeltypes.NewChannel(channeltypes.TRYOPEN, channel.Ordering, channel.Counterparty, channel.ConnectionHops, channel.Version)
-	bz := marshaler.MustMarshal(&channelNew)
-	path := calculateKey(hosttypes.ChannelKey(
-		opts.args.PortID,
-		channelID,
-	))
-	opts.accessibleState.GetStateDB().SetPrecompileState(
-		common.BytesToAddress([]byte(path)),
-		bz,
-	)
+	if err := setChannel(statedb, opts.args.PortID, channelID, &channelNew); err != nil {
+		return "", fmt.Errorf("can't store channel data: %w", err)
+	}
 
 	return channelID, nil
 }
 
-func getChannelState(
-	marshaler *codec.ProtoCodec,
-	channelStatePath string,
-	accessibleState contract.AccessibleState,
-) (*channeltypes.Channel, error) {
-	// connection hop length checked on msg.ValidateBasic()
-	key := common.BytesToAddress([]byte(calculateKey([]byte(channelStatePath))))
-	exist := accessibleState.GetStateDB().Exist(key)
-	if !exist {
-		return nil, fmt.Errorf("cannot find channel state with path: %s", channelStatePath)
-	}
-	channelStateByte := accessibleState.GetStateDB().GetPrecompileState(key)
-	channelState := &channeltypes.Channel{}
-	marshaler.MustUnmarshal(channelStateByte, channelState)
-	return channelState, nil
-}
-
 func _channelOpenAck(opts *callOpts[ChannelOpenAckInput]) error {
+	statedb := opts.accessibleState.GetStateDB()
+
 	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
 	std.RegisterInterfaces(interfaceRegistry)
 	channeltypes.RegisterInterfaces(interfaceRegistry)
@@ -293,26 +255,18 @@ func _channelOpenAck(opts *callOpts[ChannelOpenAckInput]) error {
 		return fmt.Errorf("error unmarshalling proofHeight: %w", err)
 	}
 
-	channel, err := getChannelState(
-		marshaler,
-		string(hosttypes.ChannelKey(
-			opts.args.PortID,
-			opts.args.ChannelID,
-		)),
-		opts.accessibleState,
-	)
+	channel, err := getChannel(statedb, opts.args.PortID, opts.args.ChannelID)
 	if err != nil {
-		return err
+		return fmt.Errorf("can't read channel: %w", err)
 	}
 
 	if channel.State != channeltypes.INIT {
 		return fmt.Errorf("channel state should be INIT (got %s), err: %w", channel.State.String(), channeltypes.ErrInvalidChannelState)
 	}
 
-	connectionsPath := fmt.Sprintf("connections/%s", channel.ConnectionHops[0])
-	connectionEnd, err := getConnection(marshaler, connectionsPath, opts.accessibleState)
+	connectionEnd, err := getConnection(statedb, channel.ConnectionHops[0])
 	if err != nil {
-		return err
+		return fmt.Errorf("can't read connection: %w", err)
 	}
 
 	if connectionEnd.GetState() != int32(connectiontypes.OPEN) {
@@ -346,17 +300,15 @@ func _channelOpenAck(opts *callOpts[ChannelOpenAckInput]) error {
 	channel.Version = opts.args.CounterpartyVersion
 	channel.Counterparty.ChannelId = opts.args.CounterpartyChannelID
 
-	bz := marshaler.MustMarshal(channel)
-	key := calculateKey(hosttypes.ChannelKey(
-		opts.args.PortID,
-		opts.args.ChannelID,
-	))
-	opts.accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(key)), bz)
-
+	if err := setChannel(statedb, opts.args.PortID, opts.args.ChannelID, channel); err != nil {
+		return fmt.Errorf("can't store channel data: %w", err)
+	}
 	return nil
 }
 
 func _channelOpenConfirm(opts *callOpts[ChannelOpenConfirmInput]) error {
+	statedb := opts.accessibleState.GetStateDB()
+
 	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
 	std.RegisterInterfaces(interfaceRegistry)
 	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
@@ -367,16 +319,9 @@ func _channelOpenConfirm(opts *callOpts[ChannelOpenConfirmInput]) error {
 		return fmt.Errorf("error unmarshalling proofHeight: %w", err)
 	}
 
-	channel, err := getChannelState(
-		marshaler,
-		string(hosttypes.ChannelKey(
-			opts.args.PortID,
-			opts.args.ChannelID,
-		)),
-		opts.accessibleState,
-	)
+	channel, err := getChannel(statedb, opts.args.PortID, opts.args.ChannelID)
 	if err != nil {
-		return err
+		return fmt.Errorf("can't read channel: %w", err)
 	}
 
 	ok, err := getCapability(opts.accessibleState.GetStateDB(), opts.args.PortID, opts.args.ChannelID)
@@ -388,10 +333,9 @@ func _channelOpenConfirm(opts *callOpts[ChannelOpenConfirmInput]) error {
 		return fmt.Errorf("channel state is not TRYOPEN (got %s), err: %w", channel.State.String(), channeltypes.ErrInvalidChannelState)
 	}
 
-	connectionsPath := fmt.Sprintf("connections/%s", channel.ConnectionHops[0])
-	connectionEnd, err := getConnection(marshaler, connectionsPath, opts.accessibleState)
+	connectionEnd, err := getConnection(statedb, channel.ConnectionHops[0])
 	if err != nil {
-		return err
+		return fmt.Errorf("can't read connection: %w", err)
 	}
 
 	if connectionEnd.GetState() != int32(connectiontypes.OPEN) {
@@ -415,28 +359,18 @@ func _channelOpenConfirm(opts *callOpts[ChannelOpenConfirmInput]) error {
 	}
 	channel.State = channeltypes.OPEN
 
-	bz := marshaler.MustMarshal(channel)
-	opts.accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.ChannelKey(opts.args.PortID, opts.args.ChannelID))), bz)
-
+	if err := setChannel(statedb, opts.args.PortID, opts.args.ChannelID, channel); err != nil {
+		return fmt.Errorf("can't store channel data: %w", err)
+	}
 	return nil
 }
 
 func _channelCloseInit(opts *callOpts[ChannelCloseInitInput]) error {
-	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
-	std.RegisterInterfaces(interfaceRegistry)
-	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
-	marshaler := codec.NewProtoCodec(interfaceRegistry)
+	statedb := opts.accessibleState.GetStateDB()
 
-	channel, err := getChannelState(
-		marshaler,
-		string(hosttypes.ChannelKey(
-			opts.args.PortID,
-			opts.args.ChannelID,
-		)),
-		opts.accessibleState,
-	)
+	channel, err := getChannel(statedb, opts.args.PortID, opts.args.ChannelID)
 	if err != nil {
-		return err
+		return fmt.Errorf("can't read channel: %w", err)
 	}
 
 	if channel.State == channeltypes.CLOSED {
@@ -446,18 +380,15 @@ func _channelCloseInit(opts *callOpts[ChannelCloseInitInput]) error {
 	if len(channel.ConnectionHops) == 0 {
 		return fmt.Errorf("length channel.ConnectionHops == 0")
 	}
-	connectionsPath := fmt.Sprintf("connections/%s", channel.ConnectionHops[0])
-	connectionEnd, err := getConnection(marshaler, connectionsPath, opts.accessibleState)
+
+	connectionEnd, err := getConnection(statedb, channel.ConnectionHops[0])
 	if err != nil {
-		return err
+		return fmt.Errorf("can't read connection: %w", err)
 	}
 
-	_, found, err := getClientState(opts.accessibleState.GetStateDB(), connectionEnd.ClientId)
+	_, err = getClientState(opts.accessibleState.GetStateDB(), connectionEnd.ClientId)
 	if err != nil {
 		return fmt.Errorf("can't read client state: %w", err)
-	}
-	if !found {
-		return fmt.Errorf("client state not found: %s", connectionEnd.ClientId)
 	}
 
 	if connectionEnd.GetState() != int32(connectiontypes.OPEN) {
@@ -465,20 +396,15 @@ func _channelCloseInit(opts *callOpts[ChannelCloseInitInput]) error {
 	}
 
 	channel.State = channeltypes.CLOSED
-
-	bz := marshaler.MustMarshal(channel)
-	opts.accessibleState.GetStateDB().SetPrecompileState(
-		common.BytesToAddress([]byte(hosttypes.ChannelKey(
-			opts.args.PortID,
-			opts.args.ChannelID,
-		))),
-		bz,
-	)
-
+	if err := setChannel(statedb, opts.args.PortID, opts.args.ChannelID, channel); err != nil {
+		return fmt.Errorf("can't store channel data: %w", err)
+	}
 	return nil
 }
 
 func _channelCloseConfirm(opts *callOpts[ChannelCloseConfirmInput]) error {
+	statedb := opts.accessibleState.GetStateDB()
+
 	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
 	std.RegisterInterfaces(interfaceRegistry)
 	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
@@ -489,26 +415,18 @@ func _channelCloseConfirm(opts *callOpts[ChannelCloseConfirmInput]) error {
 		return fmt.Errorf("error unmarshalling proofHeight: %w", err)
 	}
 
-	channel, err := getChannelState(
-		marshaler,
-		string(hosttypes.ChannelKey(
-			opts.args.PortID,
-			opts.args.ChannelID,
-		)),
-		opts.accessibleState,
-	)
+	channel, err := getChannel(statedb, opts.args.PortID, opts.args.ChannelID)
 	if err != nil {
-		return err
+		return fmt.Errorf("can't read channel: %w", err)
 	}
 
 	if channel.State == channeltypes.CLOSED {
 		return fmt.Errorf("channel is already CLOSED: %w", channeltypes.ErrInvalidChannelState)
 	}
 
-	connectionsPath := fmt.Sprintf("connections/%s", channel.ConnectionHops[0])
-	connectionEnd, err := getConnection(marshaler, connectionsPath, opts.accessibleState)
+	connectionEnd, err := getConnection(statedb, channel.ConnectionHops[0])
 	if err != nil {
-		return err
+		return fmt.Errorf("can't read connection: %w", err)
 	}
 
 	if connectionEnd.GetState() != int32(connectiontypes.OPEN) {
@@ -531,15 +449,8 @@ func _channelCloseConfirm(opts *callOpts[ChannelCloseConfirmInput]) error {
 	}
 
 	channel.State = channeltypes.CLOSED
-
-	bz := marshaler.MustMarshal(channel)
-	opts.accessibleState.GetStateDB().SetPrecompileState(
-		common.BytesToAddress([]byte(hosttypes.ChannelKey(
-			opts.args.PortID,
-			opts.args.ChannelID,
-		))),
-		bz,
-	)
-
+	if err := setChannel(statedb, opts.args.PortID, opts.args.ChannelID, channel); err != nil {
+		return fmt.Errorf("can't store channel data: %w", err)
+	}
 	return nil
 }

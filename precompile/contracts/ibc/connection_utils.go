@@ -3,7 +3,6 @@ package ibc
 import (
 	"encoding/binary"
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -21,27 +20,20 @@ import (
 	ibctm "github.com/cosmos/ibc-go/v7/modules/light-clients/07-tendermint"
 )
 
-var (
-	keyClientSeq = common.BytesToHash([]byte("client-seq"))
-)
-
-type callOpts[T any] struct {
-	accessibleState contract.AccessibleState
-	caller          common.Address
-	addr            common.Address
-	suppliedGas     uint64
-	readOnly        bool
-	args            T
+func makeConnectionID(db contract.StateDB) string {
+	connSeq := uint64(0)
+	if db.Exist(common.BytesToAddress([]byte("nextConnSeq"))) {
+		b := db.GetPrecompileState(common.BytesToAddress([]byte("nextConnSeq")))
+		connSeq = binary.BigEndian.Uint64(b)
+	}
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, connSeq+1)
+	db.SetPrecompileState(common.BytesToAddress([]byte("nextConnSeq")), b)
+	return fmt.Sprintf("%s%d", "connection-", connSeq)
 }
 
 func _connOpenInit(opts *callOpts[ConnOpenInitInput]) (string, error) {
-	stateDB := opts.accessibleState.GetStateDB()
-
-	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
-	marshaler := codec.NewProtoCodec(interfaceRegistry)
-
-	std.RegisterInterfaces(interfaceRegistry)
-	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
+	statedb := opts.accessibleState.GetStateDB()
 
 	counterparty := &connectiontypes.Counterparty{}
 	if err := counterparty.Unmarshal(opts.args.Counterparty); err != nil {
@@ -62,48 +54,27 @@ func _connOpenInit(opts *callOpts[ConnOpenInitInput]) (string, error) {
 	}
 
 	// check ClientState exists in database
-	_, found, err := getClientState(stateDB, opts.args.ClientID)
+	_, err := getClientState(statedb, opts.args.ClientID)
 	if err != nil {
 		return "", err
 	}
-	if !found {
-		return "", fmt.Errorf("cannot update client with ID %s", opts.args.ClientID)
-	}
 
-	nextConnSeq := uint64(0)
-	if stateDB.Exist(common.BytesToAddress([]byte("nextConnSeq"))) {
-		b := stateDB.GetPrecompileState(common.BytesToAddress([]byte("nextConnSeq")))
-		nextConnSeq = binary.BigEndian.Uint64(b)
-	}
-	connectionID := fmt.Sprintf("%s%d", "connection-", nextConnSeq)
-	nextConnSeq++
-	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, nextConnSeq)
-	stateDB.SetPrecompileState(common.BytesToAddress([]byte("nextConnSeq")), b)
+	connectionID := makeConnectionID(statedb)
 
 	// connection defines chain A's ConnectionEnd
 	connection := connectiontypes.NewConnectionEnd(connectiontypes.INIT, opts.args.ClientID, *counterparty, connectiontypes.ExportedVersionsToProto(versions), uint64(opts.args.DelayPeriod))
-
-	connectionByte, err := marshaler.Marshal(&connection)
-	if err != nil {
-		return "", fmt.Errorf("connection marshaler error: %w", err)
+	if err := setConnection(statedb, connectionID, &connection); err != nil {
+		return "", fmt.Errorf("can't save connection: %w", err)
 	}
-	connectionsPath := fmt.Sprintf("connections/%s", connectionID)
-	stateDB.SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
-
-	// emit event
-	topics, data, err := IBCABI.PackEvent(GeneratedConnectionIdentifier.RawName, opts.args.ClientID, connectionID)
-	if err != nil {
+	if err := addLog(opts.accessibleState, GeneratedConnectionIdentifier.RawName, opts.args.ClientID, connectionID); err != nil {
 		return "", fmt.Errorf("error packing event: %w", err)
 	}
-	blockNumber := opts.accessibleState.GetBlockContext().Number().Uint64()
-	opts.accessibleState.GetStateDB().AddLog(ContractAddress, topics, data, blockNumber)
 
 	return connectionID, nil
 }
 
 func _connOpenTry(opts *callOpts[ConnOpenTryInput]) (string, error) {
-	stateDB := opts.accessibleState.GetStateDB()
+	statedb := opts.accessibleState.GetStateDB()
 
 	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
 	clienttypes.RegisterInterfaces(interfaceRegistry)
@@ -137,17 +108,7 @@ func _connOpenTry(opts *callOpts[ConnOpenTryInput]) (string, error) {
 		return "", fmt.Errorf("error unmarshalling consensusHeight: %w", err)
 	}
 
-	nextConnSeq := uint64(0)
-	if stateDB.Exist(common.BytesToAddress([]byte("nextConnSeq"))) {
-		b := stateDB.GetPrecompileState(common.BytesToAddress([]byte("nextConnSeq")))
-		nextConnSeq = binary.BigEndian.Uint64(b)
-	}
-	connectionID := fmt.Sprintf("%s%d", "connection-", nextConnSeq)
-	nextConnSeq++
-	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, nextConnSeq)
-	stateDB.SetPrecompileState(common.BytesToAddress([]byte("nextConnSeq")), b)
-
+	connectionID := makeConnectionID(statedb)
 	expectedCounterparty := connectiontypes.NewCounterparty(opts.args.ClientID, "", commitmenttypes.NewMerklePrefix([]byte("ibc")))
 	expectedConnection := connectiontypes.NewConnectionEnd(connectiontypes.INIT, counterparty.ClientId, expectedCounterparty, counterpartyVersions, uint64(opts.args.DelayPeriod))
 
@@ -170,21 +131,20 @@ func _connOpenTry(opts *callOpts[ConnOpenTryInput]) (string, error) {
 		return "", fmt.Errorf("error connectionVerification: %w", err)
 	}
 
-	connectionByte, err := marshaler.Marshal(&connection)
-	if err != nil {
-		return "", fmt.Errorf("connection marshaler error: %w", err)
+	if err := setConnection(statedb, connectionID, &connection); err != nil {
+		return "", fmt.Errorf("can't save connection: %w", err)
 	}
-	connectionsPath := fmt.Sprintf("connections/%s", connectionID)
-	stateDB.SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
+	if err := addLog(opts.accessibleState, GeneratedConnectionIdentifier.RawName, opts.args.ClientID, connectionID); err != nil {
+		return "", fmt.Errorf("error packing event: %w", err)
+	}
 
 	return connectionID, nil
 }
 
 func _connOpenAck(opts *callOpts[ConnOpenAckInput]) error {
-	stateDB := opts.accessibleState.GetStateDB()
+	statedb := opts.accessibleState.GetStateDB()
 
 	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
-
 	std.RegisterInterfaces(interfaceRegistry)
 	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
 	marshaler := codec.NewProtoCodec(interfaceRegistry)
@@ -210,11 +170,9 @@ func _connOpenAck(opts *callOpts[ConnOpenAckInput]) error {
 		return fmt.Errorf("error unmarshalling consensusHeight: %w", err)
 	}
 
-	connectionsPath := fmt.Sprintf("connections/%s", opts.args.ConnectionID)
-	connectionByte := stateDB.GetPrecompileState(common.BytesToAddress([]byte(connectionsPath)))
-	connection := connectiontypes.ConnectionEnd{}
-	if err = marshaler.Unmarshal(connectionByte, &connection); err != nil {
-		return fmt.Errorf("error unmarshalling connection id: %s, error: %w", opts.args.ConnectionID, err)
+	connection, err := getConnection(statedb, opts.args.ConnectionID)
+	if err != nil {
+		return fmt.Errorf("can't get connection: %w", err)
 	}
 
 	// verify the previously set connection state
@@ -230,12 +188,12 @@ func _connOpenAck(opts *callOpts[ConnOpenAckInput]) error {
 	expectedCounterparty := connectiontypes.NewCounterparty(connection.ClientId, opts.args.ConnectionID, commitmenttypes.NewMerklePrefix([]byte("ibc")))
 	expectedConnection := connectiontypes.NewConnectionEnd(connectiontypes.TRYOPEN, connection.Counterparty.ClientId, expectedCounterparty, []*connectiontypes.Version{&version}, connection.DelayPeriod)
 
-	if err := connectionVerification(connection, expectedConnection, *proofHeight, opts.accessibleState, marshaler, string(opts.args.CounterpartyConnectionID), opts.args.ProofTry); err != nil {
+	if err := connectionVerification(*connection, expectedConnection, *proofHeight, opts.accessibleState, marshaler, string(opts.args.CounterpartyConnectionID), opts.args.ProofTry); err != nil {
 		return fmt.Errorf("connection verification failed: %w", err)
 	}
 
 	// Check that ChainB stored the clientState provided in the msg
-	if err := clientVerification(connection, clientState, *proofHeight, opts.accessibleState, marshaler, opts.args.ProofClient); err != nil {
+	if err := clientVerification(*connection, clientState, *proofHeight, opts.accessibleState, marshaler, opts.args.ProofClient); err != nil {
 		return fmt.Errorf("client verification failed: %w", err)
 	}
 
@@ -244,21 +202,17 @@ func _connOpenAck(opts *callOpts[ConnOpenAckInput]) error {
 	connection.Versions = []*connectiontypes.Version{&version}
 	connection.Counterparty.ConnectionId = string(opts.args.CounterpartyConnectionID)
 
-	connectionByte, err = marshaler.Marshal(&connection)
-	if err != nil {
-		return errors.New("connection marshaler error")
+	if err := setConnection(statedb, opts.args.ConnectionID, connection); err != nil {
+		return fmt.Errorf("can't save connection: %w", err)
 	}
-	connectionsPath = fmt.Sprintf("connections/%s", opts.args.ConnectionID)
-	stateDB.SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
 
 	return nil
 }
 
 func _connOpenConfirm(opts *callOpts[ConnOpenConfirmInput]) error {
-	stateDB := opts.accessibleState.GetStateDB()
+	statedb := opts.accessibleState.GetStateDB()
 
 	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
-
 	std.RegisterInterfaces(interfaceRegistry)
 	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
 	marshaler := codec.NewProtoCodec(interfaceRegistry)
@@ -268,15 +222,10 @@ func _connOpenConfirm(opts *callOpts[ConnOpenConfirmInput]) error {
 		return fmt.Errorf("error unmarshalling proofHeight: %w", err)
 	}
 
-	connectionsPath := fmt.Sprintf("connections/%s", opts.args.ConnectionID)
-	exist := stateDB.Exist(common.BytesToAddress([]byte(connectionsPath)))
-	if !exist {
-		return fmt.Errorf("cannot find connection with path: %s", connectionsPath)
+	connection, err := getConnection(statedb, opts.args.ConnectionID)
+	if err != nil {
+		return fmt.Errorf("cannot find connection: %w", err)
 	}
-
-	connectionByte := stateDB.GetPrecompileState(common.BytesToAddress([]byte(connectionsPath)))
-	connection := &connectiontypes.ConnectionEnd{}
-	marshaler.MustUnmarshal(connectionByte, connection)
 
 	// Check that connection state on ChainB is on state: TRYOPEN
 	if connection.State != connectiontypes.TRYOPEN {
@@ -293,20 +242,14 @@ func _connOpenConfirm(opts *callOpts[ConnOpenConfirmInput]) error {
 
 	clientID := connection.GetClientID()
 
-	clientState, clientStateFound, err := getClientState(stateDB, clientID)
+	clientState, err := getClientState(statedb, clientID)
 	if err != nil {
 		return fmt.Errorf("error loading client state, err: %w", err)
 	}
-	if !clientStateFound {
-		return fmt.Errorf("client state not found: %s", clientID)
-	}
 
-	consensusState, consensusStateFound, err := getConsensusState(stateDB, clientID, clientState.GetLatestHeight())
+	consensusState, err := getConsensusState(statedb, clientID, clientState.GetLatestHeight())
 	if err != nil {
 		return fmt.Errorf("can't get consensus state: %w", err)
-	}
-	if !consensusStateFound {
-		return fmt.Errorf("consensus state not found: %s", clientID)
 	}
 
 	merklePath := commitmenttypes.NewMerklePath(hosttypes.ConnectionPath(opts.args.ConnectionID))
@@ -333,13 +276,9 @@ func _connOpenConfirm(opts *callOpts[ConnOpenConfirmInput]) error {
 	// Update ChainB's connection to Open
 	connection.State = connectiontypes.OPEN
 
-	connectionByte, err = marshaler.Marshal(connection)
-	if err != nil {
-		return errors.New("connection marshaler error")
+	if err := setConnection(statedb, opts.args.ConnectionID, connection); err != nil {
+		return fmt.Errorf("can't save connection: %w", err)
 	}
-	connectionsPath = fmt.Sprintf("connections/%s", opts.args.ConnectionID)
-	stateDB.SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
-
 	return nil
 }
 
@@ -353,20 +292,14 @@ func clientVerification(
 ) error {
 	clientID := connection.GetClientID()
 
-	targetClientState, found, err := getClientState(accessibleState.GetStateDB(), clientID)
+	targetClientState, err := getClientState(accessibleState.GetStateDB(), clientID)
 	if err != nil {
 		return fmt.Errorf("error loading client state, err: %w", err)
 	}
-	if !found {
-		return fmt.Errorf("client state not found in database")
-	}
 
-	consensusState, found, err := getConsensusState(accessibleState.GetStateDB(), clientID, targetClientState.GetLatestHeight())
+	consensusState, err := getConsensusState(accessibleState.GetStateDB(), clientID, targetClientState.GetLatestHeight())
 	if err != nil {
 		return fmt.Errorf("error loading consensus state, err: %w", err)
-	}
-	if !found {
-		return fmt.Errorf("consensus state not found in database")
 	}
 
 	merklePath := commitmenttypes.NewMerklePath(hosttypes.FullClientStatePath(connection.GetCounterparty().GetClientID()))
@@ -406,20 +339,14 @@ func connectionVerification(
 ) error {
 	clientID := connection.GetClientID()
 
-	clientState, found, err := getClientState(accessibleState.GetStateDB(), clientID)
+	clientState, err := getClientState(accessibleState.GetStateDB(), clientID)
 	if err != nil {
 		return fmt.Errorf("error loading client state, err: %w", err)
 	}
-	if !found {
-		return fmt.Errorf("client state not found in database")
-	}
 
-	consensusState, found, err := getConsensusState(accessibleState.GetStateDB(), clientID, clientState.GetLatestHeight())
+	consensusState, err := getConsensusState(accessibleState.GetStateDB(), clientID, clientState.GetLatestHeight())
 	if err != nil {
 		return fmt.Errorf("error loading consensus state, err: %w", err)
-	}
-	if !found {
-		return fmt.Errorf("consensus state not found in database")
 	}
 
 	merklePath := commitmenttypes.NewMerklePath(hosttypes.ConnectionPath(connectionID))
@@ -446,37 +373,4 @@ func connectionVerification(
 		return err
 	}
 	return nil
-}
-
-func getClientConnectionPaths(
-	marshaler *codec.ProtoCodec,
-	clientID string,
-	accessibleState contract.AccessibleState,
-) ([]string, bool) {
-
-	bz := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress(hosttypes.ClientConnectionsKey(clientID)))
-	if len(bz) == 0 {
-		return nil, false
-	}
-	var clientPaths connectiontypes.ClientPaths
-	marshaler.MustUnmarshal(bz, &clientPaths)
-	return clientPaths.Paths, true
-}
-
-func getConnection(
-	marshaler *codec.ProtoCodec,
-	connectionsPath string,
-	accessibleState contract.AccessibleState,
-) (*connectiontypes.ConnectionEnd, error) {
-	// connection hop length checked on msg.ValidateBasic()
-	exist := accessibleState.GetStateDB().Exist(common.BytesToAddress([]byte(connectionsPath)))
-	if !exist {
-		return nil, fmt.Errorf("cannot find connection with path: %s", connectionsPath)
-	}
-	connection := &connectiontypes.ConnectionEnd{}
-	connectionByte := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(connectionsPath)))
-	if err := connection.Unmarshal(connectionByte); err != nil {
-		return nil, err
-	}
-	return connection, nil
 }
