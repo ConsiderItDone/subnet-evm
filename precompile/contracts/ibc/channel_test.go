@@ -23,6 +23,10 @@ import (
 
 const doesnotexist = "doesnotexist"
 
+func malleateHeight(height clienttypes.Height, diff uint64) clienttypes.Height {
+	return clienttypes.NewHeight(height.GetRevisionNumber(), height.GetRevisionHeight()+diff)
+}
+
 func TestChanOpenInit(t *testing.T) {
 	coordinator := ibctesting.NewCoordinator(t, 2)
 	chainA := coordinator.GetChain(ibctesting.GetChainID(1))
@@ -120,7 +124,7 @@ func TestChanOpenTry(t *testing.T) {
 		heightDiff uint64
 	)
 
-	res, err := PackChanOpenTryOutput("channel-1")
+	res, err := PackChanOpenTryOutput("channel-0")
 	require.NoError(t, err)
 
 	tests := map[string]testutils.PrecompileTest{
@@ -394,10 +398,12 @@ func TestChanOpenAck(t *testing.T) {
 			})
 			require.NoError(t, err)
 
+			makeCapability(statedb, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID)
+
 			channel, _ := chainA.App.GetIBCKeeper().ChannelKeeper.GetChannel(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID)
 			chanByte := marshaler.MustMarshal(&channel)
 			chanPath := hosttypes.ChannelKey(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID)
-			statedb.SetPrecompileState(common.BytesToAddress(chanPath), chanByte)
+			statedb.SetPrecompileState(common.BytesToAddress([]byte(calculateKey([]byte(chanPath)))), chanByte)
 
 			connection, _ := chainA.App.GetIBCKeeper().ConnectionKeeper.GetConnection(chainA.GetContext(), path.EndpointA.ConnectionID)
 			connectionByte := marshaler.MustMarshal(&connection)
@@ -542,10 +548,12 @@ func TestChanOpenConfirm(t *testing.T) {
 			})
 			require.NoError(t, err)
 
+			makeCapability(statedb, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID)
+
 			channel, _ := chainB.App.GetIBCKeeper().ChannelKeeper.GetChannel(chainB.GetContext(), path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID)
 			chanByte := marshaler.MustMarshal(&channel)
 			chanPath := hosttypes.ChannelKey(path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID)
-			statedb.SetPrecompileState(common.BytesToAddress(chanPath), chanByte)
+			statedb.SetPrecompileState(common.BytesToAddress([]byte(calculateKey([]byte(chanPath)))), chanByte)
 
 			connection, _ := chainB.App.GetIBCKeeper().ConnectionKeeper.GetConnection(chainB.GetContext(), path.EndpointB.ConnectionID)
 			connectionByte := marshaler.MustMarshal(&connection)
@@ -826,8 +834,4 @@ func TestChanCloseConfirm(t *testing.T) {
 			test.Run(t, Module, statedb)
 		})
 	}
-}
-
-func malleateHeight(height clienttypes.Height, diff uint64) clienttypes.Height {
-	return clienttypes.NewHeight(height.GetRevisionNumber(), height.GetRevisionHeight()+diff)
 }
