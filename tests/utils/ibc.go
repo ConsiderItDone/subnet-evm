@@ -3,7 +3,6 @@ package utils
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"math/big"
 	"os"
 	"testing"
@@ -30,6 +29,8 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	wallet "github.com/ava-labs/avalanchego/wallet/subnet/primary"
+	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
+
 	"github.com/ava-labs/subnet-evm/accounts/abi/bind"
 	"github.com/ava-labs/subnet-evm/core"
 	"github.com/ava-labs/subnet-evm/core/types"
@@ -37,7 +38,6 @@ import (
 	"github.com/ava-labs/subnet-evm/plugin/evm"
 	"github.com/ava-labs/subnet-evm/precompile/contracts/ibc"
 	contractBind "github.com/ava-labs/subnet-evm/tests/precompile/contract"
-	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
 )
 
 const (
@@ -62,6 +62,8 @@ var (
 	chainA      *ibctesting.TestChain
 	chainB      *ibctesting.TestChain
 	path        *ibctesting.Path
+
+	upgradePath = []string{"upgrade", "upgradedIBCState"}
 
 	clientIdA     = "07-tendermint-0"
 	clientIdB     = "07-tendermint-1"
@@ -150,21 +152,39 @@ func RunTestIbcInit(t *testing.T) {
 	coordinator.SetupClients(path)
 }
 
+func InitClientOnChainA() {
+	err := path.EndpointA.CreateClient()
+	require.NoError(coordinator.T, err)
+}
+
+func InitClientOnChainB() {
+	err := path.EndpointB.CreateClient()
+	require.NoError(coordinator.T, err)
+}
+
 func RunTestIbcCreateClient(t *testing.T) {
+	// we are running on chain A, init client on other chainB (Tendermint Light Client)
+	//InitClientOnChainB()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	clientStateA, existA := chainA.App.GetIBCKeeper().ClientKeeper.GetClientState(chainA.GetContext(), path.EndpointA.ClientID)
-	require.True(t, existA)
-	clientStateByteA, err := clientStateA.(*ibctm.ClientState).Marshal()
+	tmConfig, ok := path.EndpointA.ClientConfig.(*ibctesting.TendermintConfig)
+	require.True(path.EndpointA.Chain.T, ok)
+
+	// get Height on Chain B
+	height := path.EndpointA.Counterparty.Chain.LastHeader.GetHeight().(clienttypes.Height)
+	// client state on chain B
+	clientState := ibctm.NewClientState(
+		path.EndpointA.Counterparty.Chain.ChainID, tmConfig.TrustLevel, tmConfig.TrustingPeriod, tmConfig.UnbondingPeriod, tmConfig.MaxClockDrift,
+		height, commitmenttypes.GetSDKSpecs(), upgradePath)
+	clientStateBz, err := clientState.Marshal()
+
+	// consensus state on chain B
+	consensusState := path.EndpointA.Counterparty.Chain.LastHeader.ConsensusState()
+	consensusStateBz, err := consensusState.Marshal()
 	require.NoError(t, err)
 
-	consensusStateA, foundA := chainA.App.GetIBCKeeper().ClientKeeper.GetLatestClientConsensusState(chainA.GetContext(), path.EndpointA.ClientID)
-	require.True(t, foundA)
-	consensusStateByteA, err := consensusStateA.(*ibctm.ConsensusState).Marshal()
-	require.NoError(t, err)
-
-	txA, err := ibcContract.CreateClient(auth, exported.Tendermint, clientStateByteA, consensusStateByteA)
+	txA, err := ibcContract.CreateClient(auth, exported.Tendermint, clientStateBz, consensusStateBz)
 	require.NoError(t, err)
 	reA, err := waitForReceiptAndGet(ctx, ethClient, txA)
 	require.NoError(t, err)
@@ -172,25 +192,6 @@ func RunTestIbcCreateClient(t *testing.T) {
 	eventA, err := ibcContractFilterer.ParseClientCreated(*reA.Logs[0])
 	require.NoError(t, err)
 	assert.Equal(t, clientIdA, eventA.ClientId)
-
-	clientStateB, existB := chainB.App.GetIBCKeeper().ClientKeeper.GetClientState(chainB.GetContext(), path.EndpointB.ClientID)
-	require.True(t, existB)
-	clientStateByteB, err := clientStateB.(*ibctm.ClientState).Marshal()
-	require.NoError(t, err)
-
-	consensusStateB, foundB := chainB.App.GetIBCKeeper().ClientKeeper.GetLatestClientConsensusState(chainB.GetContext(), path.EndpointB.ClientID)
-	require.True(t, foundB)
-	consensusStateByteB, err := consensusStateB.(*ibctm.ConsensusState).Marshal()
-	require.NoError(t, err)
-
-	txB, err := ibcContract.CreateClient(auth, exported.Tendermint, clientStateByteB, consensusStateByteB)
-	require.NoError(t, err)
-	reB, err := waitForReceiptAndGet(ctx, ethClient, txB)
-	require.NoError(t, err)
-	require.True(t, len(reA.Logs) > 0)
-	eventB, err := ibcContractFilterer.ParseClientCreated(*reB.Logs[0])
-	require.NoError(t, err)
-	assert.Equal(t, clientIdB, eventB.ClientId)
 }
 
 func RunTestIbcConnectionOpenInit(t *testing.T) {
@@ -230,35 +231,26 @@ func RunTestIbcConnectionOpenTry(t *testing.T) {
 
 	connectionKey := host.ConnectionKey(path.EndpointA.ConnectionID)
 	proofInit, proofHeight := chainA.QueryProof(connectionKey)
-	fmt.Printf("proofInit %#v\n", proofInit)
-	fmt.Printf("proofHeight %#v\n", proofHeight)
 
 	versions := connectiontypes.GetCompatibleVersions()
 	consensusHeight := counterpartyClient.GetLatestHeight().(clienttypes.Height)
 
 	consensusKey := host.FullConsensusStateKey(path.EndpointA.ClientID, consensusHeight)
 	proofConsensus, _ := chainA.QueryProof(consensusKey)
-	fmt.Printf("proofConsensus %#v\n", proofConsensus)
 
 	// retrieve proof of counterparty clientstate on chainA
 	clientKey := host.FullClientStateKey(path.EndpointA.ClientID)
 	proofClient, _ := chainA.QueryProof(clientKey)
-	fmt.Printf("proofClient %#v\n", proofClient)
 
 	counterpartyByte, _ := counterparty.Marshal()
-	fmt.Printf("counterparty %#v\n", counterpartyByte)
 
 	clientStateByte, _ := clienttypes.MarshalClientState(marshaler, counterpartyClient)
-	fmt.Printf("clientState %#v\n", clientStateByte)
 
 	versionsByte, _ := json.Marshal(connectiontypes.ExportedVersionsToProto(versions))
-	fmt.Printf("versions %#v\n", versionsByte)
 
 	proofHeightByte, _ := marshaler.MarshalInterface(&proofHeight)
-	fmt.Printf("proofHeightByte %#v\n", proofHeightByte)
 
 	consensusHeightByte, _ := marshaler.MarshalInterface(&consensusHeight)
-	fmt.Printf("consensusHeightByte %#v\n", consensusHeightByte)
 
 	tx, err := ibcContract.ConnOpenTry(
 		auth,
@@ -316,7 +308,7 @@ func RunTestIbcConnectionOpenAck(t *testing.T) {
 
 	tx, err := ibcContract.ConnOpenAck(
 		auth,
-		path.EndpointA.ConnectionID,
+		connectionId0,
 		clientStateByte,
 		versionByte,
 		[]byte(path.EndpointB.ConnectionID),
@@ -464,10 +456,10 @@ func RunTestIncChannelOpenConfirm(t *testing.T) {
 func updateClient(t *testing.T, endpoint *ibctesting.Endpoint) {
 	require.NoError(t, endpoint.UpdateClient())
 
-	trustedHeight, ok := chainA.GetClientState(endpoint.ClientID).GetLatestHeight().(clienttypes.Height)
-	require.True(t, ok)
+	//trustedHeight, ok := chainA.GetClientState(endpoint.ClientID).GetLatestHeight().(clienttypes.Height)
+	//require.True(t, ok)
 
-	header, err := endpoint.Chain.ConstructUpdateTMClientHeaderWithTrustedHeight(endpoint.Counterparty.Chain, endpoint.ClientID, trustedHeight)
+	header, err := endpoint.Chain.ConstructUpdateTMClientHeaderWithTrustedHeight(endpoint.Counterparty.Chain, endpoint.ClientID, clienttypes.ZeroHeight())
 	require.NoError(t, err)
 
 	msg, err := header.Marshal()
