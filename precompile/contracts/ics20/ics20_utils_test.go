@@ -3,11 +3,12 @@ package ics20
 import (
 	_ "embed"
 	"encoding/json"
-	"math/big"
 	"testing"
 
 	"github.com/ava-labs/subnet-evm/precompile/contracts/ics20/testdata"
 	"github.com/ava-labs/subnet-evm/precompile/contracts/ics20/testdata/codec"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -46,12 +47,14 @@ func TestFungibleTokenPacketDataToABI(t *testing.T) {
 
 			var jsondata FungibleTokenPacketData
 			require.NoError(t, json.Unmarshal(testcase.Input, &jsondata), "can't parse json input")
+			amount, ok := math.ParseBig256(jsondata.Amount)
+			require.True(t, ok)
 
 			expected, err := cdc.Encode(nil, codec.FungibleTokenPacketData{
 				Denom:    jsondata.Denom,
-				Amount:   (*big.Int)(jsondata.Amount),
+				Amount:   amount,
 				Sender:   jsondata.Sender,
-				Receiver: jsondata.Receiver,
+				Receiver: common.HexToAddress(jsondata.Receiver),
 				Memo:     jsondata.Memo,
 			})
 			require.NoError(t, err, "can't call test contract 'codec'")

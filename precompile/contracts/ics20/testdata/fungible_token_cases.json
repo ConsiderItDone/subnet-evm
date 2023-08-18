@@ -3,7 +3,17 @@
     "name": "success",
     "input": {
       "denom": "some_denom",
-      "amount": 10000000000000000000000000000000,
+      "amount": "10000000000000000000000000000000",
+      "sender": "some_sender",
+      "receiver": "0x0000000000000000000000000000000000000000",
+      "memo": "some_memo"
+    }
+  },
+  {
+    "name": "success hex amount",
+    "input": {
+      "denom": "some_denom",
+      "amount": "0xaaaa",
       "sender": "some_sender",
       "receiver": "0x0000000000000000000000000000000000000000",
       "memo": "some_memo"
@@ -12,7 +22,7 @@
   {
     "name": "empty denom",
     "input": {
-      "amount": 10000000000000000000000000000000,
+      "amount": "10000000000000000000000000000000",
       "sender": "some_sender",
       "receiver": "0x0000000000000000000000000000000000000000",
       "memo": "some_memo"
@@ -20,10 +30,31 @@
     "error": "denom not found"
   },
   {
+    "name": "empty amount",
+    "input": {
+      "denom": "some_denom",
+      "sender": "some_sender",
+      "receiver": "0x0000000000000000000000000000000000000000",
+      "memo": "some_memo"
+    },
+    "error": "amount not found"
+  },
+  {
+    "name": "bad amount",
+    "input": {
+      "denom": "some_denom",
+      "amount": "alksdlkalskdjalkdj",
+      "sender": "some_sender",
+      "receiver": "0x0000000000000000000000000000000000000000",
+      "memo": "some_memo"
+    },
+    "error": "amount has unknown format"
+  },
+  {
     "name": "empty sender",
     "input": {
       "denom": "some_denom",
-      "amount": 10000000000000000000000000000000,
+      "amount": "10000000000000000000000000000000",
       "receiver": "0x0000000000000000000000000000000000000000",
       "memo": "some_memo"
     },

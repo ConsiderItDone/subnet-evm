@@ -8,6 +8,7 @@ import (
 
 	"github.com/ava-labs/subnet-evm/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 )
 
 type (
@@ -15,11 +16,11 @@ type (
 		// the token denomination to be transferred
 		Denom string `json:"denom"`
 		// the token amount to be transferred
-		Amount *big.Int `json:"amount"`
+		Amount string `json:"amount"`
 		// the sender address
 		Sender string `json:"sender"`
 		// the recipient address on the destination chain
-		Receiver common.Address `json:"receiver"`
+		Receiver string `json:"receiver"`
 		// optional memo
 		Memo string `json:"memo,omitempty"`
 	}
@@ -30,6 +31,8 @@ var (
 	FungibleTokenAbiArgument abi.Arguments
 
 	ErrDenomNotFound    = errors.New("denom not found")
+	ErrAmountNotFound   = errors.New("amount not found")
+	ErrAmountCantParse  = errors.New("amount has unknown format")
 	ErrSenderNotFound   = errors.New("sender not found")
 	ErrReceiverNotFound = errors.New("receiver not found")
 )
@@ -63,11 +66,36 @@ func FungibleTokenPacketDataToABI(rawdata []byte) ([]byte, error) {
 		return nil, ErrDenomNotFound
 	}
 
+	if len(data.Amount) == 0 {
+		return nil, ErrAmountNotFound
+	}
+
 	if len(data.Sender) == 0 {
 		return nil, ErrSenderNotFound
 	}
 
-	abidata, err := FungibleTokenAbiArgument.Pack(&data)
+	if len(data.Receiver) == 0 {
+		return nil, ErrReceiverNotFound
+	}
+
+	amount, ok := math.ParseBig256(data.Amount)
+	if !ok {
+		return nil, ErrAmountCantParse
+	}
+
+	abidata, err := FungibleTokenAbiArgument.Pack(&struct {
+		Denom    string
+		Amount   *big.Int
+		Sender   string
+		Receiver common.Address
+		Memo     string
+	}{
+		Denom:    data.Denom,
+		Amount:   amount,
+		Sender:   data.Sender,
+		Receiver: common.HexToAddress(data.Receiver),
+		Memo:     data.Memo,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("can't abi encode: %w", err)
 	}
