@@ -59,5 +59,15 @@
       "memo": "some_memo"
     },
     "error": "sender not found"
+  },
+  {
+    "name": "empty receiver",
+    "input": {
+      "denom": "some_denom",
+      "amount": "10000000000000000000000000000000",
+      "sender": "0x0000000000000000000000000000000000000000",
+      "memo": "some_memo"
+    },
+    "error": "receiver not found"
   }
 ]
