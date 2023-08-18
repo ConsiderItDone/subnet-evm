@@ -1,0 +1,32 @@
+[
+  {
+    "name": "success",
+    "input": {
+      "denom": "some_denom",
+      "amount": 10000000000000000000000000000000,
+      "sender": "some_sender",
+      "receiver": "0x0000000000000000000000000000000000000000",
+      "memo": "some_memo"
+    }
+  },
+  {
+    "name": "empty denom",
+    "input": {
+      "amount": 10000000000000000000000000000000,
+      "sender": "some_sender",
+      "receiver": "0x0000000000000000000000000000000000000000",
+      "memo": "some_memo"
+    },
+    "error": "denom not found"
+  },
+  {
+    "name": "empty sender",
+    "input": {
+      "denom": "some_denom",
+      "amount": 10000000000000000000000000000000,
+      "receiver": "0x0000000000000000000000000000000000000000",
+      "memo": "some_memo"
+    },
+    "error": "sender not found"
+  }
+]
