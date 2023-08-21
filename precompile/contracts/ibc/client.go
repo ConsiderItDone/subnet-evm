@@ -62,7 +62,7 @@ func PackCreateClientOutput(clientID string) ([]byte, error) {
 }
 
 func getStoredNextClientSeq(db contract.StateDB) *big.Int {
-	val := db.GetState(ContractAddress, nextClientSeqStorageKey)
+	val := db.GetState(ContractAddress, NextClientSeqStorageKey)
 	return val.Big()
 }
 
@@ -70,7 +70,7 @@ func storeNextClientSeq(db contract.StateDB, value *big.Int) error {
 	if value == nil {
 		return fmt.Errorf("client seq cannot be nil")
 	}
-	db.SetState(ContractAddress, nextClientSeqStorageKey, common.BigToHash(value))
+	db.SetState(ContractAddress, NextClientSeqStorageKey, common.BigToHash(value))
 
 	return nil
 }
@@ -88,8 +88,8 @@ func generateClientIdentifier(db contract.StateDB, clientType string) (string, e
 	return clientId, nil
 }
 
-func calculateKey(path []byte) string {
-	return crypto.Keccak256Hash(crypto.Keccak256Hash(path).Bytes()).Hex()
+func CalculateKey(path []byte) common.Hash {
+	return crypto.Keccak256Hash(crypto.Keccak256Hash(path).Bytes())
 }
 
 func storeClientState(db contract.StateDB, clientId string, clientState *ibctm.ClientState) error {
@@ -97,15 +97,15 @@ func storeClientState(db contract.StateDB, clientId string, clientState *ibctm.C
 	if err != nil {
 		return err
 	}
-	key := calculateKey(host.FullClientStateKey(clientId))
-	db.SetPrecompileState(common.BytesToAddress([]byte(key)), bz)
+	slot := ClientSlot(clientId)
+	storeBytes(db, slot, bz)
 
 	return nil
 }
 
 func getClientState(db contract.StateDB, clientId string) (*ibctm.ClientState, bool, error) {
-	key := calculateKey(host.FullClientStateKey(clientId))
-	bz := db.GetPrecompileState(common.BytesToAddress([]byte(key)))
+	slot := ClientSlot(clientId)
+	bz := getBytes(db, slot)
 
 	if len(bz) == 0 {
 		return nil, false, nil
@@ -125,20 +125,20 @@ func storeConsensusState(db contract.StateDB, clientId string, consensusState *i
 	if err != nil {
 		return err
 	}
-	key := calculateKey(host.FullConsensusStateKey(clientId, height))
-	db.SetPrecompileState(common.BytesToAddress([]byte(key)), bz)
+	key := CalculateKey(host.FullConsensusStateKey(clientId, height))
+	db.SetPrecompileState(common.BytesToAddress(key.Bytes()), bz)
 
 	return nil
 }
 
 func getConsensusState(db contract.StateDB, clientId string, height exported.Height) (*ibctm.ConsensusState, bool, error) {
-	key := calculateKey(host.FullConsensusStateKey(clientId, height))
-	found := db.Exist(common.BytesToAddress([]byte(key)))
+	key := CalculateKey(host.FullConsensusStateKey(clientId, height))
+	found := db.Exist(common.BytesToAddress(key.Bytes()))
 	if !found {
 		return nil, false, nil
 	}
 
-	bz := db.GetPrecompileState(common.BytesToAddress([]byte(key)))
+	bz := db.GetPrecompileState(common.BytesToAddress(key.Bytes()))
 	consensusState := &ibctm.ConsensusState{}
 	err := consensusState.Unmarshal(bz)
 	if err != nil {

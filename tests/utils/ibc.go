@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"os"
 	"testing"
@@ -35,8 +36,10 @@ import (
 	"github.com/ava-labs/subnet-evm/core"
 	"github.com/ava-labs/subnet-evm/core/types"
 	"github.com/ava-labs/subnet-evm/ethclient"
+	"github.com/ava-labs/subnet-evm/ethclient/subnetevmclient"
 	"github.com/ava-labs/subnet-evm/plugin/evm"
 	"github.com/ava-labs/subnet-evm/precompile/contracts/ibc"
+	"github.com/ava-labs/subnet-evm/rpc"
 	contractBind "github.com/ava-labs/subnet-evm/tests/precompile/contract"
 )
 
@@ -54,6 +57,7 @@ var (
 	testClientHeight = clienttypes.NewHeight(0, 5)
 
 	ethClient           ethclient.Client
+	subnetClient        *subnetevmclient.Client
 	ibcContract         *contractBind.Contract
 	ibcContractFilterer *contractBind.ContractFilterer
 	auth                *bind.TransactOpts
@@ -83,7 +87,7 @@ func init() {
 func RunTestIbcInit(t *testing.T) {
 	t.Log("executing new blockchain initialization")
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Minute)
 	defer cancel()
 
 	kc := secp256k1fx.NewKeychain(genesis.EWOQKey)
@@ -129,10 +133,13 @@ func RunTestIbcInit(t *testing.T) {
 	require.True(t, bootstrapped, "network isn't bootstaped")
 
 	chainURI := GetDefaultChainURI(createChainTxID.String())
-	t.Log("subnet successfully created: %s", chainURI)
+	t.Logf("subnet successfully created: %s", chainURI)
 
-	ethClient, err = ethclient.DialContext(ctx, chainURI)
+	rpcClient, err := rpc.DialContext(ctx, chainURI)
 	require.NoError(t, err)
+
+	ethClient = ethclient.NewClient(rpcClient)
+	subnetClient = subnetevmclient.New(rpcClient)
 	t.Log("eth client created")
 
 	ibcContract, err = contractBind.NewContract(ibc.ContractAddress, ethClient)
@@ -184,6 +191,7 @@ func RunTestIbcCreateClient(t *testing.T) {
 	consensusStateBz, err := consensusState.Marshal()
 	require.NoError(t, err)
 
+	// create client on chain A
 	txA, err := ibcContract.CreateClient(auth, exported.Tendermint, clientStateBz, consensusStateBz)
 	require.NoError(t, err)
 	reA, err := waitForReceiptAndGet(ctx, ethClient, txA)
@@ -192,6 +200,16 @@ func RunTestIbcCreateClient(t *testing.T) {
 	eventA, err := ibcContractFilterer.ParseClientCreated(*reA.Logs[0])
 	require.NoError(t, err)
 	assert.Equal(t, clientIdA, eventA.ClientId)
+
+	// create client on chain A
+	txA2, err := ibcContract.CreateClient(auth, exported.Tendermint, clientStateBz, consensusStateBz)
+	require.NoError(t, err)
+	reA2, err := waitForReceiptAndGet(ctx, ethClient, txA2)
+	require.NoError(t, err)
+	require.True(t, len(reA2.Logs) > 0)
+	eventA2, err := ibcContractFilterer.ParseClientCreated(*reA.Logs[0])
+	require.NoError(t, err)
+	t.Logf("Client ID 2: %s", eventA2.ClientId)
 }
 
 func RunTestIbcConnectionOpenInit(t *testing.T) {
@@ -451,6 +469,21 @@ func RunTestIncChannelOpenConfirm(t *testing.T) {
 	require.NoError(t, err)
 	_, err = waitForReceiptAndGet(ctx, ethClient, tx)
 	require.NoError(t, err)
+}
+
+func QueryProofs(t *testing.T) {
+	clientId := clientIdA
+
+	data, err := ethClient.StorageAt(context.Background(), ibc.ContractAddress, ibc.NextClientSeqStorageKey, nil)
+	require.NoError(t, err)
+	t.Logf("Client seq storage data: %x\n", data)
+	proof, err := subnetClient.GetProof(context.Background(), ibc.ContractAddress, []string{ibc.NextClientSeqStorageKey.Hex()}, nil)
+	require.NoError(t, err)
+	fmt.Printf("Client seq storage merkle tree proof: %+v\n", proof)
+
+	clientStateBz, err := ethClient.StorageAt(context.Background(), ibc.ContractAddress, ibc.ClientSlot(clientId), nil)
+	require.NoError(t, err)
+	t.Logf("Client state storage data: %x\n", clientStateBz)
 }
 
 func updateClient(t *testing.T, endpoint *ibctesting.Endpoint) {

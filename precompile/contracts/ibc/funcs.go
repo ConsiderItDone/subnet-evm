@@ -503,16 +503,16 @@ func generateChannelIdentifier(accessibleState contract.AccessibleState) string 
 func setNextSequenceSend(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64) {
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, sequence)
-	key := calculateKey([]byte(hosttypes.NextSequenceSendKey(portID, channelID)))
-	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(key)), b)
+	key := CalculateKey([]byte(hosttypes.NextSequenceSendKey(portID, channelID)))
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress(key.Bytes()), b)
 }
 
 // setNextSequenceRecv sets a channel's next receive sequence to the store
 func setNextSequenceRecv(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64) {
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, sequence)
-	key := calculateKey([]byte(hosttypes.NextSequenceRecvKey(portID, channelID)))
-	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(key)), b)
+	key := CalculateKey([]byte(hosttypes.NextSequenceRecvKey(portID, channelID)))
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress(key.Bytes()), b)
 }
 
 // setNextSequenceAck sets a channel's next ack sequence to the store
@@ -520,8 +520,8 @@ func setNextSequenceAck(accessibleState contract.AccessibleState, portID, channe
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, sequence)
 
-	key := calculateKey([]byte(hosttypes.NextSequenceAckKey(portID, channelID)))
-	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(key)), b)
+	key := CalculateKey([]byte(hosttypes.NextSequenceAckKey(portID, channelID)))
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress(key.Bytes()), b)
 }
 
 func _chanOpenInit(opts *callOpts[ChanOpenInitInput]) error {
@@ -572,8 +572,8 @@ func _chanOpenInit(opts *callOpts[ChanOpenInitInput]) error {
 	if err != nil {
 		return fmt.Errorf("can't serialize channel state: %w", err)
 	}
-	path := calculateKey(hosttypes.ChannelKey(opts.args.PortID, channelID))
-	opts.accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(path)), bz)
+	path := CalculateKey(hosttypes.ChannelKey(opts.args.PortID, channelID))
+	opts.accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress(path.Bytes()), bz)
 
 	setNextSequenceSend(opts.accessibleState, opts.args.PortID, channelID, 1)
 	setNextSequenceRecv(opts.accessibleState, opts.args.PortID, channelID, 1)
@@ -705,12 +705,12 @@ func _chanOpenTry(opts *callOpts[ChanOpenTryInput]) (string, error) {
 
 	channelNew := channeltypes.NewChannel(channeltypes.TRYOPEN, channel.Ordering, channel.Counterparty, channel.ConnectionHops, channel.Version)
 	bz := marshaler.MustMarshal(&channelNew)
-	path := calculateKey(hosttypes.ChannelKey(
+	path := CalculateKey(hosttypes.ChannelKey(
 		opts.args.PortID,
 		channelID,
 	))
 	opts.accessibleState.GetStateDB().SetPrecompileState(
-		common.BytesToAddress([]byte(path)),
+		common.BytesToAddress(path.Bytes()),
 		bz,
 	)
 
@@ -723,7 +723,7 @@ func getChannelState(
 	accessibleState contract.AccessibleState,
 ) (*channeltypes.Channel, error) {
 	// connection hop length checked on msg.ValidateBasic()
-	key := common.BytesToAddress([]byte(calculateKey([]byte(channelStatePath))))
+	key := common.BytesToAddress((CalculateKey([]byte(channelStatePath))).Bytes())
 	exist := accessibleState.GetStateDB().Exist(key)
 	if !exist {
 		return nil, fmt.Errorf("cannot find channel state with path: %s", channelStatePath)
@@ -795,11 +795,11 @@ func _channelOpenAck(opts *callOpts[ChannelOpenAckInput]) error {
 	channel.Counterparty.ChannelId = opts.args.CounterpartyChannelID
 
 	bz := marshaler.MustMarshal(channel)
-	key := calculateKey(hosttypes.ChannelKey(
+	key := CalculateKey(hosttypes.ChannelKey(
 		opts.args.PortID,
 		opts.args.ChannelID,
 	))
-	opts.accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(key)), bz)
+	opts.accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress(key.Bytes()), bz)
 
 	return nil
 }
