@@ -46,11 +46,11 @@ func bindPort(accessibleState contract.AccessibleState, caller common.Address, a
 
 	portID := inputStruct
 
-	if _, err := getPort(accessibleState.GetStateDB(), portID); err == nil {
+	if _, err := GetPort(accessibleState.GetStateDB(), portID); err == nil {
 		return nil, remainingGas, fmt.Errorf("port with portID: %s already bound", portID)
 	}
 
-	if err = setPort(accessibleState.GetStateDB(), portID, caller); err != nil {
+	if err = SetPort(accessibleState.GetStateDB(), portID, caller); err != nil {
 		return nil, remainingGas, err
 	}
 

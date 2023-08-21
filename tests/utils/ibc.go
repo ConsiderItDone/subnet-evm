@@ -470,14 +470,15 @@ func RunTestIncChannelOpenConfirm(t *testing.T) {
 func QueryProofs(t *testing.T) {
 	clientId := clientIdA
 
-	data, err := ethClient.StorageAt(context.Background(), ibc.ContractAddress, ibc.NextClientSeqStorageKey, nil)
+	data, err := ethClient.StorageAt(context.Background(), ibc.ContractAddress, ibc.ClientSequenceSlot, nil)
 	require.NoError(t, err)
 	t.Logf("Client seq storage data: %x\n", data)
-	proof, err := subnetClient.GetProof(context.Background(), ibc.ContractAddress, []string{ibc.NextClientSeqStorageKey.Hex()}, nil)
-	require.NoError(t, err)
-	fmt.Printf("Client seq storage merkle tree proof: %+v\n", proof)
 
-	clientStateBz, err := ethClient.StorageAt(context.Background(), ibc.ContractAddress, ibc.ClientSlot(clientId), nil)
+	proof, err := subnetClient.GetProof(context.Background(), ibc.ContractAddress, []string{ibc.ClientSequenceSlot.Hex()}, nil)
+	require.NoError(t, err)
+	t.Logf("Client seq storage merkle tree proof: %+v\n", proof)
+
+	clientStateBz, err := ethClient.StorageAt(context.Background(), ibc.ContractAddress, ibc.ClientStateSlot(clientId), nil)
 	require.NoError(t, err)
 	t.Logf("Client state storage data: %x\n", clientStateBz)
 }

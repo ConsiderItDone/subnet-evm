@@ -3,7 +3,6 @@ package ibc
 import (
 	"errors"
 	"fmt"
-	"math/big"
 
 	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -18,15 +17,11 @@ import (
 )
 
 func makeClientID(db contract.StateDB, clientType string) string {
-	clientSeq := db.GetState(ContractAddress, nextClientSeqStorageKey).Big()
-	clientId := fmt.Sprintf("%s-%d", clientType, clientSeq.Int64())
-	db.SetState(ContractAddress, nextClientSeqStorageKey, common.BigToHash(
-		new(big.Int).Add(
-			clientSeq,
-			common.Big1,
-		),
-	))
-	return clientId
+	clientSeq := db.GetState(ContractAddress, ClientSequenceSlot).Big()
+	clientID := fmt.Sprintf("%s-%d", clientType, clientSeq.Int64())
+	clientSeq.Add(clientSeq, common.Big1)
+	db.SetState(ContractAddress, ClientSequenceSlot, common.BigToHash(clientSeq))
+	return clientID
 }
 
 func _createClient(opts *callOpts[CreateClientInput]) (string, error) {
@@ -45,7 +40,7 @@ func _createClient(opts *callOpts[CreateClientInput]) (string, error) {
 	if err := clientState.Unmarshal(opts.args.ClientState); err != nil {
 		return "", fmt.Errorf("error unmarshalling client state: %w", err)
 	}
-	if err := setClientState(statedb, clientId, clientState); err != nil {
+	if err := SetClientState(statedb, clientId, clientState); err != nil {
 		return "", fmt.Errorf("error storing client state: %w", err)
 	}
 
@@ -53,11 +48,11 @@ func _createClient(opts *callOpts[CreateClientInput]) (string, error) {
 	if err := consensusState.Unmarshal(opts.args.ConsensusState); err != nil {
 		return "", fmt.Errorf("error unmarshalling consensus state: %w", err)
 	}
-	if err := setConsensusState(statedb, clientId, clientState.GetLatestHeight(), consensusState); err != nil {
+	if err := SetConsensusState(statedb, clientId, clientState.GetLatestHeight(), consensusState); err != nil {
 		return "", fmt.Errorf("error storing consensus state: %w", err)
 	}
 
-	if err := addLog(opts.accessibleState, "ClientCreated", clientId); err != nil {
+	if err := AddLog(opts.accessibleState, "ClientCreated", clientId); err != nil {
 		return "", fmt.Errorf("error packing event: %w", err)
 	}
 
@@ -67,12 +62,12 @@ func _createClient(opts *callOpts[CreateClientInput]) (string, error) {
 func _updateClient(opts *callOpts[UpdateClientInput]) error {
 	statedb := opts.accessibleState.GetStateDB()
 
-	clientState, err := getClientState(statedb, opts.args.ClientID)
+	clientState, err := GetClientState(statedb, opts.args.ClientID)
 	if err != nil {
 		return fmt.Errorf("can't get client state: %w", err)
 	}
 
-	consensusState, err := getConsensusState(statedb, opts.args.ClientID, clientState.GetLatestHeight())
+	consensusState, err := GetConsensusState(statedb, opts.args.ClientID, clientState.GetLatestHeight())
 	if err != nil {
 		return fmt.Errorf("can't get consensus state: %w", err)
 	}
@@ -87,11 +82,11 @@ func _updateClient(opts *callOpts[UpdateClientInput]) error {
 	consensusState.Root = commitmenttypes.NewMerkleRoot(clientMessage.Header.GetAppHash())
 	consensusState.NextValidatorsHash = clientMessage.Header.NextValidatorsHash
 
-	if err := setClientState(statedb, opts.args.ClientID, clientState); err != nil {
+	if err := SetClientState(statedb, opts.args.ClientID, clientState); err != nil {
 		return fmt.Errorf("can't update client state: %w", err)
 	}
 
-	if err := setConsensusState(statedb, opts.args.ClientID, clientState.GetLatestHeight(), consensusState); err != nil {
+	if err := SetConsensusState(statedb, opts.args.ClientID, clientState.GetLatestHeight(), consensusState); err != nil {
 		return fmt.Errorf("can't update consensus state: %w", err)
 	}
 
@@ -115,12 +110,12 @@ func _upgradeClient(opts *callOpts[UpgradeClientInput]) error {
 		return fmt.Errorf("error unmarshalling upgraded ConsensusState: %w", err)
 	}
 
-	clientState, err := getClientState(statedb, opts.args.ClientID)
+	clientState, err := GetClientState(statedb, opts.args.ClientID)
 	if err != nil {
 		return fmt.Errorf("can't get client state: %w", err)
 	}
 
-	consensusState, err := getConsensusState(statedb, opts.args.ClientID, clientState.GetLatestHeight())
+	consensusState, err := GetConsensusState(statedb, opts.args.ClientID, clientState.GetLatestHeight())
 	if err != nil {
 		return fmt.Errorf("can't get consensus state: %w", err)
 	}
@@ -202,10 +197,10 @@ func _upgradeClient(opts *callOpts[UpgradeClientInput]) error {
 		upgradedConsState.Timestamp, commitmenttypes.NewMerkleRoot([]byte(ibctm.SentinelRoot)), upgradedConsState.NextValidatorsHash,
 	)
 
-	if err := setClientState(statedb, opts.args.ClientID, newClientState); err != nil {
+	if err := SetClientState(statedb, opts.args.ClientID, newClientState); err != nil {
 		return fmt.Errorf("error storing client state: %w", err)
 	}
-	if err := setConsensusState(statedb, opts.args.ClientID, newClientState.GetLatestHeight(), newConsState); err != nil {
+	if err := SetConsensusState(statedb, opts.args.ClientID, newClientState.GetLatestHeight(), newConsState); err != nil {
 		return fmt.Errorf("error storing consensus state: %w", err)
 	}
 	return nil

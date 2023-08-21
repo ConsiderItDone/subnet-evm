@@ -36,52 +36,35 @@ type (
 	}
 )
 
-func calculateKey(path []byte) common.Address {
-	return common.BytesToAddress(crypto.Keccak256Hash(path).Bytes())
+func CalculateSlot(path []byte) common.Hash {
+	return crypto.Keccak256Hash(path)
 }
 
-func clientStateKey(clientID string) common.Address {
-	return calculateKey(host.FullClientStateKey(clientID))
+func ClientStateSlot(clientID string) common.Hash {
+	return CalculateSlot(host.FullClientStateKey(clientID))
 }
 
-func consensusStateKey(clientID string, height exported.Height) common.Address {
-	return calculateKey(host.FullConsensusStateKey(clientID, height))
+func ConsensusStateSlot(clientID string, height exported.Height) common.Hash {
+	return CalculateSlot(host.FullConsensusStateKey(clientID, height))
 }
 
-func connectionKey(connectionID string) common.Address {
-	return calculateKey(host.ConnectionKey(connectionID))
+func ConnectionSlot(connectionID string) common.Hash {
+	return CalculateSlot(host.ConnectionKey(connectionID))
 }
 
-func channelKey(portID, channelID string) common.Address {
-	return calculateKey(host.ChannelKey(portID, channelID))
+func ChannelSlot(portID, channelID string) common.Hash {
+	return CalculateSlot(host.ChannelKey(portID, channelID))
 }
 
-func portKey(portID string) common.Address {
-	return calculateKey([]byte(host.PortPath(portID)))
+func PortSlot(portID string) common.Hash {
+	return CalculateSlot([]byte(host.PortPath(portID)))
 }
 
-func channelCapabilityKey(portID, channelID string) common.Address {
-	return calculateKey([]byte(host.ChannelCapabilityPath(portID, channelID)))
+func ChannelCapabilitySlot(portID, channelID string) common.Hash {
+	return CalculateSlot([]byte(host.ChannelCapabilityPath(portID, channelID)))
 }
 
-func getPrecompileState(db contract.StateDB, addr common.Address) ([]byte, error) {
-	state := db.GetPrecompileState(addr)
-	if len(state) == 0 {
-		return nil, ErrEmptyState
-	}
-	return state, nil
-}
-
-func setPrecompileState(db contract.StateDB, addr common.Address, obj Marshaler) error {
-	state, err := obj.Marshal()
-	if err != nil {
-		return err
-	}
-	db.SetPrecompileState(addr, state)
-	return nil
-}
-
-func addLog(as contract.AccessibleState, name string, args ...any) error {
+func AddLog(as contract.AccessibleState, name string, args ...any) error {
 	topics, data, err := IBCABI.PackEvent(name, args...)
 	if err != nil {
 		return err
@@ -91,8 +74,8 @@ func addLog(as contract.AccessibleState, name string, args ...any) error {
 	return nil
 }
 
-func getClientState(db contract.StateDB, clientId string) (*ibctm.ClientState, error) {
-	state, err := getPrecompileState(db, clientStateKey(clientId))
+func GetClientState(db contract.StateDB, clientId string) (*ibctm.ClientState, error) {
+	state, err := GetState(db, ClientStateSlot(clientId))
 	if err != nil {
 		return nil, err
 	}
@@ -103,12 +86,12 @@ func getClientState(db contract.StateDB, clientId string) (*ibctm.ClientState, e
 	return clientState, nil
 }
 
-func setClientState(db contract.StateDB, clientId string, clientState *ibctm.ClientState) error {
-	return setPrecompileState(db, clientStateKey(clientId), clientState)
+func SetClientState(db contract.StateDB, clientId string, clientState *ibctm.ClientState) error {
+	return SetState(db, ClientStateSlot(clientId), clientState)
 }
 
-func getConsensusState(db contract.StateDB, clientId string, height exported.Height) (*ibctm.ConsensusState, error) {
-	state, err := getPrecompileState(db, consensusStateKey(clientId, height))
+func GetConsensusState(db contract.StateDB, clientId string, height exported.Height) (*ibctm.ConsensusState, error) {
+	state, err := GetState(db, ConsensusStateSlot(clientId, height))
 	if err != nil {
 		return nil, err
 	}
@@ -119,12 +102,12 @@ func getConsensusState(db contract.StateDB, clientId string, height exported.Hei
 	return consensusState, nil
 }
 
-func setConsensusState(db contract.StateDB, clientId string, height exported.Height, consensusState *ibctm.ConsensusState) error {
-	return setPrecompileState(db, consensusStateKey(clientId, height), consensusState)
+func SetConsensusState(db contract.StateDB, clientId string, height exported.Height, consensusState *ibctm.ConsensusState) error {
+	return SetState(db, ConsensusStateSlot(clientId, height), consensusState)
 }
 
-func getConnection(db contract.StateDB, connectionID string) (*connectiontypes.ConnectionEnd, error) {
-	state, err := getPrecompileState(db, connectionKey(connectionID))
+func GetConnection(db contract.StateDB, connectionID string) (*connectiontypes.ConnectionEnd, error) {
+	state, err := GetState(db, ConnectionSlot(connectionID))
 	if err != nil {
 		return nil, err
 	}
@@ -135,12 +118,12 @@ func getConnection(db contract.StateDB, connectionID string) (*connectiontypes.C
 	return connection, nil
 }
 
-func setConnection(db contract.StateDB, connectionID string, conn *connectiontypes.ConnectionEnd) error {
-	return setPrecompileState(db, connectionKey(connectionID), conn)
+func SetConnection(db contract.StateDB, connectionID string, conn *connectiontypes.ConnectionEnd) error {
+	return SetState(db, ConnectionSlot(connectionID), conn)
 }
 
-func getChannel(db contract.StateDB, portID string, channelID string) (*channeltypes.Channel, error) {
-	state, err := getPrecompileState(db, channelKey(portID, channelID))
+func GetChannel(db contract.StateDB, portID string, channelID string) (*channeltypes.Channel, error) {
+	state, err := GetState(db, ChannelSlot(portID, channelID))
 	if err != nil {
 		return nil, err
 	}
@@ -151,12 +134,12 @@ func getChannel(db contract.StateDB, portID string, channelID string) (*channelt
 	return channel, nil
 }
 
-func setChannel(db contract.StateDB, portID string, channelID string, channel *channeltypes.Channel) error {
-	return setPrecompileState(db, channelKey(portID, channelID), channel)
+func SetChannel(db contract.StateDB, portID string, channelID string, channel *channeltypes.Channel) error {
+	return SetState(db, ChannelSlot(portID, channelID), channel)
 }
 
-func getPort(db contract.StateDB, portID string) (common.Address, error) {
-	state, err := getPrecompileState(db, portKey(portID))
+func GetPort(db contract.StateDB, portID string) (common.Address, error) {
+	state, err := GetState(db, PortSlot(portID))
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -166,16 +149,16 @@ func getPort(db contract.StateDB, portID string) (common.Address, error) {
 	return common.BytesToAddress(state), nil
 }
 
-func setPort(db contract.StateDB, portID string, caller common.Address) error {
+func SetPort(db contract.StateDB, portID string, caller common.Address) error {
 	if err := host.PortIdentifierValidator(portID); err != nil {
 		return err
 	}
-	db.SetPrecompileState(portKey(portID), caller[:])
+	setState(db, ContractAddress, PortSlot(portID), caller[:])
 	return nil
 }
 
-func getCapability(db contract.StateDB, portID, channelID string) (bool, error) {
-	state, err := getPrecompileState(db, channelCapabilityKey(portID, channelID))
+func GetCapability(db contract.StateDB, portID, channelID string) (bool, error) {
+	state, err := GetState(db, ChannelCapabilitySlot(portID, channelID))
 	if err != nil {
 		return false, err
 	}
@@ -185,14 +168,14 @@ func getCapability(db contract.StateDB, portID, channelID string) (bool, error) 
 	return true, nil
 }
 
-func setCapability(db contract.StateDB, portID, channelID string) error {
-	exist, err := getCapability(db, portID, channelID)
+func SetCapability(db contract.StateDB, portID, channelID string) error {
+	exist, err := GetCapability(db, portID, channelID)
 	if err != nil && err != ErrEmptyState {
 		return err
 	}
 	if exist {
 		return ErrAlreadyExist
 	}
-	db.SetPrecompileState(channelCapabilityKey(portID, channelID), []byte{1})
+	setState(db, ContractAddress, ChannelCapabilitySlot(portID, channelID), []byte{1})
 	return nil
 }

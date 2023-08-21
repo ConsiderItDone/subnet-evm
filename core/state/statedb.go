@@ -440,21 +440,6 @@ func (s *StateDB) SetBalance(addr common.Address, amount *big.Int) {
 	}
 }
 
-func (s *StateDB) GetPrecompileState(addr common.Address) []byte {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		return stateObject.Code(s.db)
-	}
-	return nil
-}
-
-func (s *StateDB) SetPrecompileState(addr common.Address, code []byte) {
-	stateObject := s.GetOrNewStateObject(addr)
-	if stateObject != nil {
-		stateObject.SetCode(crypto.Keccak256Hash(code), code)
-	}
-}
-
 func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {

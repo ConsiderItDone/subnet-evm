@@ -21,40 +21,47 @@ import (
 )
 
 func makeChannelID(db contract.StateDB) string {
-	chanSeq := uint64(0)
-	if db.Exist(common.BytesToAddress([]byte("nextChannelSeq"))) {
-		b := db.GetPrecompileState(common.BytesToAddress([]byte("nextChannelSeq")))
-		chanSeq = binary.BigEndian.Uint64(b)
-	}
-	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, chanSeq+1)
-	db.SetPrecompileState(common.BytesToAddress([]byte("nextChannelSeq")), b)
-	return fmt.Sprintf("%s%d", "channel-", chanSeq)
+	chanSeq := db.GetState(ContractAddress, ChannelSequenceSlot).Big()
+	chanID := fmt.Sprintf("channel-%d", chanSeq.Int64())
+	chanSeq.Add(chanSeq, common.Big1)
+	db.SetState(ContractAddress, ChannelSequenceSlot, common.BigToHash(chanSeq))
+	return chanID
 }
 
 // setNextSequenceSend sets a channel's next send sequence to the store
 func setNextSequenceSend(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64) {
-	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, sequence)
-	key := calculateKey(hosttypes.NextSequenceSendKey(portID, channelID))
-	accessibleState.GetStateDB().SetPrecompileState(key, b)
+	state := make([]byte, 8)
+	binary.BigEndian.PutUint64(state, sequence)
+	setState(
+		accessibleState.GetStateDB(),
+		ContractAddress,
+		CalculateSlot(hosttypes.NextSequenceSendKey(portID, channelID)),
+		state,
+	)
 }
 
 // setNextSequenceRecv sets a channel's next receive sequence to the store
 func setNextSequenceRecv(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64) {
-	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, sequence)
-	key := calculateKey(hosttypes.NextSequenceRecvKey(portID, channelID))
-	accessibleState.GetStateDB().SetPrecompileState(key, b)
+	state := make([]byte, 8)
+	binary.BigEndian.PutUint64(state, sequence)
+	setState(
+		accessibleState.GetStateDB(),
+		ContractAddress,
+		CalculateSlot(hosttypes.NextSequenceRecvKey(portID, channelID)),
+		state,
+	)
 }
 
 // setNextSequenceAck sets a channel's next ack sequence to the store
 func setNextSequenceAck(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64) {
-	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, sequence)
-
-	key := calculateKey(hosttypes.NextSequenceAckKey(portID, channelID))
-	accessibleState.GetStateDB().SetPrecompileState(key, b)
+	state := make([]byte, 8)
+	binary.BigEndian.PutUint64(state, sequence)
+	setState(
+		accessibleState.GetStateDB(),
+		ContractAddress,
+		CalculateSlot(hosttypes.NextSequenceRecvKey(portID, channelID)),
+		state,
+	)
 }
 
 func _chanOpenInit(opts *callOpts[ChanOpenInitInput]) error {
@@ -71,7 +78,7 @@ func _chanOpenInit(opts *callOpts[ChanOpenInitInput]) error {
 	}
 
 	// connection hop length checked on msg.ValidateBasic()
-	connectionEnd, err := getConnection(statedb, channel.ConnectionHops[0])
+	connectionEnd, err := GetConnection(statedb, channel.ConnectionHops[0])
 	if err != nil {
 		return fmt.Errorf("can't read connection: %w", err)
 	}
@@ -91,7 +98,7 @@ func _chanOpenInit(opts *callOpts[ChanOpenInitInput]) error {
 		)
 	}
 
-	_, err = getClientState(statedb, connectionEnd.ClientId)
+	_, err = GetClientState(statedb, connectionEnd.ClientId)
 	if err != nil {
 		return fmt.Errorf("can't read client state: %w", err)
 	}
@@ -103,10 +110,10 @@ func _chanOpenInit(opts *callOpts[ChanOpenInitInput]) error {
 	setNextSequenceAck(opts.accessibleState, opts.args.PortID, channelID, 1)
 
 	channelNew := channeltypes.NewChannel(channeltypes.INIT, channel.Ordering, channel.Counterparty, channel.ConnectionHops, channel.Version)
-	if err := setCapability(statedb, opts.args.PortID, channelID); err != nil {
+	if err := SetCapability(statedb, opts.args.PortID, channelID); err != nil {
 		return fmt.Errorf("can't store capability: %w", err)
 	}
-	if err := setChannel(statedb, opts.args.PortID, channelID, &channelNew); err != nil {
+	if err := SetChannel(statedb, opts.args.PortID, channelID, &channelNew); err != nil {
 		return fmt.Errorf("can't store channel data: %w", err)
 	}
 
@@ -125,12 +132,12 @@ func channelStateVerification(
 ) error {
 	clientID := connection.GetClientID()
 
-	clientState, err := getClientState(accessibleState.GetStateDB(), clientID)
+	clientState, err := GetClientState(accessibleState.GetStateDB(), clientID)
 	if err != nil {
 		return fmt.Errorf("can't read client state: %w", err)
 	}
 
-	consensusState, err := getConsensusState(accessibleState.GetStateDB(), clientID, clientState.GetLatestHeight())
+	consensusState, err := GetConsensusState(accessibleState.GetStateDB(), clientID, clientState.GetLatestHeight())
 	if err != nil {
 		return fmt.Errorf("can't read consensus state: %w", err)
 	}
@@ -184,7 +191,7 @@ func _chanOpenTry(opts *callOpts[ChanOpenTryInput]) (string, error) {
 	channelID := makeChannelID(statedb)
 
 	// connection hop length checked on msg.ValidateBasic()
-	connectionEnd, err := getConnection(statedb, channel.ConnectionHops[0])
+	connectionEnd, err := GetConnection(statedb, channel.ConnectionHops[0])
 	if err != nil {
 		return "", err
 	}
@@ -230,10 +237,10 @@ func _chanOpenTry(opts *callOpts[ChanOpenTryInput]) (string, error) {
 	setNextSequenceAck(opts.accessibleState, opts.args.PortID, channelID, 1)
 
 	channelNew := channeltypes.NewChannel(channeltypes.TRYOPEN, channel.Ordering, channel.Counterparty, channel.ConnectionHops, channel.Version)
-	if err := setCapability(statedb, opts.args.PortID, channelID); err != nil {
+	if err := SetCapability(statedb, opts.args.PortID, channelID); err != nil {
 		return "", fmt.Errorf("can't make capability [%s,%s]: %w", opts.args.PortID, channelID, err)
 	}
-	if err := setChannel(statedb, opts.args.PortID, channelID, &channelNew); err != nil {
+	if err := SetChannel(statedb, opts.args.PortID, channelID, &channelNew); err != nil {
 		return "", fmt.Errorf("can't store channel data: %w", err)
 	}
 
@@ -255,7 +262,7 @@ func _channelOpenAck(opts *callOpts[ChannelOpenAckInput]) error {
 		return fmt.Errorf("error unmarshalling proofHeight: %w", err)
 	}
 
-	channel, err := getChannel(statedb, opts.args.PortID, opts.args.ChannelID)
+	channel, err := GetChannel(statedb, opts.args.PortID, opts.args.ChannelID)
 	if err != nil {
 		return fmt.Errorf("can't read channel: %w", err)
 	}
@@ -264,7 +271,7 @@ func _channelOpenAck(opts *callOpts[ChannelOpenAckInput]) error {
 		return fmt.Errorf("channel state should be INIT (got %s), err: %w", channel.State.String(), channeltypes.ErrInvalidChannelState)
 	}
 
-	connectionEnd, err := getConnection(statedb, channel.ConnectionHops[0])
+	connectionEnd, err := GetConnection(statedb, channel.ConnectionHops[0])
 	if err != nil {
 		return fmt.Errorf("can't read connection: %w", err)
 	}
@@ -281,7 +288,7 @@ func _channelOpenAck(opts *callOpts[ChannelOpenAckInput]) error {
 		opts.args.ChannelID,
 	)
 
-	ok, err := getCapability(opts.accessibleState.GetStateDB(), opts.args.PortID, opts.args.ChannelID)
+	ok, err := GetCapability(opts.accessibleState.GetStateDB(), opts.args.PortID, opts.args.ChannelID)
 	if !ok {
 		return fmt.Errorf("caller does not own port capability for port ID %s, %w", opts.args.PortID, err)
 	}
@@ -300,7 +307,7 @@ func _channelOpenAck(opts *callOpts[ChannelOpenAckInput]) error {
 	channel.Version = opts.args.CounterpartyVersion
 	channel.Counterparty.ChannelId = opts.args.CounterpartyChannelID
 
-	if err := setChannel(statedb, opts.args.PortID, opts.args.ChannelID, channel); err != nil {
+	if err := SetChannel(statedb, opts.args.PortID, opts.args.ChannelID, channel); err != nil {
 		return fmt.Errorf("can't store channel data: %w", err)
 	}
 	return nil
@@ -319,12 +326,12 @@ func _channelOpenConfirm(opts *callOpts[ChannelOpenConfirmInput]) error {
 		return fmt.Errorf("error unmarshalling proofHeight: %w", err)
 	}
 
-	channel, err := getChannel(statedb, opts.args.PortID, opts.args.ChannelID)
+	channel, err := GetChannel(statedb, opts.args.PortID, opts.args.ChannelID)
 	if err != nil {
 		return fmt.Errorf("can't read channel: %w", err)
 	}
 
-	ok, err := getCapability(opts.accessibleState.GetStateDB(), opts.args.PortID, opts.args.ChannelID)
+	ok, err := GetCapability(opts.accessibleState.GetStateDB(), opts.args.PortID, opts.args.ChannelID)
 	if !ok {
 		return fmt.Errorf("caller does not own port capability for port ID %s, %w", opts.args.PortID, err)
 	}
@@ -333,7 +340,7 @@ func _channelOpenConfirm(opts *callOpts[ChannelOpenConfirmInput]) error {
 		return fmt.Errorf("channel state is not TRYOPEN (got %s), err: %w", channel.State.String(), channeltypes.ErrInvalidChannelState)
 	}
 
-	connectionEnd, err := getConnection(statedb, channel.ConnectionHops[0])
+	connectionEnd, err := GetConnection(statedb, channel.ConnectionHops[0])
 	if err != nil {
 		return fmt.Errorf("can't read connection: %w", err)
 	}
@@ -359,7 +366,7 @@ func _channelOpenConfirm(opts *callOpts[ChannelOpenConfirmInput]) error {
 	}
 	channel.State = channeltypes.OPEN
 
-	if err := setChannel(statedb, opts.args.PortID, opts.args.ChannelID, channel); err != nil {
+	if err := SetChannel(statedb, opts.args.PortID, opts.args.ChannelID, channel); err != nil {
 		return fmt.Errorf("can't store channel data: %w", err)
 	}
 	return nil
@@ -368,7 +375,7 @@ func _channelOpenConfirm(opts *callOpts[ChannelOpenConfirmInput]) error {
 func _channelCloseInit(opts *callOpts[ChannelCloseInitInput]) error {
 	statedb := opts.accessibleState.GetStateDB()
 
-	channel, err := getChannel(statedb, opts.args.PortID, opts.args.ChannelID)
+	channel, err := GetChannel(statedb, opts.args.PortID, opts.args.ChannelID)
 	if err != nil {
 		return fmt.Errorf("can't read channel: %w", err)
 	}
@@ -381,12 +388,12 @@ func _channelCloseInit(opts *callOpts[ChannelCloseInitInput]) error {
 		return fmt.Errorf("length channel.ConnectionHops == 0")
 	}
 
-	connectionEnd, err := getConnection(statedb, channel.ConnectionHops[0])
+	connectionEnd, err := GetConnection(statedb, channel.ConnectionHops[0])
 	if err != nil {
 		return fmt.Errorf("can't read connection: %w", err)
 	}
 
-	_, err = getClientState(opts.accessibleState.GetStateDB(), connectionEnd.ClientId)
+	_, err = GetClientState(opts.accessibleState.GetStateDB(), connectionEnd.ClientId)
 	if err != nil {
 		return fmt.Errorf("can't read client state: %w", err)
 	}
@@ -396,7 +403,7 @@ func _channelCloseInit(opts *callOpts[ChannelCloseInitInput]) error {
 	}
 
 	channel.State = channeltypes.CLOSED
-	if err := setChannel(statedb, opts.args.PortID, opts.args.ChannelID, channel); err != nil {
+	if err := SetChannel(statedb, opts.args.PortID, opts.args.ChannelID, channel); err != nil {
 		return fmt.Errorf("can't store channel data: %w", err)
 	}
 	return nil
@@ -415,7 +422,7 @@ func _channelCloseConfirm(opts *callOpts[ChannelCloseConfirmInput]) error {
 		return fmt.Errorf("error unmarshalling proofHeight: %w", err)
 	}
 
-	channel, err := getChannel(statedb, opts.args.PortID, opts.args.ChannelID)
+	channel, err := GetChannel(statedb, opts.args.PortID, opts.args.ChannelID)
 	if err != nil {
 		return fmt.Errorf("can't read channel: %w", err)
 	}
@@ -424,7 +431,7 @@ func _channelCloseConfirm(opts *callOpts[ChannelCloseConfirmInput]) error {
 		return fmt.Errorf("channel is already CLOSED: %w", channeltypes.ErrInvalidChannelState)
 	}
 
-	connectionEnd, err := getConnection(statedb, channel.ConnectionHops[0])
+	connectionEnd, err := GetConnection(statedb, channel.ConnectionHops[0])
 	if err != nil {
 		return fmt.Errorf("can't read connection: %w", err)
 	}
@@ -449,7 +456,7 @@ func _channelCloseConfirm(opts *callOpts[ChannelCloseConfirmInput]) error {
 	}
 
 	channel.State = channeltypes.CLOSED
-	if err := setChannel(statedb, opts.args.PortID, opts.args.ChannelID, channel); err != nil {
+	if err := SetChannel(statedb, opts.args.PortID, opts.args.ChannelID, channel); err != nil {
 		return fmt.Errorf("can't store channel data: %w", err)
 	}
 	return nil

@@ -2,7 +2,6 @@ package ibc
 
 import (
 	"bytes"
-	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -62,7 +61,7 @@ func TestSplit(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := split(tc.input)
+			result := splitState(tc.input)
 			if len(tc.output) != len(result) {
 				t.Errorf("result lenght mismatch: expected %d got %d", len(tc.output), len(result))
 
@@ -149,23 +148,12 @@ func TestJoin(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := join(tc.input)
+			result := joinChunks(tc.input)
 			if !bytes.Equal(tc.output, result) {
 				t.Errorf("expected %+x got %+x", tc.output, result)
 			}
 		})
 	}
-}
-
-func TestPackBytesToEVMStorage(t *testing.T) {
-	input := []byte{0xde, 0xad, 0xbe, 0xaf} // The byte slice to be packed
-	packedBytes, err := packBytesToEVMStorage(input)
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
-
-	fmt.Printf("Packed Bytes: %x\n", packedBytes)
 }
 
 func TestChunkSize(t *testing.T) {

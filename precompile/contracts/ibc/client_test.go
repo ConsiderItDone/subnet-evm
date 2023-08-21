@@ -155,7 +155,7 @@ func TestUpdateClient(t *testing.T) {
 				coordinator.CommitBlock(chainB) // this height is filled in by the update below
 
 				require.NoError(t, path.EndpointA.UpdateClient())
-				require.NoError(t, setClientState(
+				require.NoError(t, SetClientState(
 					state,
 					path.EndpointA.ClientID,
 					clientState.(*ibctm.ClientState),
@@ -166,7 +166,7 @@ func TestUpdateClient(t *testing.T) {
 					Timestamp:          time.Now(),
 					NextValidatorsHash: chainB.Vals.Hash(),
 				}
-				require.NoError(t, setConsensusState(
+				require.NoError(t, SetConsensusState(
 					state,
 					path.EndpointA.ClientID,
 					clientState.GetLatestHeight(),
@@ -228,7 +228,7 @@ func TestUpdateClient(t *testing.T) {
 				require.True(t, ok)
 
 				tmClient.LatestHeight = tmClient.LatestHeight.Increment().(clienttypes.Height)
-				require.NoError(t, setClientState(
+				require.NoError(t, SetClientState(
 					state,
 					path.EndpointA.ClientID,
 					clientState.(*ibctm.ClientState),
@@ -241,7 +241,7 @@ func TestUpdateClient(t *testing.T) {
 			BeforeHook: func(t testing.TB, state contract.StateDB) {
 				clientState := path.EndpointA.GetClientState().(*ibctm.ClientState)
 				clientState.FrozenHeight = clienttypes.NewHeight(1, 1)
-				require.NoError(t, setClientState(
+				require.NoError(t, SetClientState(
 					state,
 					path.EndpointA.ClientID,
 					clientState,
@@ -264,6 +264,7 @@ func TestUpdateClient(t *testing.T) {
 
 	// Run tests.
 	for name, test := range tests {
+		test := test
 		t.Run(name, func(t *testing.T) {
 			if name != "misbehaviour detection: conflicting header" {
 				statedb = state.NewTestStateDB(t)
@@ -272,6 +273,11 @@ func TestUpdateClient(t *testing.T) {
 
 			path = ibctesting.NewPath(chainA, chainB)
 			coordinator.SetupClients(path)
+
+			if test.BeforeHook != nil {
+				test.BeforeHook(t, statedb)
+				test.BeforeHook = nil
+			}
 
 			test.Caller = common.Address{1}
 			test.SuppliedGas = UpgradeClientGasCost
@@ -432,11 +438,11 @@ func TestUpgradeClient(t *testing.T) {
 
 				if cs != nil {
 					clientState = cs.(*ibctm.ClientState)
-					setClientState(statedb, clientState.ChainId, clientState)
+					SetClientState(statedb, clientState.ChainId, clientState)
 
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
-					setConsensusState(statedb, clientState.ChainId, clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					SetConsensusState(statedb, clientState.ChainId, clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
 				}
 			}
 			test.Caller = common.Address{1}

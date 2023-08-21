@@ -1,7 +1,6 @@
 package ibc
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 
@@ -21,15 +20,11 @@ import (
 )
 
 func makeConnectionID(db contract.StateDB) string {
-	connSeq := uint64(0)
-	if db.Exist(common.BytesToAddress([]byte("nextConnSeq"))) {
-		b := db.GetPrecompileState(common.BytesToAddress([]byte("nextConnSeq")))
-		connSeq = binary.BigEndian.Uint64(b)
-	}
-	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, connSeq+1)
-	db.SetPrecompileState(common.BytesToAddress([]byte("nextConnSeq")), b)
-	return fmt.Sprintf("%s%d", "connection-", connSeq)
+	connSeq := db.GetState(ContractAddress, ConnectionSequenceSlot).Big()
+	connID := fmt.Sprintf("connection-%d", connSeq.Int64())
+	connSeq.Add(connSeq, common.Big1)
+	db.SetState(ContractAddress, ConnectionSequenceSlot, common.BigToHash(connSeq))
+	return connID
 }
 
 func _connOpenInit(opts *callOpts[ConnOpenInitInput]) (string, error) {
@@ -54,7 +49,7 @@ func _connOpenInit(opts *callOpts[ConnOpenInitInput]) (string, error) {
 	}
 
 	// check ClientState exists in database
-	_, err := getClientState(statedb, opts.args.ClientID)
+	_, err := GetClientState(statedb, opts.args.ClientID)
 	if err != nil {
 		return "", err
 	}
@@ -63,10 +58,10 @@ func _connOpenInit(opts *callOpts[ConnOpenInitInput]) (string, error) {
 
 	// connection defines chain A's ConnectionEnd
 	connection := connectiontypes.NewConnectionEnd(connectiontypes.INIT, opts.args.ClientID, *counterparty, connectiontypes.ExportedVersionsToProto(versions), uint64(opts.args.DelayPeriod))
-	if err := setConnection(statedb, connectionID, &connection); err != nil {
+	if err := SetConnection(statedb, connectionID, &connection); err != nil {
 		return "", fmt.Errorf("can't save connection: %w", err)
 	}
-	if err := addLog(opts.accessibleState, GeneratedConnectionIdentifier.RawName, opts.args.ClientID, connectionID); err != nil {
+	if err := AddLog(opts.accessibleState, GeneratedConnectionIdentifier.RawName, opts.args.ClientID, connectionID); err != nil {
 		return "", fmt.Errorf("error packing event: %w", err)
 	}
 
@@ -131,10 +126,10 @@ func _connOpenTry(opts *callOpts[ConnOpenTryInput]) (string, error) {
 		return "", fmt.Errorf("error connectionVerification: %w", err)
 	}
 
-	if err := setConnection(statedb, connectionID, &connection); err != nil {
+	if err := SetConnection(statedb, connectionID, &connection); err != nil {
 		return "", fmt.Errorf("can't save connection: %w", err)
 	}
-	if err := addLog(opts.accessibleState, GeneratedConnectionIdentifier.RawName, opts.args.ClientID, connectionID); err != nil {
+	if err := AddLog(opts.accessibleState, GeneratedConnectionIdentifier.RawName, opts.args.ClientID, connectionID); err != nil {
 		return "", fmt.Errorf("error packing event: %w", err)
 	}
 
@@ -170,7 +165,7 @@ func _connOpenAck(opts *callOpts[ConnOpenAckInput]) error {
 		return fmt.Errorf("error unmarshalling consensusHeight: %w", err)
 	}
 
-	connection, err := getConnection(statedb, opts.args.ConnectionID)
+	connection, err := GetConnection(statedb, opts.args.ConnectionID)
 	if err != nil {
 		return fmt.Errorf("can't get connection: %w", err)
 	}
@@ -202,7 +197,7 @@ func _connOpenAck(opts *callOpts[ConnOpenAckInput]) error {
 	connection.Versions = []*connectiontypes.Version{&version}
 	connection.Counterparty.ConnectionId = string(opts.args.CounterpartyConnectionID)
 
-	if err := setConnection(statedb, opts.args.ConnectionID, connection); err != nil {
+	if err := SetConnection(statedb, opts.args.ConnectionID, connection); err != nil {
 		return fmt.Errorf("can't save connection: %w", err)
 	}
 
@@ -222,7 +217,7 @@ func _connOpenConfirm(opts *callOpts[ConnOpenConfirmInput]) error {
 		return fmt.Errorf("error unmarshalling proofHeight: %w", err)
 	}
 
-	connection, err := getConnection(statedb, opts.args.ConnectionID)
+	connection, err := GetConnection(statedb, opts.args.ConnectionID)
 	if err != nil {
 		return fmt.Errorf("cannot find connection: %w", err)
 	}
@@ -242,12 +237,12 @@ func _connOpenConfirm(opts *callOpts[ConnOpenConfirmInput]) error {
 
 	clientID := connection.GetClientID()
 
-	clientState, err := getClientState(statedb, clientID)
+	clientState, err := GetClientState(statedb, clientID)
 	if err != nil {
 		return fmt.Errorf("error loading client state, err: %w", err)
 	}
 
-	consensusState, err := getConsensusState(statedb, clientID, clientState.GetLatestHeight())
+	consensusState, err := GetConsensusState(statedb, clientID, clientState.GetLatestHeight())
 	if err != nil {
 		return fmt.Errorf("can't get consensus state: %w", err)
 	}
@@ -276,7 +271,7 @@ func _connOpenConfirm(opts *callOpts[ConnOpenConfirmInput]) error {
 	// Update ChainB's connection to Open
 	connection.State = connectiontypes.OPEN
 
-	if err := setConnection(statedb, opts.args.ConnectionID, connection); err != nil {
+	if err := SetConnection(statedb, opts.args.ConnectionID, connection); err != nil {
 		return fmt.Errorf("can't save connection: %w", err)
 	}
 	return nil
@@ -292,12 +287,12 @@ func clientVerification(
 ) error {
 	clientID := connection.GetClientID()
 
-	targetClientState, err := getClientState(accessibleState.GetStateDB(), clientID)
+	targetClientState, err := GetClientState(accessibleState.GetStateDB(), clientID)
 	if err != nil {
 		return fmt.Errorf("error loading client state, err: %w", err)
 	}
 
-	consensusState, err := getConsensusState(accessibleState.GetStateDB(), clientID, targetClientState.GetLatestHeight())
+	consensusState, err := GetConsensusState(accessibleState.GetStateDB(), clientID, targetClientState.GetLatestHeight())
 	if err != nil {
 		return fmt.Errorf("error loading consensus state, err: %w", err)
 	}
@@ -339,12 +334,12 @@ func connectionVerification(
 ) error {
 	clientID := connection.GetClientID()
 
-	clientState, err := getClientState(accessibleState.GetStateDB(), clientID)
+	clientState, err := GetClientState(accessibleState.GetStateDB(), clientID)
 	if err != nil {
 		return fmt.Errorf("error loading client state, err: %w", err)
 	}
 
-	consensusState, err := getConsensusState(accessibleState.GetStateDB(), clientID, clientState.GetLatestHeight())
+	consensusState, err := GetConsensusState(accessibleState.GetStateDB(), clientID, clientState.GetLatestHeight())
 	if err != nil {
 		return fmt.Errorf("error loading consensus state, err: %w", err)
 	}
