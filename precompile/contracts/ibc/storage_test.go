@@ -57,6 +57,25 @@ func TestSplit(t *testing.T) {
 				common.BytesToHash(common.Hex2Bytes("deadbeafdeadbeafdeadbeafdeadbeafdeadbeafdeadbeafdeadbeafdeadbeaf")),
 			},
 		},
+		{
+			"34 bytes",
+			[]byte{
+				0xde, 0xad, 0xbe, 0xaf,
+				0xde, 0xad, 0xbe, 0xaf,
+				0xde, 0xad, 0xbe, 0xaf,
+				0xde, 0xad, 0xbe, 0xaf,
+				0xde, 0xad, 0xbe, 0xaf,
+				0xde, 0xad, 0xbe, 0xaf,
+				0xde, 0xad, 0xbe, 0xaf,
+				0xde, 0xad, 0xbe, 0xaf,
+				0xde, 0xad,
+			},
+			[]common.Hash{
+				common.BytesToHash(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000045")),
+				common.BytesToHash(common.Hex2Bytes("deadbeafdeadbeafdeadbeafdeadbeafdeadbeafdeadbeafdeadbeafdeadbeaf")),
+				common.BytesToHash(common.Hex2Bytes("dead000000000000000000000000000000000000000000000000000000000000")),
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -68,7 +87,7 @@ func TestSplit(t *testing.T) {
 			}
 			for i, hash := range tc.output {
 				if !bytes.Equal(hash.Bytes(), result[i].Bytes()) {
-					t.Errorf("expected %+x got %+x", tc.output, result)
+					t.Errorf("hash %d: expected %+x got %+x", i, hash, result[i])
 				}
 			}
 		})
@@ -279,7 +298,7 @@ func TestChunkSize(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			size := chunkSize(tc.input)
+			size := chunkSize(len(tc.input))
 			if size != tc.chunkSize {
 				t.Errorf("expected %d got %d", tc.chunkSize, size)
 			}

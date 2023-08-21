@@ -24,11 +24,12 @@ func getChunks(db contract.StateDB, addr common.Address, slot common.Hash) []com
 	firstChunkBn.Div(firstChunkBn, big.NewInt(2))
 
 	length := firstChunkBn.Int64()
-	chunkAmount := length / common.HashLength
+	chunkAmount := chunkSize(int(length))
 
-	chunks := make([]common.Hash, 0, chunkAmount)
+	chunks := make([]common.Hash, 0, chunkAmount+1)
+	chunks = append(chunks, firstChunk)
 	hash := crypto.Keccak256Hash(slot.Bytes())
-	for i := 1; i <= int(chunkAmount); i++ {
+	for i := 1; i < chunkAmount; i++ {
 		slotBn := hash.Big()
 		slotBn.Add(slotBn, big.NewInt(int64(i-1)))
 		key := common.BytesToHash(slotBn.Bytes())
@@ -86,10 +87,9 @@ func GetState(db contract.StateDB, slot common.Hash) ([]byte, error) {
 	return state, nil
 }
 
-func chunkSize(data []byte) int {
-	dataLen := len(data)
-	quotient := dataLen / common.HashLength
-	remainder := dataLen % common.HashLength
+func chunkSize(length int) int {
+	quotient := length / common.HashLength
+	remainder := length % common.HashLength
 
 	// 1 byte reserved for length of data encoded into payload
 	if quotient == 0 && remainder <= common.HashLength-1 {
@@ -106,7 +106,7 @@ func chunkSize(data []byte) int {
 }
 
 func splitState(data []byte) []common.Hash {
-	chunkSize := chunkSize(data)
+	chunkSize := chunkSize(len(data))
 
 	var chunk common.Hash
 	chunks := make([]common.Hash, 0, chunkSize)
@@ -130,7 +130,7 @@ func splitState(data []byte) []common.Hash {
 		chunks = append(chunks, chunk)
 	}
 	if len(data) > 0 {
-		chunks = append(chunks, common.BytesToHash(data))
+		chunks = append(chunks, common.BytesToHash(common.RightPadBytes(data, 32)))
 	}
 
 	return chunks
