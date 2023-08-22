@@ -2,13 +2,10 @@ package ibc
 
 import (
 	"fmt"
-	"reflect"
-	"strings"
 
 	"github.com/ava-labs/subnet-evm/accounts/abi"
 	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/ava-labs/subnet-evm/vmerrs"
-	hosttypes "github.com/cosmos/ibc-go/v7/modules/core/24-host"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -49,79 +46,17 @@ func bindPort(accessibleState contract.AccessibleState, caller common.Address, a
 
 	portID := inputStruct
 
-	_, ok, _ := getPort(accessibleState.GetStateDB(), portID)
-	if ok {
+	if _, err := GetPort(accessibleState.GetStateDB(), portID); err == nil {
 		return nil, remainingGas, fmt.Errorf("port with portID: %s already bound", portID)
 	}
-	err = storePortID(accessibleState.GetStateDB(), portID, caller)
-	if err != nil {
+
+	if err = SetPort(accessibleState.GetStateDB(), portID, caller); err != nil {
 		return nil, remainingGas, err
 	}
+
 	// this function does not return an output, leave this one as is
 	packedOutput := []byte{}
 
 	// Return the packed output and the remaining gas
 	return packedOutput, remainingGas, nil
-}
-
-func storePortID(db contract.StateDB, portID string, caller common.Address) error {
-	if err := hosttypes.PortIdentifierValidator(portID); err != nil {
-		panic(err.Error())
-	}
-
-	bz := caller[:]
-
-	key := calculateKey([]byte(hosttypes.PortPath(portID)))
-	db.SetPrecompileState(common.BytesToAddress([]byte(key)), bz)
-	return nil
-}
-
-func getPort(db contract.StateDB, portID string) (common.Address, bool, error) {
-	key := calculateKey([]byte(hosttypes.PortPath(portID)))
-	bz := db.GetPrecompileState(common.BytesToAddress([]byte(key)))
-
-	if len(bz) == 0 {
-		return common.Address{}, false, fmt.Errorf("Bind port with this portID: %s not exist", portID)
-	}
-
-	if len(bz) != common.AddressLength {
-		return common.Address{}, false, fmt.Errorf("Lenght of data by this portID: %s, not equal AddressLength", portID)
-	}
-
-	return common.BytesToAddress([]byte(bz)), true, nil
-}
-
-func makeCapability(db contract.StateDB, portID, channelID string) error {
-	name := hosttypes.ChannelCapabilityPath(portID, channelID)
-
-	if strings.TrimSpace(name) == "" {
-		return fmt.Errorf("capability name cannot be empty")
-	}
-
-	if ok, _ := getCapability(db, portID, channelID); ok {
-		return fmt.Errorf("Capability with portID: %s, name: %s already exist", portID, name)
-	}
-
-	bz := []byte{1}
-
-	key := calculateKey([]byte(name))
-	db.SetPrecompileState(common.BytesToAddress([]byte(key)), bz)
-	return nil
-}
-
-func getCapability(db contract.StateDB, portID, channelID string) (bool, error) {
-	name := hosttypes.ChannelCapabilityPath(portID, channelID)
-	key := calculateKey([]byte(name))
-	bz := db.GetPrecompileState(common.BytesToAddress([]byte(key)))
-
-	if len(bz) == 0 {
-		return false, fmt.Errorf("Capability with this name: %s not exist", name)
-	}
-
-	// TODO make deleteCapability func to operate all condition of variable
-	if !reflect.DeepEqual(bz, []byte{1}) {
-		return false, fmt.Errorf("Capability with this name: %s has bad data", name)
-	}
-
-	return true, nil
 }

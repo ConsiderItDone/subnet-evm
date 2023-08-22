@@ -58,8 +58,9 @@ var (
 	GeneratedClientIdentifier     = IBCABI.Events["ClientCreated"]
 	GeneratedConnectionIdentifier = IBCABI.Events["ConnectionCreated"]
 
-	nextClientSeqStorageKey = common.Hash{'n', 'c', 's', 'e', 'q', 's', 'k'}
-	clientStateStorageKey   = common.Hash{'c', 's', 't', 's', 'k'}
+	ClientSequenceSlot     = common.BytesToHash([]byte("client-sequence"))
+	ConnectionSequenceSlot = common.BytesToHash([]byte("connection-sequence"))
+	ChannelSequenceSlot    = common.BytesToHash([]byte("channel-sequence"))
 
 	ErrWrongClientType = errors.New("wrong client type. Only Tendermint supported")
 )

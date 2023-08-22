@@ -23,6 +23,10 @@ import (
 
 const doesnotexist = "doesnotexist"
 
+func malleateHeight(height clienttypes.Height, diff uint64) clienttypes.Height {
+	return clienttypes.NewHeight(height.GetRevisionNumber(), height.GetRevisionHeight()+diff)
+}
+
 func TestChanOpenInit(t *testing.T) {
 	coordinator := ibctesting.NewCoordinator(t, 2)
 	chainA := coordinator.GetChain(ibctesting.GetChainID(1))
@@ -80,20 +84,17 @@ func TestChanOpenInit(t *testing.T) {
 			require.NoError(t, err)
 
 			connection, _ := chainA.App.GetIBCKeeper().ConnectionKeeper.GetConnection(chainA.GetContext(), path.EndpointA.ConnectionID)
-			connectionByte := marshaler.MustMarshal(&connection)
-			connectionsPath := fmt.Sprintf("connections/%s", path.EndpointA.ConnectionID)
-			statedb.SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
+			SetConnection(statedb, path.EndpointA.ConnectionID, &connection)
 
 			cs, _ := chainA.App.GetIBCKeeper().ClientKeeper.GetClientState(chainA.GetContext(), path.EndpointA.ClientID)
 			cStore := chainA.App.GetIBCKeeper().ClientKeeper.ClientStore(chainA.GetContext(), path.EndpointA.ClientID)
-
 			if cs != nil {
 				clientState := cs.(*ibctm.ClientState)
 				bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 				consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 
-				storeClientState(statedb, connection.GetClientID(), clientState)
-				storeConsensusState(statedb, connection.GetClientID(), consensusState.(*ibctm.ConsensusState), clientState.GetLatestHeight())
+				SetClientState(statedb, connection.GetClientID(), clientState)
+				SetConsensusState(statedb, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
 			}
 
 			test.Input = input
@@ -120,7 +121,7 @@ func TestChanOpenTry(t *testing.T) {
 		heightDiff uint64
 	)
 
-	res, err := PackChanOpenTryOutput("channel-1")
+	res, err := PackChanOpenTryOutput("channel-0")
 	require.NoError(t, err)
 
 	tests := map[string]testutils.PrecompileTest{
@@ -226,19 +227,16 @@ func TestChanOpenTry(t *testing.T) {
 			require.NoError(t, err)
 
 			connection, _ := chainB.App.GetIBCKeeper().ConnectionKeeper.GetConnection(chainB.GetContext(), path.EndpointB.ConnectionID)
-			connectionByte := marshaler.MustMarshal(&connection)
-			connectionsPath := fmt.Sprintf("connections/%s", path.EndpointB.ConnectionID)
-			statedb.SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
+			SetConnection(statedb, path.EndpointB.ConnectionID, &connection)
 
 			cs, _ := chainB.App.GetIBCKeeper().ClientKeeper.GetClientState(chainB.GetContext(), path.EndpointB.ClientID)
 			cStore := chainB.App.GetIBCKeeper().ClientKeeper.ClientStore(chainB.GetContext(), path.EndpointB.ClientID)
-
 			if cs != nil {
 				clientState := cs.(*ibctm.ClientState)
 				bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 				consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
-				storeClientState(statedb, connection.GetClientID(), clientState)
-				storeConsensusState(statedb, connection.GetClientID(), consensusState.(*ibctm.ConsensusState), clientState.GetLatestHeight())
+				SetClientState(statedb, connection.GetClientID(), clientState)
+				SetConsensusState(statedb, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
 			}
 
 			test.Input = input
@@ -313,7 +311,7 @@ func TestChanOpenAck(t *testing.T) {
 				channel.ConnectionHops[0] = doesnotexist
 				chainA.App.GetIBCKeeper().ChannelKeeper.SetChannel(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, channel)
 			},
-			ExpectedErr: "cannot find connection with path",
+			ExpectedErr: "can't read connection",
 		},
 		"connection is not OPEN": {
 			BeforeHook: func(t testing.TB, state contract.StateDB) {
@@ -377,8 +375,7 @@ func TestChanOpenAck(t *testing.T) {
 				require.NoError(t, path.EndpointA.UpdateClient())
 			}
 
-			channelKey := hosttypes.ChannelKey(path.EndpointB.ChannelConfig.PortID, ibctesting.FirstChannelID)
-			proof, proofHeight := chainB.QueryProof(channelKey)
+			proof, proofHeight := chainB.QueryProof(hosttypes.ChannelKey(path.EndpointB.ChannelConfig.PortID, ibctesting.FirstChannelID))
 
 			height := malleateHeight(proofHeight, heightDiff)
 			consensusHeightByte, err := marshaler.Marshal(&height)
@@ -394,25 +391,22 @@ func TestChanOpenAck(t *testing.T) {
 			})
 			require.NoError(t, err)
 
+			SetCapability(statedb, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID)
+
 			channel, _ := chainA.App.GetIBCKeeper().ChannelKeeper.GetChannel(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID)
-			chanByte := marshaler.MustMarshal(&channel)
-			chanPath := hosttypes.ChannelKey(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID)
-			statedb.SetPrecompileState(common.BytesToAddress(chanPath), chanByte)
+			SetChannel(statedb, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, &channel)
 
 			connection, _ := chainA.App.GetIBCKeeper().ConnectionKeeper.GetConnection(chainA.GetContext(), path.EndpointA.ConnectionID)
-			connectionByte := marshaler.MustMarshal(&connection)
-			connectionsPath := fmt.Sprintf("connections/%s", path.EndpointA.ConnectionID)
-			statedb.SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
+			SetConnection(statedb, path.EndpointA.ConnectionID, &connection)
 
 			cs, _ := chainA.App.GetIBCKeeper().ClientKeeper.GetClientState(chainA.GetContext(), path.EndpointA.ClientID)
 			cStore := chainA.App.GetIBCKeeper().ClientKeeper.ClientStore(chainA.GetContext(), path.EndpointA.ClientID)
-
 			if cs != nil {
 				clientState := cs.(*ibctm.ClientState)
 				bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 				consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
-				storeClientState(statedb, connection.GetClientID(), clientState)
-				storeConsensusState(statedb, connection.GetClientID(), consensusState.(*ibctm.ConsensusState), clientState.GetLatestHeight())
+				SetClientState(statedb, connection.GetClientID(), clientState)
+				SetConsensusState(statedb, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
 			}
 
 			test.Input = input
@@ -470,7 +464,7 @@ func TestChanOpenConfirm(t *testing.T) {
 				channel.ConnectionHops[0] = doesnotexist
 				chainB.App.GetIBCKeeper().ChannelKeeper.SetChannel(chainB.GetContext(), path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, channel)
 			},
-			ExpectedErr: "cannot find connection with path",
+			ExpectedErr: "can't read connection: empty precompile state",
 		},
 		"connection is not OPEN": {
 			BeforeHook: func(t testing.TB, state contract.StateDB) {
@@ -478,7 +472,7 @@ func TestChanOpenConfirm(t *testing.T) {
 				require.NoError(t, path.EndpointB.ConnOpenInit())
 				chainB.CreateChannelCapability(chainB.GetSimApp().ScopedIBCMockKeeper, path.EndpointB.ChannelConfig.PortID, ibctesting.FirstChannelID)
 			},
-			ExpectedErr: "cannot find channel state with path",
+			ExpectedErr: "can't read channel",
 		},
 		"consensus state not found": {
 			BeforeHook: func(t testing.TB, state contract.StateDB) {
@@ -527,8 +521,7 @@ func TestChanOpenConfirm(t *testing.T) {
 				require.NoError(t, path.EndpointB.UpdateClient())
 			}
 
-			channelKey := hosttypes.ChannelKey(path.EndpointA.ChannelConfig.PortID, ibctesting.FirstChannelID)
-			proof, proofHeight := chainA.QueryProof(channelKey)
+			proof, proofHeight := chainA.QueryProof(hosttypes.ChannelKey(path.EndpointA.ChannelConfig.PortID, ibctesting.FirstChannelID))
 
 			height := malleateHeight(proofHeight, heightDiff)
 			consensusHeightByte, err := marshaler.Marshal(&height)
@@ -542,15 +535,13 @@ func TestChanOpenConfirm(t *testing.T) {
 			})
 			require.NoError(t, err)
 
+			SetCapability(statedb, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID)
+
 			channel, _ := chainB.App.GetIBCKeeper().ChannelKeeper.GetChannel(chainB.GetContext(), path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID)
-			chanByte := marshaler.MustMarshal(&channel)
-			chanPath := hosttypes.ChannelKey(path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID)
-			statedb.SetPrecompileState(common.BytesToAddress(chanPath), chanByte)
+			SetChannel(statedb, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, &channel)
 
 			connection, _ := chainB.App.GetIBCKeeper().ConnectionKeeper.GetConnection(chainB.GetContext(), path.EndpointB.ConnectionID)
-			connectionByte := marshaler.MustMarshal(&connection)
-			connectionsPath := fmt.Sprintf("connections/%s", path.EndpointB.ConnectionID)
-			statedb.SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
+			SetConnection(statedb, path.EndpointB.ConnectionID, &connection)
 
 			cs, _ := chainB.App.GetIBCKeeper().ClientKeeper.GetClientState(chainB.GetContext(), path.EndpointB.ClientID)
 			cStore := chainB.App.GetIBCKeeper().ClientKeeper.ClientStore(chainB.GetContext(), path.EndpointB.ClientID)
@@ -558,8 +549,8 @@ func TestChanOpenConfirm(t *testing.T) {
 				clientState := cs.(*ibctm.ClientState)
 				bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 				consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
-				storeClientState(statedb, connection.GetClientID(), clientState)
-				storeConsensusState(statedb, connection.GetClientID(), consensusState.(*ibctm.ConsensusState), clientState.GetLatestHeight())
+				SetClientState(statedb, connection.GetClientID(), clientState)
+				SetConsensusState(statedb, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
 			}
 
 			test.Input = input
@@ -622,7 +613,7 @@ func TestChanCloseInit(t *testing.T) {
 				chainA.App.GetIBCKeeper().ChannelKeeper.SetChannel(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, channel)
 
 			},
-			ExpectedErr: "cannot find connection with path",
+			ExpectedErr: "can't read connection",
 		},
 		"connection is not OPEN": {
 			BeforeHook: func(t testing.TB, state contract.StateDB) {
@@ -637,7 +628,7 @@ func TestChanCloseInit(t *testing.T) {
 				// ensure channel capability check passes
 				chainA.CreateChannelCapability(chainA.GetSimApp().ScopedIBCMockKeeper, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID)
 			},
-			ExpectedErr: "cannot find channel state with path",
+			ExpectedErr: "can't read channel",
 		},
 	}
 
@@ -665,14 +656,10 @@ func TestChanCloseInit(t *testing.T) {
 			require.NoError(t, err)
 
 			channel, _ := chainA.App.GetIBCKeeper().ChannelKeeper.GetChannel(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID)
-			chanByte := marshaler.MustMarshal(&channel)
-			chanPath := hosttypes.ChannelKey(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID)
-			statedb.SetPrecompileState(common.BytesToAddress(chanPath), chanByte)
+			SetChannel(statedb, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, &channel)
 
 			connection, _ := chainA.App.GetIBCKeeper().ConnectionKeeper.GetConnection(chainA.GetContext(), path.EndpointA.ConnectionID)
-			connectionByte := marshaler.MustMarshal(&connection)
-			connectionsPath := fmt.Sprintf("connections/%s", path.EndpointA.ConnectionID)
-			statedb.SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
+			SetConnection(statedb, path.EndpointA.ConnectionID, &connection)
 
 			cs, _ := chainA.App.GetIBCKeeper().ClientKeeper.GetClientState(chainA.GetContext(), path.EndpointA.ClientID)
 			cStore := chainA.App.GetIBCKeeper().ClientKeeper.ClientStore(chainA.GetContext(), path.EndpointA.ClientID)
@@ -680,8 +667,8 @@ func TestChanCloseInit(t *testing.T) {
 				clientState := cs.(*ibctm.ClientState)
 				bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 				consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
-				storeClientState(statedb, connection.GetClientID(), clientState)
-				storeConsensusState(statedb, connection.GetClientID(), consensusState.(*ibctm.ConsensusState), clientState.GetLatestHeight())
+				SetClientState(statedb, connection.GetClientID(), clientState)
+				SetConsensusState(statedb, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
 			}
 
 			test.Input = input
@@ -732,7 +719,7 @@ func TestChanCloseConfirm(t *testing.T) {
 				channel.ConnectionHops[0] = doesnotexist
 				chainB.App.GetIBCKeeper().ChannelKeeper.SetChannel(chainB.GetContext(), path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, channel)
 			},
-			ExpectedErr: "cannot find connection with path",
+			ExpectedErr: "can't read connection",
 		},
 		"connection is not OPEN": {
 			BeforeHook: func(t testing.TB, state contract.StateDB) {
@@ -747,7 +734,7 @@ func TestChanCloseConfirm(t *testing.T) {
 				// ensure channel capability check passes
 				chainB.CreateChannelCapability(chainB.GetSimApp().ScopedIBCMockKeeper, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID)
 			},
-			ExpectedErr: "cannot find channel state with path",
+			ExpectedErr: "can't read channel",
 		},
 		"consensus state not found": {
 			BeforeHook: func(t testing.TB, state contract.StateDB) {
@@ -799,24 +786,19 @@ func TestChanCloseConfirm(t *testing.T) {
 			require.NoError(t, err)
 
 			channel, _ := chainB.App.GetIBCKeeper().ChannelKeeper.GetChannel(chainB.GetContext(), path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID)
-			chanByte := marshaler.MustMarshal(&channel)
-			chanPath := hosttypes.ChannelKey(path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID)
-			statedb.SetPrecompileState(common.BytesToAddress(chanPath), chanByte)
+			SetChannel(statedb, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, &channel)
 
 			connection, _ := chainB.App.GetIBCKeeper().ConnectionKeeper.GetConnection(chainB.GetContext(), path.EndpointB.ConnectionID)
-			connectionByte := marshaler.MustMarshal(&connection)
-			connectionsPath := fmt.Sprintf("connections/%s", path.EndpointB.ConnectionID)
-			statedb.SetPrecompileState(common.BytesToAddress([]byte(connectionsPath)), connectionByte)
+			SetConnection(statedb, path.EndpointB.ConnectionID, &connection)
 
 			cs, _ := chainB.App.GetIBCKeeper().ClientKeeper.GetClientState(chainB.GetContext(), path.EndpointB.ClientID)
 			cStore := chainB.App.GetIBCKeeper().ClientKeeper.ClientStore(chainB.GetContext(), path.EndpointB.ClientID)
-
 			if cs != nil {
 				clientState := cs.(*ibctm.ClientState)
 				bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 				consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
-				storeClientState(statedb, connection.GetClientID(), clientState)
-				storeConsensusState(statedb, connection.GetClientID(), consensusState.(*ibctm.ConsensusState), clientState.GetLatestHeight())
+				SetClientState(statedb, connection.GetClientID(), clientState)
+				SetConsensusState(statedb, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
 			}
 
 			test.Input = input
@@ -826,8 +808,4 @@ func TestChanCloseConfirm(t *testing.T) {
 			test.Run(t, Module, statedb)
 		})
 	}
-}
-
-func malleateHeight(height clienttypes.Height, diff uint64) clienttypes.Height {
-	return clienttypes.NewHeight(height.GetRevisionNumber(), height.GetRevisionHeight()+diff)
 }

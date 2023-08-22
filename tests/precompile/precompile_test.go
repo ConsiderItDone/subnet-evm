@@ -54,4 +54,10 @@ func TestIBC(t *testing.T) {
 		t.Run("channel open try", utils.RunTestIncChannelOpenTry)
 		t.Run("channel open confirm", utils.RunTestIncChannelOpenConfirm)
 	})
+
+	t.Run("proof generation", func(t *testing.T) {
+		t.Run("create chain", utils.RunTestIbcInit)
+		t.Run("create clients", utils.RunTestIbcCreateClient)
+		t.Run("query proofs", utils.QueryProofs)
+	})
 }
