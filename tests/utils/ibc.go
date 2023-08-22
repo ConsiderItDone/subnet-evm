@@ -30,6 +30,8 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	wallet "github.com/ava-labs/avalanchego/wallet/subnet/primary"
+	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
+
 	"github.com/ava-labs/subnet-evm/accounts/abi/bind"
 	"github.com/ava-labs/subnet-evm/core"
 	"github.com/ava-labs/subnet-evm/core/types"
@@ -39,7 +41,6 @@ import (
 	"github.com/ava-labs/subnet-evm/precompile/contracts/ibc"
 	"github.com/ava-labs/subnet-evm/rpc"
 	contractBind "github.com/ava-labs/subnet-evm/tests/precompile/contract"
-	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
 )
 
 const (
@@ -57,6 +58,7 @@ var (
 
 	ethClient           ethclient.Client
 	subnetClient        *subnetevmclient.Client
+	subnetStorageReader *EVMStorageReader
 	ibcContract         *contractBind.Contract
 	ibcContractFilterer *contractBind.ContractFilterer
 	auth                *bind.TransactOpts
@@ -137,6 +139,7 @@ func RunTestIbcInit(t *testing.T) {
 
 	ethClient = ethclient.NewClient(rpcClient)
 	subnetClient = subnetevmclient.New(rpcClient)
+	subnetStorageReader = NewEVMStorageReader(ethClient)
 	t.Log("eth client created")
 
 	ibcContract, err = contractBind.NewContract(ibc.ContractAddress, ethClient)
@@ -470,17 +473,27 @@ func RunTestIncChannelOpenConfirm(t *testing.T) {
 func QueryProofs(t *testing.T) {
 	clientId := clientIdA
 
-	data, err := ethClient.StorageAt(context.Background(), ibc.ContractAddress, ibc.ClientSequenceSlot, nil)
-	require.NoError(t, err)
-	t.Logf("Client seq storage data: %x\n", data)
+	//data, err := ethClient.StorageAt(context.Background(), ibc.ContractAddress, ibc.ClientSequenceSlot, nil)
+	//require.NoError(t, err)
+	//t.Logf("Client seq storage data: %x\n", data)
+	//
+	//proof, err := subnetClient.GetProof(context.Background(), ibc.ContractAddress, []string{ibc.ClientSequenceSlot.Hex()}, nil)
+	//require.NoError(t, err)
+	//t.Logf("Client seq storage merkle tree proof: %+v\n", proof)
 
-	proof, err := subnetClient.GetProof(context.Background(), ibc.ContractAddress, []string{ibc.ClientSequenceSlot.Hex()}, nil)
-	require.NoError(t, err)
-	t.Logf("Client seq storage merkle tree proof: %+v\n", proof)
+	clientStateSlots := ibc.GetClientStateSlots(subnetStorageReader, ibc.ContractAddress, clientId)
+	t.Logf("Client state slots: %+x\n", clientStateSlots)
 
-	clientStateBz, err := ethClient.StorageAt(context.Background(), ibc.ContractAddress, ibc.ClientStateSlot(clientId), nil)
+	keys := make([]string, 0)
+	for _, slot := range clientStateSlots {
+		keys = append(keys, slot.Hex())
+	}
+
+	t.Logf("Client state slots hex: %s\n", keys)
+
+	clientStateProof, err := subnetClient.GetProof(context.Background(), ibc.ContractAddress, keys, nil)
 	require.NoError(t, err)
-	t.Logf("Client state storage data: %x\n", clientStateBz)
+	t.Logf("Client state storage merkle tree proof: %+v\n", clientStateProof)
 }
 
 func updateClient(t *testing.T, endpoint *ibctesting.Endpoint) {

@@ -3,6 +3,7 @@ package ibc
 import (
 	"math/big"
 
+	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -10,13 +11,25 @@ import (
 	"github.com/ava-labs/subnet-evm/precompile/contract"
 )
 
-func getChunks(db contract.StateDB, addr common.Address, slot common.Hash) []common.Hash {
-	firstChunk := db.GetState(addr, slot)
+type StorageReader interface {
+	GetState(common.Address, common.Hash) common.Hash
+}
+
+func GetClientStateSlots(reader StorageReader, addr common.Address, clientID string) []common.Hash {
+	initialSlot := CalculateSlot(host.FullClientStateKey(clientID))
+	return getStateSlots(reader, addr, initialSlot)
+}
+
+func getStateSlots(reader StorageReader, addr common.Address, initialSlot common.Hash) []common.Hash {
+	firstChunk := reader.GetState(addr, initialSlot)
 	firstChunkBn := firstChunk.Big()
 	hasMultipleChunks := firstChunkBn.Bit(0) == 1
 
+	slots := make([]common.Hash, 0)
+	slots = append(slots, initialSlot)
+
 	if !hasMultipleChunks {
-		return []common.Hash{firstChunk}
+		return slots
 	}
 
 	// get length
@@ -26,15 +39,25 @@ func getChunks(db contract.StateDB, addr common.Address, slot common.Hash) []com
 	length := firstChunkBn.Int64()
 	chunkAmount := chunkSize(int(length))
 
-	chunks := make([]common.Hash, 0, chunkAmount+1)
-	chunks = append(chunks, firstChunk)
-	hash := crypto.Keccak256Hash(slot.Bytes())
+	hash := crypto.Keccak256Hash(initialSlot.Bytes())
 	for i := 1; i < chunkAmount; i++ {
 		slotBn := hash.Big()
 		slotBn.Add(slotBn, big.NewInt(int64(i-1)))
-		key := common.BytesToHash(slotBn.Bytes())
+		slot := common.BytesToHash(slotBn.Bytes())
 
-		data := db.GetState(addr, key)
+		slots = append(slots, slot)
+	}
+
+	return slots
+}
+
+func getChunks(db contract.StateDB, addr common.Address, slot common.Hash) []common.Hash {
+	slots := getStateSlots(db, addr, slot)
+
+	chunks := make([]common.Hash, 0, len(slots))
+
+	for _, hash := range slots {
+		data := db.GetState(addr, hash)
 		chunks = append(chunks, data)
 	}
 
