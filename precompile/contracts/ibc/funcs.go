@@ -1,10 +1,12 @@
 package ibc
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -526,11 +528,13 @@ func getNextSequenceRecv(accessibleState contract.AccessibleState, portID, chann
 func setNextSequenceAck(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64) {
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, sequence)
+	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.NextSequenceAckKey(portID, channelID))), b)
+}
 
-	path := []byte(fmt.Sprintf("%s/%s/%s", portID, channelID, "nextSequenceAck"))
-	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress(path), b)
-	// TODO
-	// accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.NextSequenceAckKey(portID, channelID))), b)
+// getNextSequenceAck gets a channel's next ack sequence to the store
+func getNextSequenceAck(accessibleState contract.AccessibleState, portID, channelID string) uint64 {
+	b := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(hosttypes.NextSequenceAckKey(portID, channelID))))
+	return binary.BigEndian.Uint64(b)
 }
 
 // HasPacketAcknowledgement check if the packet ack hash is already on the store
@@ -567,8 +571,18 @@ func SetPacketReceipt(accessibleState contract.AccessibleState, portID, channelI
 	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.PacketReceiptKey(portID, channelID, sequence))), []byte{byte(1)})
 }
 
+func getPacketCommitment(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64) []byte {
+	bz := accessibleState.GetStateDB().GetPrecompileState(common.BytesToAddress([]byte(hosttypes.PacketCommitmentKey(portID, channelID, sequence))))
+	return bz
+}
+
 func setPacketCommitment(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64, commitmentHash []byte) {
 	accessibleState.GetStateDB().SetPrecompileState(common.BytesToAddress([]byte(hosttypes.PacketCommitmentKey(portID, channelID, sequence))), commitmentHash)
+}
+
+func deletePacketCommitment(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64) {
+	// TODO Suicide?
+	accessibleState.GetStateDB().Suicide(common.BytesToAddress([]byte(hosttypes.PacketCommitmentKey(portID, channelID, sequence))))
 }
 
 func _chanOpenInit(opts *callOpts[ChanOpenInitInput]) error {
@@ -787,6 +801,20 @@ func getChannelState(
 	channelState := &channeltypes.Channel{}
 	marshaler.MustUnmarshal(channelStateByte, channelState)
 	return channelState, nil
+}
+
+func setChannelState(
+	marshaler *codec.ProtoCodec,
+	channel channeltypes.Channel,
+	accessibleState contract.AccessibleState,
+	channelStatePath string,
+
+) {
+	bz := marshaler.MustMarshal(&channel)
+	accessibleState.GetStateDB().SetPrecompileState(
+		common.BytesToAddress([]byte(channelStatePath)),
+		bz,
+	)
 }
 
 func _channelOpenAck(opts *callOpts[ChannelOpenAckInput]) error {
@@ -1050,7 +1078,7 @@ func _channelCloseConfirm(opts *callOpts[ChannelCloseConfirmInput]) error {
 	return nil
 }
 
-func _sendPacket(opts *callOpts[SendPacketInput]) error {
+func _sendPacket(opts *callOpts[MsgSendPacket]) error {
 	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
 	std.RegisterInterfaces(interfaceRegistry)
 	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
@@ -1126,7 +1154,7 @@ func _sendPacket(opts *callOpts[SendPacketInput]) error {
 	commitment := channeltypes.CommitPacket(marshaler, packet)
 
 	topics, data, err := IBCABI.PackEvent(
-		GeneratedPacketIdentifier.RawName,
+		GeneratedPacketSentIdentifier.RawName,
 		packet.TimeoutHeight,
 		packet.TimeoutTimestamp,
 		sequence,
@@ -1147,7 +1175,7 @@ func _sendPacket(opts *callOpts[SendPacketInput]) error {
 	return nil
 }
 
-func _recvPacket(opts *callOpts[RecvPacketInput]) error {
+func _recvPacket(opts *callOpts[MsgRecvPacket]) error {
 	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
 	std.RegisterInterfaces(interfaceRegistry)
 	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
@@ -1220,8 +1248,6 @@ func _recvPacket(opts *callOpts[RecvPacketInput]) error {
 
 	commitment := channeltypes.CommitPacket(marshaler, packet)
 
-	_ = commitment
-	// TODO VerifyPacketCommitment
 	height := clienttypes.Height(opts.args.ProofHeight)
 
 	// verify that the counterparty did commit to sending this packet
@@ -1240,8 +1266,22 @@ func _recvPacket(opts *callOpts[RecvPacketInput]) error {
 		_, found := GetPacketReceipt(opts.accessibleState, packet.GetDestPort(), packet.GetDestChannel(), packet.GetSequence())
 		if found {
 
-			// TODO
-			//emitRecvPacketEvent(ctx, packet, channel)
+			topics, data, err := IBCABI.PackEvent(GeneratedPacketReceivedIdentifier.RawName,
+				packet.Data,
+				packet.TimeoutHeight.String(),
+				packet.TimeoutTimestamp,
+				packet.Sequence,
+				packet.SourcePort,
+				packet.SourceChannel,
+				packet.DestinationPort,
+				packet.DestinationChannel,
+				channel.Ordering.String(),
+			)
+			if err != nil {
+				return fmt.Errorf("error packing event: %w", err)
+			}
+			blockNumber := opts.accessibleState.GetBlockContext().Number().Uint64()
+			opts.accessibleState.GetStateDB().AddLog(ContractAddress, topics, data, blockNumber)
 
 			// This error indicates that the packet has already been relayed. Core IBC will
 			// treat this error as a no-op in order to prevent an entire relay transaction
@@ -1260,8 +1300,22 @@ func _recvPacket(opts *callOpts[RecvPacketInput]) error {
 		nextSequenceRecv := getNextSequenceRecv(opts.accessibleState, packet.GetDestPort(), packet.GetDestChannel())
 
 		if packet.GetSequence() < nextSequenceRecv {
-			// TODO
-			// emitRecvPacketEvent(ctx, packet, channel)
+			topics, data, err := IBCABI.PackEvent(GeneratedPacketReceivedIdentifier.RawName,
+				packet.Data,
+				packet.TimeoutHeight.String(),
+				packet.TimeoutTimestamp,
+				packet.Sequence,
+				packet.SourcePort,
+				packet.SourceChannel,
+				packet.DestinationPort,
+				packet.DestinationChannel,
+				channel.Ordering.String(),
+			)
+			if err != nil {
+				return fmt.Errorf("error packing event: %w", err)
+			}
+			blockNumber := opts.accessibleState.GetBlockContext().Number().Uint64()
+			opts.accessibleState.GetStateDB().AddLog(ContractAddress, topics, data, blockNumber)
 
 			// This error indicates that the packet has already been relayed. Core IBC will
 			// treat this error as a no-op in order to prevent an entire relay transaction
@@ -1282,9 +1336,23 @@ func _recvPacket(opts *callOpts[RecvPacketInput]) error {
 		setNextSequenceRecv(opts.accessibleState, packet.GetDestPort(), packet.GetDestChannel(), nextSequenceRecv)
 	}
 	// emit an event that the relayer can query for
+	topics, data, err := IBCABI.PackEvent(GeneratedPacketReceivedIdentifier.RawName,
+		packet.Data,
+		packet.TimeoutHeight.String(),
+		packet.TimeoutTimestamp,
+		packet.Sequence,
+		packet.SourcePort,
+		packet.SourceChannel,
+		packet.DestinationPort,
+		packet.DestinationChannel,
+		channel.Ordering.String(),
+	)
+	if err != nil {
+		return fmt.Errorf("error packing event: %w", err)
+	}
+	blockNumber := opts.accessibleState.GetBlockContext().Number().Uint64()
+	opts.accessibleState.GetStateDB().AddLog(ContractAddress, topics, data, blockNumber)
 
-	//TOOD
-	// emitRecvPacketEvent(ctx, packet, channel)
 	return nil
 }
 
@@ -1313,8 +1381,8 @@ func VerifyPacketCommitment(
 
 	// get time and block delays
 	timeDelay := connection.GetDelayPeriod()
-	// TODO
-	blockDelay := uint64(0) //k.getBlockDelay(ctx, connection)
+	expectedTimePerBlock := 2
+	blockDelay := uint64(math.Ceil(float64(timeDelay) / float64(expectedTimePerBlock)))
 
 	merklePath := commitmenttypes.NewMerklePath(hosttypes.PacketCommitmentPath(portID, channelID, sequence))
 	merklePath, err = commitmenttypes.ApplyPrefix(connection.GetCounterparty().GetPrefix(), merklePath)
@@ -1406,4 +1474,491 @@ func VerifyMembership(
 	}
 
 	return merkleProof.VerifyMembership(cs.ProofSpecs, consensusState.GetRoot(), merklePath, value)
+}
+
+func _timeout(opts *callOpts[MsgTimeout]) error {
+	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
+	std.RegisterInterfaces(interfaceRegistry)
+	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+
+	found, err := getCapability(opts.accessibleState.GetStateDB(), opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel)
+	if err != nil {
+		return fmt.Errorf("%w, could not retrieve module from port-id", err)
+	}
+	if !found {
+		return fmt.Errorf("module with port-ID: %s and channel-ID: %s, does not exist", opts.args.Packet.DestinationPort, opts.args.Packet.DestinationChannel)
+	}
+
+	height := clienttypes.Height{
+		RevisionNumber: opts.args.Packet.TimeoutHeight.RevisionNumber,
+		RevisionHeight: opts.args.Packet.TimeoutHeight.RevisionHeight,
+	}
+
+	channel, err := getChannelState(
+		marshaler,
+		string(hosttypes.ChannelKey(
+			opts.args.Packet.SourcePort,
+			opts.args.Packet.SourceChannel,
+		)),
+		opts.accessibleState,
+	)
+	if err != nil {
+		return err
+	}
+
+	packet := channeltypes.NewPacket(opts.args.Packet.Data, opts.args.Packet.Sequence, opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel,
+		channel.Counterparty.PortId, channel.Counterparty.ChannelId, height, opts.args.Packet.TimeoutTimestamp)
+
+	proofHeight := clienttypes.Height{
+		RevisionNumber: opts.args.ProofHeight.RevisionNumber,
+		RevisionHeight: opts.args.ProofHeight.RevisionHeight,
+	}
+
+	err = TimeoutPacket(marshaler, packet, opts.args.ProofUnreceived, proofHeight, opts.args.NextSequenceRecv, opts.accessibleState)
+
+	switch err {
+	case nil:
+	case channeltypes.ErrNoOpMsg:
+		// no-ops do not need event emission as they will be ignored
+		// TODO
+		//return &channeltypes.MsgTimeoutResponse{Result: channeltypes.NOOP}, nil
+		return nil
+	default:
+		return fmt.Errorf("%w, timeout packet verification failed", err)
+	}
+
+	// TODO
+	// err = cbs.OnTimeoutPacket(ctx, msg.Packet, msg.Signer)
+	// if err != nil {
+	// 	return nil, errorsmod.Wrap(err, "timeout packet callback failed")
+	// }
+
+	deletePacketCommitment(opts.accessibleState, opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel, opts.args.Packet.Sequence)
+
+	if channel.Ordering == channeltypes.ORDERED {
+		channel.State = channeltypes.CLOSED
+		setChannelState(marshaler, *channel, opts.accessibleState, string(hosttypes.ChannelKey(
+			opts.args.Packet.SourcePort,
+			opts.args.Packet.SourceChannel,
+		)))
+	}
+
+	// emit an event marking that we have processed the timeout
+	topics, data, err := IBCABI.PackEvent(GeneratedTimeoutPacketIdentifier.RawName,
+		opts.args.Packet.TimeoutTimestamp,
+		opts.args.Packet.Sequence,
+		opts.args.Packet.SourcePort,
+		opts.args.Packet.SourceChannel,
+		opts.args.Packet.DestinationPort,
+		opts.args.Packet.DestinationChannel,
+		channel.Ordering.String(),
+		channel.ConnectionHops[0],
+	)
+	if err != nil {
+		return fmt.Errorf("error packing event: %w", err)
+	}
+	blockNumber := opts.accessibleState.GetBlockContext().Number().Uint64()
+	opts.accessibleState.GetStateDB().AddLog(ContractAddress, topics, data, blockNumber)
+
+	if channel.Ordering == channeltypes.ORDERED && channel.State == channeltypes.CLOSED {
+		// TODO
+		// emitChannelClosedEvent(ctx, opts.args.Packet, channel)
+	}
+
+	return nil
+}
+
+func _timeoutOnClose(opts *callOpts[MsgTimeoutOnClose]) error {
+	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
+	std.RegisterInterfaces(interfaceRegistry)
+	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+
+	found, err := getCapability(opts.accessibleState.GetStateDB(), opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel)
+	if err != nil {
+		return fmt.Errorf("%w, could not retrieve module from port-id", err)
+	}
+	if !found {
+		return fmt.Errorf("module with port-ID: %s and channel-ID: %s, does not exist", opts.args.Packet.DestinationPort, opts.args.Packet.DestinationChannel)
+	}
+
+	height := clienttypes.Height{
+		RevisionNumber: opts.args.Packet.TimeoutHeight.RevisionNumber,
+		RevisionHeight: opts.args.Packet.TimeoutHeight.RevisionHeight,
+	}
+
+	channel, err := getChannelState(
+		marshaler,
+		string(hosttypes.ChannelKey(
+			opts.args.Packet.SourcePort,
+			opts.args.Packet.SourceChannel,
+		)),
+		opts.accessibleState,
+	)
+	if err != nil {
+		return err
+	}
+
+	packet := channeltypes.NewPacket(opts.args.Packet.Data, opts.args.Packet.Sequence, opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel,
+		channel.Counterparty.PortId, channel.Counterparty.ChannelId, height, opts.args.Packet.TimeoutTimestamp)
+
+	if packet.GetDestPort() != channel.Counterparty.PortId {
+		return fmt.Errorf("%w, packet destination port doesn't match the counterparty's port (%s ≠ %s)", channeltypes.ErrInvalidPacket, packet.GetDestPort(), channel.Counterparty.PortId)
+	}
+
+	if packet.GetDestChannel() != channel.Counterparty.ChannelId {
+		return fmt.Errorf("%w, packet destination channel doesn't match the counterparty's channel (%s ≠ %s)", channeltypes.ErrInvalidPacket, packet.GetDestChannel(), channel.Counterparty.ChannelId)
+	}
+
+	connectionsPath := fmt.Sprintf("connections/%s", channel.ConnectionHops[0])
+	connectionEnd, err := getConnection(marshaler, connectionsPath, opts.accessibleState)
+	if err != nil {
+		return err
+	}
+
+	commitment := getPacketCommitment(opts.accessibleState, packet.GetSourcePort(), packet.GetSourceChannel(), packet.GetSequence())
+
+	if len(commitment) == 0 {
+		// emit an event marking that we have processed the timeout
+		topics, data, err := IBCABI.PackEvent(GeneratedTimeoutPacketIdentifier.RawName,
+			opts.args.Packet.TimeoutTimestamp,
+			opts.args.Packet.Sequence,
+			opts.args.Packet.SourcePort,
+			opts.args.Packet.SourceChannel,
+			opts.args.Packet.DestinationPort,
+			opts.args.Packet.DestinationChannel,
+			channel.Ordering.String(),
+			channel.ConnectionHops[0],
+		)
+		if err != nil {
+			return fmt.Errorf("error packing event: %w", err)
+		}
+		blockNumber := opts.accessibleState.GetBlockContext().Number().Uint64()
+		opts.accessibleState.GetStateDB().AddLog(ContractAddress, topics, data, blockNumber)
+
+		// This error indicates that the timeout has already been relayed
+		// or there is a misconfigured relayer attempting to prove a timeout
+		// for a packet never sent. Core IBC will treat this error as a no-op in order to
+		// prevent an entire relay transaction from failing and consuming unnecessary fees.
+		return channeltypes.ErrNoOpMsg
+	}
+
+	packetCommitment := channeltypes.CommitPacket(marshaler, packet)
+
+	// verify we sent the packet and haven't cleared it out yet
+	if !bytes.Equal(commitment, packetCommitment) {
+		return fmt.Errorf("%w, packet commitment bytes are not equal: got (%v), expected (%v)", channeltypes.ErrInvalidPacket, commitment, packetCommitment)
+	}
+
+	counterpartyHops := []string{connectionEnd.GetCounterparty().GetConnectionID()}
+
+	counterparty := channeltypes.NewCounterparty(packet.GetSourcePort(), packet.GetSourceChannel())
+	expectedChannel := channeltypes.NewChannel(
+		channeltypes.CLOSED, channel.Ordering, counterparty, counterpartyHops, channel.Version,
+	)
+
+	// TODO
+	_ = expectedChannel
+	// check that the opposing channel end has closed
+	// if err := VerifyChannelState(
+	// 	connectionEnd, opts.args.ProofHeight, opts.args.ProofClose,
+	// 	channel.Counterparty.PortId, channel.Counterparty.ChannelId,
+	// 	expectedChannel,
+	// ); err != nil {
+	// 	return err
+	// }
+
+	switch channel.Ordering {
+	case channeltypes.ORDERED:
+		// check that packet has not been received
+		if opts.args.NextSequenceRecv > packet.GetSequence() {
+			return fmt.Errorf("%w, packet already received, next sequence receive > packet sequence (%d > %d", channeltypes.ErrInvalidPacket, opts.args.NextSequenceRecv, packet.GetSequence())
+		}
+
+		// TODO
+		// check that the recv sequence is as claimed
+	// 	err = VerifyNextSequenceRecv(
+	// 		connectionEnd, opts.args.ProofHeight, opts.args.Proof,
+	// 		packet.GetDestPort(), packet.GetDestChannel(), opts.args.NextSequenceRecv,
+	// 	)
+	case channeltypes.UNORDERED:
+		// TODO
+	// 	err = VerifyPacketReceiptAbsence(
+	// 		connectionEnd, opts.args.ProofHeight, opts.args.Proof,
+	// 		packet.GetDestPort(), packet.GetDestChannel(), packet.GetSequence(),
+	// 	)
+	default:
+		panic(fmt.Errorf("%w, %s", channeltypes.ErrInvalidChannelOrdering, channel.Ordering.String()))
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func _acknowledgement(opts *callOpts[MsgAcknowledgement]) error {
+	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
+	std.RegisterInterfaces(interfaceRegistry)
+	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+
+	found, err := getCapability(opts.accessibleState.GetStateDB(), opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel)
+	if err != nil {
+		return fmt.Errorf("%w, could not retrieve module from port-id", err)
+	}
+	if !found {
+		return fmt.Errorf("module with port-ID: %s and channel-ID: %s, does not exist", opts.args.Packet.DestinationPort, opts.args.Packet.DestinationChannel)
+	}
+
+	channel, err := getChannelState(
+		marshaler,
+		string(hosttypes.ChannelKey(
+			opts.args.Packet.SourcePort,
+			opts.args.Packet.SourceChannel,
+		)),
+		opts.accessibleState,
+	)
+	if err != nil {
+		return err
+	}
+
+	height := clienttypes.Height{
+		RevisionNumber: opts.args.Packet.TimeoutHeight.RevisionNumber,
+		RevisionHeight: opts.args.Packet.TimeoutHeight.RevisionHeight,
+	}
+
+	packet := channeltypes.NewPacket(opts.args.Packet.Data, opts.args.Packet.Sequence, opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel,
+		channel.Counterparty.PortId, channel.Counterparty.ChannelId, height, opts.args.Packet.TimeoutTimestamp)
+
+	if channel.State != channeltypes.OPEN {
+		return fmt.Errorf("%w, channel state is not OPEN (got %s)", channeltypes.ErrInvalidChannelState, channel.State.String())
+	}
+
+	found, err = getCapability(opts.accessibleState.GetStateDB(), opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel)
+	if err != nil {
+		return fmt.Errorf("%w, could not retrieve module from port-id", err)
+	}
+	if !found {
+		return fmt.Errorf("module with port-ID: %s and channel-ID: %s, does not exist", opts.args.Packet.DestinationPort, opts.args.Packet.DestinationChannel)
+	}
+
+	// packet must have been sent to the channel's counterparty
+	if packet.GetDestPort() != channel.Counterparty.PortId {
+		return fmt.Errorf("%w, packet destination port doesn't match the counterparty's port (%s ≠ %s)", channeltypes.ErrInvalidPacket, packet.GetDestPort(), channel.Counterparty.PortId)
+	}
+
+	if packet.GetDestChannel() != channel.Counterparty.ChannelId {
+		return fmt.Errorf("%w, packet destination channel doesn't match the counterparty's channel (%s ≠ %s)", channeltypes.ErrInvalidPacket, packet.GetDestChannel(), channel.Counterparty.ChannelId)
+	}
+
+	connectionsPath := fmt.Sprintf("connections/%s", channel.ConnectionHops[0])
+	connectionEnd, err := getConnection(marshaler, connectionsPath, opts.accessibleState)
+	if err != nil {
+		return err
+	}
+
+	if connectionEnd.GetState() != int32(connectiontypes.OPEN) {
+		return fmt.Errorf("%w, connection state is not OPEN (got %s)", connectiontypes.ErrInvalidConnectionState, connectiontypes.State(connectionEnd.GetState()).String())
+	}
+
+	commitment := getPacketCommitment(opts.accessibleState, packet.GetSourcePort(), packet.GetSourceChannel(), packet.GetSequence())
+	if len(commitment) == 0 {
+		topics, data, err := IBCABI.PackEvent(GeneratedAcknowledgePacketIdentifier.RawName,
+			packet.TimeoutHeight.String(),
+			opts.args.Packet.TimeoutTimestamp,
+			opts.args.Packet.Sequence,
+			opts.args.Packet.SourcePort,
+			opts.args.Packet.SourceChannel,
+			opts.args.Packet.DestinationPort,
+			opts.args.Packet.DestinationChannel,
+			channel.Ordering.String(),
+			channel.ConnectionHops[0],
+		)
+		if err != nil {
+			return fmt.Errorf("error packing event: %w", err)
+		}
+		blockNumber := opts.accessibleState.GetBlockContext().Number().Uint64()
+		opts.accessibleState.GetStateDB().AddLog(ContractAddress, topics, data, blockNumber)
+
+		// This error indicates that the acknowledgement has already been relayed
+		// or there is a misconfigured relayer attempting to prove an acknowledgement
+		// for a packet never sent. Core IBC will treat this error as a no-op in order to
+		// prevent an entire relay transaction from failing and consuming unnecessary fees.
+		return channeltypes.ErrNoOpMsg
+	}
+
+	packetCommitment := channeltypes.CommitPacket(marshaler, packet)
+
+	// verify we sent the packet and haven't cleared it out yet
+	if !bytes.Equal(commitment, packetCommitment) {
+		return fmt.Errorf("%w, commitment bytes are not equal: got (%v), expected (%v)", channeltypes.ErrInvalidPacket, packetCommitment, commitment)
+	}
+
+	// TODO
+	// if err := VerifyPacketAcknowledgement(
+	// 	connectionEnd, opts.args.ProofHeight, proof, packet.GetDestPort(), packet.GetDestChannel(),
+	// 	packet.GetSequence(), acknowledgement,
+	// ); err != nil {
+	// 	return err
+	// }
+
+	// assert packets acknowledged in order
+	if channel.Ordering == channeltypes.ORDERED {
+
+		nextSequenceAck := getNextSequenceAck(opts.accessibleState, opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel)
+
+		if opts.args.Packet.Sequence != nextSequenceAck {
+			return fmt.Errorf("%w, packet sequence ≠ next ack sequence (%d ≠ %d)", channeltypes.ErrPacketSequenceOutOfOrder, opts.args.Packet.Sequence, nextSequenceAck)
+		}
+
+		// All verification complete, in the case of ORDERED channels we must increment nextSequenceAck
+		nextSequenceAck++
+
+		setNextSequenceAck(opts.accessibleState, opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel, opts.args.Packet.Sequence)
+	}
+
+	// Delete packet commitment, since the packet has been acknowledged, the commitement is no longer necessary
+	deletePacketCommitment(opts.accessibleState, opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel, opts.args.Packet.Sequence)
+
+	// emit an event marking that we have processed the acknowledgement
+	topics, data, err := IBCABI.PackEvent(GeneratedAcknowledgePacketIdentifier.RawName,
+		packet.TimeoutHeight.String(),
+		opts.args.Packet.TimeoutTimestamp,
+		opts.args.Packet.Sequence,
+		opts.args.Packet.SourcePort,
+		opts.args.Packet.SourceChannel,
+		opts.args.Packet.DestinationPort,
+		opts.args.Packet.DestinationChannel,
+		channel.Ordering.String(),
+		channel.ConnectionHops[0],
+	)
+	if err != nil {
+		return fmt.Errorf("error packing event: %w", err)
+	}
+	blockNumber := opts.accessibleState.GetBlockContext().Number().Uint64()
+	opts.accessibleState.GetStateDB().AddLog(ContractAddress, topics, data, blockNumber)
+
+	return nil
+}
+
+func TimeoutPacket(
+	marshaler *codec.ProtoCodec,
+	packet exported.PacketI,
+	proof []byte,
+	proofHeight exported.Height,
+	nextSequenceRecv uint64,
+	accessibleState contract.AccessibleState,
+) error {
+
+	channel, err := getChannelState(
+		marshaler,
+		string(hosttypes.ChannelKey(
+			packet.GetSourcePort(),
+			packet.GetSourceChannel(),
+		)),
+		accessibleState,
+	)
+	if err != nil {
+		return err
+	}
+	// NOTE: TimeoutPacket is called by the AnteHandler which acts upon the packet.Route(),
+	// so the capability authentication can be omitted here
+
+	if packet.GetDestPort() != channel.Counterparty.PortId {
+		return fmt.Errorf("%w, packet destination port doesn't match the counterparty's port (%s ≠ %s)", channeltypes.ErrInvalidPacket, packet.GetDestPort(), channel.Counterparty.PortId)
+	}
+
+	if packet.GetDestChannel() != channel.Counterparty.ChannelId {
+		return fmt.Errorf("%w, packet destination channel doesn't match the counterparty's channel (%s ≠ %s)", channeltypes.ErrInvalidPacket, packet.GetDestChannel(), channel.Counterparty.ChannelId)
+	}
+
+	connectionsPath := fmt.Sprintf("connections/%s", channel.ConnectionHops[0])
+	connectionEnd, err := getConnection(marshaler, connectionsPath, accessibleState)
+	if err != nil {
+		return err
+	}
+
+	// check that timeout height or timeout timestamp has passed on the other end
+	consensusState, found, err := getConsensusState(accessibleState.GetStateDB(), connectionEnd.ClientId, proofHeight)
+	if !found {
+		return fmt.Errorf("%w, %w, please ensure the proof was constructed against a height that exists on the client", clienttypes.ErrConsensusStateNotFound, err)
+	}
+	proofTimestamp := consensusState.GetTimestamp()
+
+	timeoutHeight := packet.GetTimeoutHeight()
+	if (timeoutHeight.IsZero() || proofHeight.LT(timeoutHeight)) &&
+		(packet.GetTimeoutTimestamp() == 0 || proofTimestamp < packet.GetTimeoutTimestamp()) {
+		return fmt.Errorf("%w, packet timeout has not been reached for height or timestamp", channeltypes.ErrPacketTimeout)
+	}
+
+	commitment := getPacketCommitment(accessibleState, packet.GetSourcePort(), packet.GetSourceChannel(), packet.GetSequence())
+
+	if len(commitment) == 0 {
+		// emit an event marking that we have processed the timeout
+		topics, data, err := IBCABI.PackEvent(GeneratedTimeoutPacketIdentifier.RawName,
+			packet.GetTimeoutTimestamp(),
+			packet.GetSequence(),
+			packet.GetSourcePort(),
+			packet.GetSourceChannel(),
+			packet.GetDestPort(),
+			packet.GetDestChannel(),
+			channel.Ordering.String(),
+			channel.ConnectionHops[0],
+		)
+		if err != nil {
+			return fmt.Errorf("error packing event: %w", err)
+		}
+		blockNumber := accessibleState.GetBlockContext().Number().Uint64()
+		accessibleState.GetStateDB().AddLog(ContractAddress, topics, data, blockNumber)
+
+		// This error indicates that the timeout has already been relayed
+		// or there is a misconfigured relayer attempting to prove a timeout
+		// for a packet never sent. Core IBC will treat this error as a no-op in order to
+		// prevent an entire relay transaction from failing and consuming unnecessary fees.
+		return channeltypes.ErrNoOpMsg
+	}
+
+	if channel.State != channeltypes.OPEN {
+		return fmt.Errorf("%w, channel state is not OPEN (got %s)", channeltypes.ErrInvalidChannelState, channel.State.String())
+	}
+
+	packetCommitment := channeltypes.CommitPacket(marshaler, packet)
+
+	// verify we sent the packet and haven't cleared it out yet
+	if !bytes.Equal(commitment, packetCommitment) {
+		return fmt.Errorf("%w, packet commitment bytes are not equal: got (%v), expected (%v)", channeltypes.ErrInvalidPacket, channel.State.String(), commitment, packetCommitment)
+	}
+
+	switch channel.Ordering {
+	case channeltypes.ORDERED:
+		// check that packet has not been received
+		if nextSequenceRecv > packet.GetSequence() {
+			return fmt.Errorf("%w, packet already received, next sequence receive > packet sequence (%d > %d)", channeltypes.ErrPacketReceived, nextSequenceRecv, packet.GetSequence())
+		}
+
+		// check that the recv sequence is as claimed
+		// TODO
+	// 	err = VerifyNextSequenceRecv(
+	// 		connectionEnd, proofHeight, proof,
+	// 		packet.GetDestPort(), packet.GetDestChannel(), nextSequenceRecv,
+	// 	)
+	case channeltypes.UNORDERED:
+		//TODO
+	// 	err = VerifyPacketReceiptAbsence(
+	// 		connectionEnd, proofHeight, proof,
+	// 		packet.GetDestPort(), packet.GetDestChannel(), packet.GetSequence(),
+	// 	)
+	default:
+		panic(fmt.Errorf("%w, %s", channeltypes.ErrInvalidChannelOrdering, channel.Ordering.String()))
+	}
+
+	if err != nil {
+		return err
+	}
+
+	// NOTE: the remaining code is located in the TimeoutExecuted function
+	return nil
 }

@@ -57,11 +57,15 @@ var (
 	//go:embed contract.abi
 	IBCRawABI string
 
-	IBCABI                        = contract.ParseABI(IBCRawABI)
-	IBCPrecompile                 = createIBCPrecompile()
-	GeneratedClientIdentifier     = IBCABI.Events["ClientCreated"]
-	GeneratedConnectionIdentifier = IBCABI.Events["ConnectionCreated"]
-	GeneratedPacketIdentifier = IBCABI.Events["PacketSent"]
+	IBCABI                                    = contract.ParseABI(IBCRawABI)
+	IBCPrecompile                             = createIBCPrecompile()
+	GeneratedClientIdentifier                 = IBCABI.Events["ClientCreated"]
+	GeneratedConnectionIdentifier             = IBCABI.Events["ConnectionCreated"]
+	GeneratedPacketSentIdentifier             = IBCABI.Events["PacketSent"]
+	GeneratedPacketReceivedIdentifier         = IBCABI.Events["PacketReceived"]
+	GeneratedTimeoutPacketIdentifier          = IBCABI.Events["TimeoutPacket"]
+	GeneratedAcknowledgePacketIdentifier      = IBCABI.Events["AcknowledgePacket"]
+	GeneratedAcknowledgementWrittenIdentifier = IBCABI.Events["AcknowledgementWritten"]
 
 	ClientSequenceSlot     = common.BytesToHash([]byte("client-sequence"))
 	ConnectionSequenceSlot = common.BytesToHash([]byte("connection-sequence"))
