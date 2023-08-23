@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
+	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/ava-labs/subnet-evm/accounts/abi"
@@ -35,12 +36,23 @@ type MsgAcknowledgement struct {
 	Signer          string
 }
 
+type OnAcknowledgementInput struct {
+	Packet          Packet
+	Acknowledgement []byte
+	Relayer         []byte
+}
+
 type MsgTimeout struct {
 	Packet           Packet
 	ProofUnreceived  []byte
 	ProofHeight      Height
 	NextSequenceRecv uint64
 	Signer           string
+}
+
+type OnTimeoutInput struct {
+	Packet  Packet
+	Relayer []byte
 }
 
 type MsgTimeoutOnClose struct {
@@ -52,7 +64,7 @@ type MsgTimeoutOnClose struct {
 	Signer           string
 }
 
-type OnRecvPacketInput struct {
+type OnTimeoutOnCloseInput struct {
 	Packet  Packet
 	Relayer []byte
 }
@@ -73,9 +85,29 @@ type MsgRecvPacket struct {
 	Signer          string
 }
 
+type OnRecvPacketInput struct {
+	Packet  Packet
+	Relayer []byte
+}
+
 // PackOnRecvPacket packs [inputStruct] of type OnRecvPacketInput into the appropriate arguments for OnRecvPacket.
 func PackOnRecvPacket(inputStruct OnRecvPacketInput) ([]byte, error) {
 	return IBCABI.Pack("OnRecvPacket", inputStruct.Packet, inputStruct.Relayer)
+}
+
+// PackOnTimeoutOnCloseInput packs [inputStruct] of type OnTimeoutOnCloseInput into the appropriate arguments for OnTimeoutOnClose.
+func PackOnTimeoutOnCloseInput(inputStruct OnTimeoutOnCloseInput) ([]byte, error) {
+	return IBCABI.Pack("OnTimeoutOnCloseInput", inputStruct.Packet, inputStruct.Relayer)
+}
+
+// PackOnTimeoutInput packs [inputStruct] of type OnTimeoutInput into the appropriate arguments for OnTimeout.
+func PackOnTimeoutInput(inputStruct OnTimeoutInput) ([]byte, error) {
+	return IBCABI.Pack("OnTimeoutInput", inputStruct.Packet, inputStruct.Relayer)
+}
+
+// PackOnAcknowledgementInput packs [inputStruct] of type OnAcknowledgementInput into the appropriate arguments for OnAcknowledgement.
+func PackOnAcknowledgementInput(inputStruct OnAcknowledgementInput) ([]byte, error) {
+	return IBCABI.Pack("OnAcknowledgementInput", inputStruct.Packet, inputStruct.Acknowledgement, inputStruct.Relayer)
 }
 
 // UnpackSendPacketInput attempts to unpack [input] as SendPacketInput
@@ -167,19 +199,17 @@ func recvPacket(accessibleState contract.AccessibleState, caller common.Address,
 		return nil, remainingGas, err
 	}
 
-	recvAddr, ok, _ := getPort(accessibleState.GetStateDB(), inputStruct.Packet.DestinationPort)
-	if ok {
-		return nil, remainingGas, fmt.Errorf("port with portID: %s already bound", inputStruct.Packet.DestinationPort)
+	recvAddr, err := GetPort(accessibleState.GetStateDB(), inputStruct.Packet.DestinationPort)
+	if err != nil {
+		return nil, remainingGas, fmt.Errorf("%w, port with portID: %s already bound", err, inputStruct.Packet.DestinationPort)
 	}
 
-	data, err := PackOnRecvPacket(OnRecvPacketInput{ })
+	data, err := PackOnRecvPacket(OnRecvPacketInput{Packet: inputStruct.Packet, Relayer: []byte(inputStruct.Signer)})
 	if err != nil {
 		return nil, remainingGas, err
 	}
-
 	ret, remainingGas, err = accessibleState.CallFromPrecompile(ContractAddress, recvAddr, data, remainingGas, big.NewInt(0))
 
-	// TODO WriteAcknowledgement
 	writeAcknowledgement(inputStruct.Packet, accessibleState)
 
 	// this function does not return an output, leave this one as is
@@ -221,11 +251,38 @@ func timeout(accessibleState contract.AccessibleState, caller common.Address, ad
 	if err != nil {
 		return nil, remainingGas, err
 	}
-
-	// CUSTOM CODE STARTS HERE
-	_ = inputStruct // CUSTOM CODE OPERATES ON INPUT
-	// this function does not return an output, leave this one as is
 	packedOutput := []byte{}
+
+	err = _timeout(&callOpts[MsgTimeout]{
+		accessibleState: accessibleState,
+		caller:          caller,
+		addr:            addr,
+		suppliedGas:     suppliedGas,
+		readOnly:        readOnly,
+		args:            *inputStruct,
+	})
+	switch err {
+	case nil:
+	case channeltypes.ErrNoOpMsg:
+		return packedOutput, remainingGas, nil
+	default:
+		return nil, remainingGas, err
+	}
+
+	recvAddr, err := GetPort(accessibleState.GetStateDB(), inputStruct.Packet.DestinationPort)
+	if err != nil {
+		return nil, remainingGas, fmt.Errorf("%w, port with portID: %s already bound", err, inputStruct.Packet.DestinationPort)
+	}
+	data, err := PackOnTimeoutInput(OnTimeoutInput{Packet: inputStruct.Packet, Relayer: []byte(inputStruct.Signer)})
+	if err != nil {
+		return nil, remainingGas, err
+	}
+	ret, remainingGas, err = accessibleState.CallFromPrecompile(ContractAddress, recvAddr, data, remainingGas, big.NewInt(0))
+
+	// Delete packet commitment
+	if err = TimeoutExecuted(accessibleState, inputStruct.Packet); err != nil {
+		return nil, remainingGas, err
+	}
 
 	// Return the packed output and the remaining gas
 	return packedOutput, remainingGas, nil
@@ -263,30 +320,39 @@ func timeoutOnClose(accessibleState contract.AccessibleState, caller common.Addr
 	if err != nil {
 		return nil, remainingGas, err
 	}
+	packedOutput := []byte{}
 
-	// CUSTOM CODE STARTS HERE
-	_ = inputStruct // CUSTOM CODE OPERATES ON INPUT
+	err = _timeoutOnClose(&callOpts[MsgTimeoutOnClose]{
+		accessibleState: accessibleState,
+		caller:          caller,
+		addr:            addr,
+		suppliedGas:     suppliedGas,
+		readOnly:        readOnly,
+		args:            *inputStruct,
+	});
+	switch err {
+	case nil:
+	case channeltypes.ErrNoOpMsg:
+		return packedOutput, remainingGas, nil
+	default:
+		return nil, remainingGas, err
+	}
 
-	// TODO 
-	// switch err {
-	// case nil:
-	// case channeltypes.ErrNoOpMsg:
-	// 	// no-ops do not need event emission as they will be ignored
-	// 	return &channeltypes.MsgTimeoutOnCloseResponse{Result: channeltypes.NOOP}, nil
-	// default:
-	// 	return nil, errorsmod.Wrap(err, "timeout on close packet verification failed")
-	// }
+	recvAddr, err := GetPort(accessibleState.GetStateDB(), inputStruct.Packet.DestinationPort)
+	if err != nil {
+		return nil, remainingGas, fmt.Errorf("%w, port with portID: %s already bound", err, inputStruct.Packet.DestinationPort)
+	}
+	data, err := PackOnTimeoutOnCloseInput(OnTimeoutOnCloseInput{Packet: inputStruct.Packet, Relayer: []byte(inputStruct.Signer)})
+	if err != nil {
+		return nil, remainingGas, err
+	}
+	ret, remainingGas, err = accessibleState.CallFromPrecompile(ContractAddress, recvAddr, data, remainingGas, big.NewInt(0))
 
-	// TODO
-	// err = cbs.OnTimeoutPacket(ctx, msg.Packet, msg.Signer)
 
 	// Delete packet commitment
-	// if err = k.ChannelKeeper.TimeoutExecuted(ctx, capability, msg.Packet); err != nil {
-	// 	return nil, err
-	// }
-
-	// this function does not return an output, leave this one as is
-	packedOutput := []byte{}
+	if err = TimeoutExecuted(accessibleState, inputStruct.Packet); err != nil {
+		return nil, remainingGas, err
+	}
 
 	// Return the packed output and the remaining gas
 	return packedOutput, remainingGas, nil
@@ -331,26 +397,33 @@ func acknowledgement(accessibleState contract.AccessibleState, caller common.Add
 
 	// CUSTOM CODE STARTS HERE
 	_ = inputStruct // CUSTOM CODE OPERATES ON INPUT
-
-
-	// TODO channeltypes.ErrNoOpMsg
-	// switch err {
-	// case nil:
-	// case channeltypes.ErrNoOpMsg:
-	// 	// no-ops do not need event emission as they will be ignored
-	// 	// TODO
-	// 	//return &channeltypes.MsgTimeoutResponse{Result: channeltypes.NOOP}, nil
-	// 	return nil
-	// default:
-	// 	return fmt.Errorf("%w, acknowledge packet verification failed", err)
-	// }
-
-	// Perform application logic callback
-	// TODO
-	// err = cbs.OnAcknowledgementPacket(ctx, msg.Packet, msg.Acknowledgement, msg.Signer)
-
-	// this function does not return an output, leave this one as is
 	packedOutput := []byte{}
+
+	err = _acknowledgement(&callOpts[MsgAcknowledgement]{
+		accessibleState: accessibleState,
+		caller:          caller,
+		addr:            addr,
+		suppliedGas:     suppliedGas,
+		readOnly:        readOnly,
+		args:            *inputStruct,
+	});
+	switch err {
+	case nil:
+	case channeltypes.ErrNoOpMsg:
+		return packedOutput, remainingGas, nil
+	default:
+		return nil, remainingGas, err
+	}
+
+	recvAddr, err := GetPort(accessibleState.GetStateDB(), inputStruct.Packet.DestinationPort)
+	if err != nil {
+		return nil, remainingGas, fmt.Errorf("%w, port with portID: %s already bound", err, inputStruct.Packet.DestinationPort)
+	}
+	data, err := PackOnAcknowledgementInput(OnAcknowledgementInput{Packet: inputStruct.Packet, Acknowledgement: inputStruct.Acknowledgement, Relayer: []byte(inputStruct.Signer)})
+	if err != nil {
+		return nil, remainingGas, err
+	}
+	ret, remainingGas, err = accessibleState.CallFromPrecompile(ContractAddress, recvAddr, data, remainingGas, big.NewInt(0))
 
 	// Return the packed output and the remaining gas
 	return packedOutput, remainingGas, nil

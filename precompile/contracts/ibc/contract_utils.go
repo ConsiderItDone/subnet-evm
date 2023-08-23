@@ -3,6 +3,7 @@ package ibc
 import (
 	"bytes"
 	"errors"
+	"fmt"
 
 	"github.com/ava-labs/subnet-evm/precompile/contract"
 	connectiontypes "github.com/cosmos/ibc-go/v7/modules/core/03-connection/types"
@@ -62,6 +63,16 @@ func PortSlot(portID string) common.Hash {
 
 func ChannelCapabilitySlot(portID, channelID string) common.Hash {
 	return CalculateSlot([]byte(host.ChannelCapabilityPath(portID, channelID)))
+}
+
+func ProcessedTimeSlot(height uint64) common.Hash {
+	consensusStateKey := fmt.Sprintf("consensusStates/%s", height)
+	return CalculateSlot([]byte(append([]byte(consensusStateKey), []byte("/processedTime")...)))
+}
+
+func ProcessedHeightSlot(height uint64) common.Hash {
+	consensusStateKey := fmt.Sprintf("consensusStates/%s", height)
+	return CalculateSlot([]byte(append([]byte(consensusStateKey), []byte("/processedHeight")...)))
 }
 
 func AddLog(as contract.AccessibleState, name string, args ...any) error {

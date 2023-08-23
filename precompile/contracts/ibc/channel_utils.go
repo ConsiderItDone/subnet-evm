@@ -29,39 +29,180 @@ func makeChannelID(db contract.StateDB) string {
 }
 
 // setNextSequenceSend sets a channel's next send sequence to the store
-func setNextSequenceSend(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64) {
+func setNextSequenceSend(db contract.StateDB, portID, channelID string, sequence uint64) {
 	state := make([]byte, 8)
 	binary.BigEndian.PutUint64(state, sequence)
 	setState(
-		accessibleState.GetStateDB(),
+		db,
 		ContractAddress,
 		CalculateSlot(hosttypes.NextSequenceSendKey(portID, channelID)),
 		state,
 	)
 }
 
+// setNextSequenceSend sets a channel's next send sequence to the store
+func getNextSequenceSend(db contract.StateDB, portID, channelID string) (uint64, error) {
+	state, err := GetState(db, CalculateSlot(hosttypes.NextSequenceSendKey(portID, channelID)))
+	if err != nil {
+		return 0, err
+	}
+	return binary.BigEndian.Uint64(state), nil
+}
+
 // setNextSequenceRecv sets a channel's next receive sequence to the store
-func setNextSequenceRecv(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64) {
+func setNextSequenceRecv(db contract.StateDB, portID, channelID string, sequence uint64) {
 	state := make([]byte, 8)
 	binary.BigEndian.PutUint64(state, sequence)
 	setState(
-		accessibleState.GetStateDB(),
+		db,
 		ContractAddress,
 		CalculateSlot(hosttypes.NextSequenceRecvKey(portID, channelID)),
 		state,
 	)
 }
 
+// setNextSequenceSend sets a channel's next send sequence to the store
+func getNextSequenceRecv(db contract.StateDB, portID, channelID string) (uint64, error) {
+	state, err := GetState(db, CalculateSlot(hosttypes.NextSequenceRecvKey(portID, channelID)))
+	if err != nil {
+		return 0, err
+	}
+	return binary.BigEndian.Uint64(state), nil
+}
+
 // setNextSequenceAck sets a channel's next ack sequence to the store
-func setNextSequenceAck(accessibleState contract.AccessibleState, portID, channelID string, sequence uint64) {
+func setNextSequenceAck(db contract.StateDB, portID, channelID string, sequence uint64) {
 	state := make([]byte, 8)
 	binary.BigEndian.PutUint64(state, sequence)
 	setState(
-		accessibleState.GetStateDB(),
+		db,
 		ContractAddress,
-		CalculateSlot(hosttypes.NextSequenceRecvKey(portID, channelID)),
+		CalculateSlot(hosttypes.NextSequenceAckKey(portID, channelID)),
 		state,
 	)
+}
+
+// getNextSequenceAck gets a channel's next ack sequence to the store
+func getNextSequenceAck(db contract.StateDB, portID, channelID string) (uint64, error) {
+	state, err := GetState(db, CalculateSlot(hosttypes.NextSequenceAckKey(portID, channelID)))
+	if err != nil {
+		return 0, err
+	}
+	return binary.BigEndian.Uint64(state), nil
+}
+
+// TODO
+// HasPacketAcknowledgement check if the packet ack hash is already on the store
+func hasPacketAcknowledgement(db contract.StateDB, portID, channelID string, sequence uint64) bool {
+	return db.Exist(common.BytesToAddress(hosttypes.PacketAcknowledgementKey(portID, channelID, sequence)))
+}
+
+// SetPacketAcknowledgement sets the packet ack hash to the store
+func setPacketAcknowledgement(db contract.StateDB, portID, channelID string, sequence uint64, ackHash []byte) {
+	setState(
+		db,
+		ContractAddress,
+		CalculateSlot(hosttypes.PacketAcknowledgementKey(portID, channelID, sequence)),
+		ackHash,
+	)
+}
+
+// GetPacketAcknowledgement gets the packet ack hash from the store
+func getPacketAcknowledgement(db contract.StateDB, portID, channelID string, sequence uint64) ([]byte, error) {
+	state, err := GetState(db, CalculateSlot(hosttypes.PacketAcknowledgementKey(portID, channelID, sequence)))
+	return state, err
+}
+
+// GetPacketReceipt gets a packet receipt from the store
+func getPacketReceipt(db contract.StateDB, portID, channelID string, sequence uint64) (string, bool) {
+	state, err := GetState(db, CalculateSlot(hosttypes.PacketReceiptKey(portID, channelID, sequence)))
+	if err != nil {
+		return "", false
+	}
+	return string(state), true
+}
+
+// SetPacketReceipt sets an empty packet receipt to the store
+func setPacketReceipt(db contract.StateDB, portID, channelID string, sequence uint64) {
+	state := make([]byte, 8)
+	binary.BigEndian.PutUint64(state, sequence)
+	setState(
+		db,
+		ContractAddress,
+		CalculateSlot(hosttypes.PacketReceiptKey(portID, channelID, sequence)),
+		state,
+	)
+}
+
+func getPacketCommitment(db contract.StateDB, portID, channelID string, sequence uint64) ([]byte, error) {
+	state, err := GetState(db, CalculateSlot(hosttypes.PacketCommitmentKey(portID, channelID, sequence)))
+	return state, err
+}
+
+func setPacketCommitment(db contract.StateDB, portID, channelID string, sequence uint64, commitmentHash []byte) {
+	setState(
+		db,
+		ContractAddress,
+		CalculateSlot(hosttypes.PacketCommitmentKey(portID, channelID, sequence)),
+		commitmentHash,
+	)
+}
+
+func deletePacketCommitment(db contract.StateDB, portID, channelID string, sequence uint64) {
+	// TODO Suicide?
+	db.Suicide(common.BytesToAddress([]byte(hosttypes.PacketCommitmentKey(portID, channelID, sequence))))
+}
+
+func SetProcessedTime(db contract.StateDB, height uint64, timeNs uint64) {
+	state := make([]byte, 8)
+	binary.BigEndian.PutUint64(state, timeNs)
+	setState(
+		db,
+		ContractAddress,
+		ProcessedTimeSlot(height),
+		state,
+	)
+}
+
+func GetProcessedTime(db contract.StateDB, height uint64) (uint64, error) {
+	state, err := GetState(db, ProcessedTimeSlot(height))
+	if err != nil {
+		return 0, err
+	}
+	return binary.BigEndian.Uint64(state), nil
+}
+
+func SetProcessedHeight(db contract.StateDB, consHeight, processedHeight uint64) {
+	state := make([]byte, 8)
+	binary.BigEndian.PutUint64(state, processedHeight)
+	setState(
+		db,
+		ContractAddress,
+		ProcessedHeightSlot(consHeight),
+		state,
+	)
+}
+
+func GetProcessedHeight(db contract.StateDB, height uint64) (exported.Height, error) {
+	state, err := GetState(db, ProcessedHeightSlot(height))
+	if err != nil {
+		return nil, err
+	}
+	processedHeight, err := clienttypes.ParseHeight(string(state))
+	if err != nil {
+		return nil, err
+	}
+	return processedHeight, nil
+}
+
+// TODO
+func setConsensusMetadata(
+	accessibleState contract.AccessibleState, height,
+	processedHeight uint64,
+	processedTime uint64,
+) {
+	SetProcessedTime(accessibleState.GetStateDB(), height, accessibleState.GetBlockContext().Timestamp().Uint64())
+	SetProcessedHeight(accessibleState.GetStateDB(), height, accessibleState.GetBlockContext().Number().Uint64())
 }
 
 func _chanOpenInit(opts *callOpts[ChanOpenInitInput]) error {
@@ -105,9 +246,9 @@ func _chanOpenInit(opts *callOpts[ChanOpenInitInput]) error {
 
 	channelID := makeChannelID(statedb)
 
-	setNextSequenceSend(opts.accessibleState, opts.args.PortID, channelID, 1)
-	setNextSequenceRecv(opts.accessibleState, opts.args.PortID, channelID, 1)
-	setNextSequenceAck(opts.accessibleState, opts.args.PortID, channelID, 1)
+	setNextSequenceSend(opts.accessibleState.GetStateDB(), opts.args.PortID, channelID, 1)
+	setNextSequenceRecv(opts.accessibleState.GetStateDB(), opts.args.PortID, channelID, 1)
+	setNextSequenceAck(opts.accessibleState.GetStateDB(), opts.args.PortID, channelID, 1)
 
 	channelNew := channeltypes.NewChannel(channeltypes.INIT, channel.Ordering, channel.Counterparty, channel.ConnectionHops, channel.Version)
 	if err := SetCapability(statedb, opts.args.PortID, channelID); err != nil {
@@ -232,9 +373,9 @@ func _chanOpenTry(opts *callOpts[ChanOpenTryInput]) (string, error) {
 		return "", err
 	}
 
-	setNextSequenceSend(opts.accessibleState, opts.args.PortID, channelID, 1)
-	setNextSequenceRecv(opts.accessibleState, opts.args.PortID, channelID, 1)
-	setNextSequenceAck(opts.accessibleState, opts.args.PortID, channelID, 1)
+	setNextSequenceSend(opts.accessibleState.GetStateDB(), opts.args.PortID, channelID, 1)
+	setNextSequenceRecv(opts.accessibleState.GetStateDB(), opts.args.PortID, channelID, 1)
+	setNextSequenceAck(opts.accessibleState.GetStateDB(), opts.args.PortID, channelID, 1)
 
 	channelNew := channeltypes.NewChannel(channeltypes.TRYOPEN, channel.Ordering, channel.Counterparty, channel.ConnectionHops, channel.Version)
 	if err := SetCapability(statedb, opts.args.PortID, channelID); err != nil {
