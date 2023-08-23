@@ -21,6 +21,8 @@ contract ICS20Bank is Context, AccessControl, IICS20Bank {
   bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
   bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
+  event Transfer(address indexed from, address indexed to, uint256 value);
+
   // Mapping from token ID to account balances
   mapping(string => mapping(address => uint256)) private _balances;
 
@@ -49,6 +51,8 @@ contract ICS20Bank is Context, AccessControl, IICS20Bank {
     require(fromBalance >= amount, "ICS20Bank: insufficient balance for transfer");
     _balances[id][from] = fromBalance - amount;
     _balances[id][to] += amount;
+
+    emit Transfer(from, to, amount);
   }
 
   function mint(address account, string calldata id, uint256 amount) external virtual override {
@@ -75,12 +79,14 @@ contract ICS20Bank is Context, AccessControl, IICS20Bank {
 
   function _mint(address account, string memory id, uint256 amount) internal virtual {
     _balances[id][account] += amount;
+    emit Transfer(address(0), account, amount);
   }
 
   function _burn(address account, string memory id, uint256 amount) internal virtual {
     uint256 accountBalance = _balances[id][account];
     require(accountBalance >= amount, "ICS20Bank: burn amount exceeds balance");
     _balances[id][account] = accountBalance - amount;
+    emit Transfer(account, address(0), amount);
   }
 
   function _genDenom(address tokenContract) internal pure virtual returns (string memory) {

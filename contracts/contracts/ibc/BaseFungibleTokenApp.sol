@@ -5,9 +5,6 @@ import "@openzeppelin/contracts/utils/Context.sol";
 import "solidity-stringutils/src/strings.sol";
 import {Packet} from "../interfaces/IIBC.sol";
 
-import "hardhat/console.sol";
-
-
 struct FungibleTokenPacketData {
   string denom;
   uint256 amount;
@@ -40,8 +37,6 @@ abstract contract BaseFungibleTokenApp is Context {
     strings.slice memory trimedDenom = data.denom.toSlice().beyond(
       _makeDenomPrefix(packet.sourcePort, packet.sourceChannel)
     );
-    console.log("denom: %s", data.denom);
-    console.log("trimedDenom: %s", trimedDenom.toString());
     if (!denom.equals(trimedDenom)) {
       return _transferFrom(_getEscrowAddress(packet.sourceChannel), data.receiver, data.denom, data.amount);
     }
