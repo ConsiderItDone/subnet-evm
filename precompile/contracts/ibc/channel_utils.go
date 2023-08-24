@@ -94,7 +94,11 @@ func getNextSequenceAck(db contract.StateDB, portID, channelID string) (uint64, 
 // TODO
 // HasPacketAcknowledgement check if the packet ack hash is already on the store
 func hasPacketAcknowledgement(db contract.StateDB, portID, channelID string, sequence uint64) bool {
-	return db.Exist(common.BytesToAddress(hosttypes.PacketAcknowledgementKey(portID, channelID, sequence)))
+	state, err := GetState(db, CalculateSlot(hosttypes.PacketAcknowledgementKey(portID, channelID, sequence)))
+	if err != nil || len(state) == 0 {
+		return false
+	}
+	return true
 }
 
 // SetPacketAcknowledgement sets the packet ack hash to the store
@@ -149,8 +153,12 @@ func setPacketCommitment(db contract.StateDB, portID, channelID string, sequence
 }
 
 func deletePacketCommitment(db contract.StateDB, portID, channelID string, sequence uint64) {
-	// TODO Suicide?
-	db.Suicide(common.BytesToAddress([]byte(hosttypes.PacketCommitmentKey(portID, channelID, sequence))))
+	setState(
+		db,
+		ContractAddress,
+		CalculateSlot(hosttypes.PacketCommitmentKey(portID, channelID, sequence)),
+		[]byte{},
+	)
 }
 
 func SetProcessedTime(db contract.StateDB, height uint64, timeNs uint64) {
