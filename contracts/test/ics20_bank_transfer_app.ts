@@ -55,12 +55,12 @@ describe("ICS20BankTransferApp", function () {
     await expect(ics20Bank.setOperator(owner.address)).not.reverted;
   });
 
-  it("chekc address", async function () {
+  it("check addresses", async function () {
     expect(ics20Bank.address).not.eq(ethers.constants.AddressZero);
     expect(ics20app.address).not.eq(ethers.constants.AddressZero);
   });
 
-  it("escrow addr can alloc only owner", async function () {
+  it("escrow address can set only owner", async function () {
     await expect(ics20app.connect(user).setChannelEscrowAddresses("channel", ethers.constants.AddressZero))
       .revertedWith("Ownable: caller is not the owner");
     await expect(ics20app.setChannelEscrowAddresses("", ethers.constants.AddressZero)).not.reverted;
