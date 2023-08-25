@@ -4,6 +4,7 @@
 package precompile
 
 import (
+	"os"
 	"context"
 	"testing"
 	"time"
@@ -13,15 +14,18 @@ import (
 	"github.com/stretchr/testify/require"
 
 	// Import the solidity package, so that ginkgo maps out the tests declared within the package
+	"github.com/ava-labs/subnet-evm/tests/precompile/solidity"
 	"github.com/ava-labs/avalanchego/api/health"
-
-	_ "github.com/ava-labs/subnet-evm/tests/precompile/solidity"
 	"github.com/ava-labs/subnet-evm/tests/utils"
 )
 
 func TestE2E(t *testing.T) {
+	if basePath := os.Getenv("TEST_SOURCE_ROOT"); basePath != "" {
+		os.Chdir(basePath)
+	}
 	utils.RegisterNodeRun()
 	gomega.RegisterFailHandler(ginkgo.Fail)
+	solidity.RegisterAsyncTests()
 	ginkgo.RunSpecs(t, "subnet-evm precompile ginkgo test suite")
 }
 
