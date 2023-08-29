@@ -37,7 +37,7 @@ func NewIbcBackend(snowCtx *snow.Context, db database.Database, signatureCacheSi
 
 func (ib *ibcBackend) AddMessage(payload []byte, key ids.ID) error {
 	// Create a new unsigned message and add it to the warp backend.
-	unsignedMessage, err := warp.NewUnsignedMessage(ib.snowCtx.ChainID, ib.snowCtx.ChainID, payload)
+	unsignedMessage, err := warp.NewUnsignedMessage(ib.snowCtx.NetworkID, ib.snowCtx.ChainID, payload)
 	if err != nil {
 		return fmt.Errorf("failed to create unsigned message: %w", err)
 	}

@@ -30,6 +30,8 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	wallet "github.com/ava-labs/avalanchego/wallet/subnet/primary"
+	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
+
 	"github.com/ava-labs/subnet-evm/accounts/abi/bind"
 	"github.com/ava-labs/subnet-evm/core"
 	"github.com/ava-labs/subnet-evm/core/types"
@@ -39,7 +41,6 @@ import (
 	"github.com/ava-labs/subnet-evm/precompile/contracts/ibc"
 	"github.com/ava-labs/subnet-evm/rpc"
 	contractBind "github.com/ava-labs/subnet-evm/tests/precompile/contract"
-	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
 )
 
 const (
@@ -106,30 +107,30 @@ func RunTestIbcInit(t *testing.T) {
 	genesisBytes, err := os.ReadFile("../precompile/genesis/ibc.json")
 	require.NoError(t, err)
 
-	createSubnetTxID, err := pWallet.IssueCreateSubnetTx(owner)
+	createSubnetTx, err := pWallet.IssueCreateSubnetTx(owner)
 	require.NoError(t, err)
-	t.Logf("new subnet id: %s", createSubnetTxID)
+	t.Logf("new subnet id: %s", createSubnetTx)
 
 	genesis := new(core.Genesis)
 	require.NoError(t, genesis.UnmarshalJSON(genesisBytes))
 
-	createChainTxID, err := pWallet.IssueCreateChainTx(
-		createSubnetTxID,
+	createChainTx, err := pWallet.IssueCreateChainTx(
+		createSubnetTx.ID(),
 		genesisBytes,
 		evm.ID,
 		nil,
 		"testChain",
 	)
 	require.NoError(t, err)
-	t.Logf("new chain id: %s", createSubnetTxID)
+	t.Logf("new chain id: %s", createChainTx.ID())
 
 	// Confirm the new blockchain is ready by waiting for the readiness endpoint
 	infoClient := info.NewClient(DefaultLocalNodeURI)
-	bootstrapped, err := info.AwaitBootstrapped(ctx, infoClient, createChainTxID.String(), 2*time.Second)
+	bootstrapped, err := info.AwaitBootstrapped(ctx, infoClient, createChainTx.ID().String(), 2*time.Second)
 	require.NoError(t, err)
 	require.True(t, bootstrapped, "network isn't bootstaped")
 
-	chainURI := GetDefaultChainURI(createChainTxID.String())
+	chainURI := GetDefaultChainURI(createChainTx.ID().String())
 	t.Logf("subnet successfully created: %s", chainURI)
 
 	rpcClient, err := rpc.DialContext(ctx, chainURI)
@@ -454,6 +455,8 @@ func RunTestIncChannelOpenConfirm(t *testing.T) {
 
 	consensusHeightByte, err := marshaler.Marshal(&proofHeight)
 	require.NoError(t, err)
+
+	ibcContract.GetClientState(clientID)
 
 	tx, err := ibcContract.ChannelOpenConfirm(
 		auth,
