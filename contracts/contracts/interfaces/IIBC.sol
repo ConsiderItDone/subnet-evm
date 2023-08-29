@@ -101,12 +101,39 @@ interface IIBC {
     string ChannelOrdering
   );
 
-  function recvPacket(
-    Packet memory packet,
-    bytes memory proofCommitment,
-    Height memory proofHeight,
-    string memory signer
-  ) external;
+  struct MsgRecvPacket {
+    Packet packet;
+    bytes proofCommitment;
+    Height proofHeight;
+    string signer;
+  }
+
+  struct MsgAcknowledgement {
+    Packet packet;
+    bytes acknowledgement;
+    bytes proofAcked;
+    Height proofHeight;
+    string signer;
+  }
+
+  struct MsgTimeoutOnClose {
+    Packet packet;
+    bytes proofUnreceived;
+    bytes proofClose;
+    Height proofHeight;
+    uint64 nextSequenceRecv;
+    string signer;
+  }
+
+  struct MsgTimeout {
+    Packet packet;
+    bytes proofUnreceived;
+    Height proofHeight;
+    uint64 nextSequenceRecv;
+    string signer;
+  }
+
+  function recvPacket(MsgRecvPacket memory message) external;
 
   function sendPacket(
     uint channelCapability,

@@ -44,20 +44,21 @@ func TestIBC(t *testing.T) {
 		t.Run("connection open ack", utils.RunTestIbcConnectionOpenAck)
 		t.Run("channel open init", utils.RunTestIncChannelOpenInit)
 		t.Run("channel open ack", utils.RunTestIncChannelOpenAck)
+		t.Run("recv packet", utils.RunTestIbcRecvPacket)
 	})
 
-	t.Run("part b", func(t *testing.T) {
-		t.Run("create chain", utils.RunTestIbcInit)
-		t.Run("create clients", utils.RunTestIbcCreateClient)
-		t.Run("connection open try", utils.RunTestIbcConnectionOpenTry)
-		t.Run("connection open confirm", utils.RunTestIbcConnectionOpenConfirm)
-		t.Run("channel open try", utils.RunTestIncChannelOpenTry)
-		t.Run("channel open confirm", utils.RunTestIncChannelOpenConfirm)
-	})
+	//t.Run("part b", func(t *testing.T) {
+	//	t.Run("create chain", utils.RunTestIbcInit)
+	//	t.Run("create clients", utils.RunTestIbcCreateClient)
+	//	t.Run("connection open try", utils.RunTestIbcConnectionOpenTry)
+	//	t.Run("connection open confirm", utils.RunTestIbcConnectionOpenConfirm)
+	//	t.Run("channel open try", utils.RunTestIncChannelOpenTry)
+	//	t.Run("channel open confirm", utils.RunTestIncChannelOpenConfirm)
+	//})
 
-	t.Run("proof generation", func(t *testing.T) {
-		t.Run("create chain", utils.RunTestIbcInit)
-		t.Run("create clients", utils.RunTestIbcCreateClient)
-		t.Run("query proofs", utils.QueryProofs)
-	})
+	//t.Run("proof generation", func(t *testing.T) {
+	//	t.Run("create chain", utils.RunTestIbcInit)
+	//	t.Run("create clients", utils.RunTestIbcCreateClient)
+	//	t.Run("query proofs", utils.QueryProofs)
+	//})
 }

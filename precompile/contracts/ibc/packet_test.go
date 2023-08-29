@@ -62,7 +62,7 @@ func TestRecvPacket(t *testing.T) {
 				packetKey := host.PacketCommitmentKey(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				proof, proofHeight := path.EndpointA.QueryProof(packetKey)
 
-				input, err := PackRecvPacket(MsgRecvPacket{
+				input, err := PackRecvPacket(IIBCMsgRecvPacket{
 					Packet: Packet{
 						Sequence:           big.NewInt(int64(sequence)),
 						SourcePort:         path.EndpointA.ChannelConfig.PortID,
@@ -1271,7 +1271,7 @@ func TestTimeoutPacket(t *testing.T) {
 
 				proof, proofHeight = path.EndpointB.QueryProof(orderedPacketKey)
 
-				input, err := PackTimeout(MsgTimeout{
+				input, err := PackTimeout(IIBCMsgTimeout{
 					Packet: packet,
 					ProofHeight: Height{
 						RevisionNumber: big.NewInt(int64(proofHeight.GetRevisionNumber())),

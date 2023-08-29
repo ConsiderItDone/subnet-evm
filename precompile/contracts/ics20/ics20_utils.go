@@ -27,7 +27,6 @@ type (
 )
 
 var (
-	FungibleTokenAbiStruct   abi.Type
 	FungibleTokenAbiArgument abi.Arguments
 
 	ErrDenomNotFound    = errors.New("denom not found")
@@ -35,25 +34,48 @@ var (
 	ErrAmountCantParse  = errors.New("amount has unknown format")
 	ErrSenderNotFound   = errors.New("sender not found")
 	ErrReceiverNotFound = errors.New("receiver not found")
+	ErrBadReceiverAddr  = errors.New("bad receiver address")
 )
 
 func init() {
-	fungibleTokenAbiStruct, err := abi.NewType("tuple", "struct thing", []abi.ArgumentMarshaling{
-		{Name: "denom", Type: "string", InternalType: "string"},
-		{Name: "amount", Type: "uint256", InternalType: "uint256"},
-		{Name: "sender", Type: "string", InternalType: "string"},
-		{Name: "receiver", Type: "address", InternalType: "address"},
-		{Name: "memo", Type: "string", InternalType: "string"},
-	})
-	if err != nil {
+	var fungibleTokenPacketDataArg abi.Argument
+	if err := json.Unmarshal([]byte(`
+		{
+			"components": [
+				{
+					"internalType": "string",
+					"name": "denom",
+					"type": "string"
+				},
+				{
+					"internalType": "uint256",
+					"name": "amount",
+					"type": "uint256"
+				},
+				{
+					"internalType": "string",
+					"name": "sender",
+					"type": "string"
+				},
+				{
+					"internalType": "address",
+					"name": "receiver",
+					"type": "address"
+				},
+				{
+					"internalType": "string",
+					"name": "memo",
+					"type": "string"
+				}
+			],
+			"internalType": "struct FungibleTokenPacketData",
+			"name": "data",
+			"type": "tuple"
+		}
+	`), &fungibleTokenPacketDataArg); err != nil {
 		panic(err)
 	}
-
-	FungibleTokenAbiStruct = fungibleTokenAbiStruct
-	FungibleTokenAbiArgument = abi.Arguments{{
-		Name: "rawdata",
-		Type: FungibleTokenAbiStruct,
-	}}
+	FungibleTokenAbiArgument = abi.Arguments{fungibleTokenPacketDataArg}
 }
 
 func FungibleTokenPacketDataToABI(rawdata []byte) ([]byte, error) {
@@ -76,6 +98,10 @@ func FungibleTokenPacketDataToABI(rawdata []byte) ([]byte, error) {
 
 	if len(data.Receiver) == 0 {
 		return nil, ErrReceiverNotFound
+	}
+
+	if !common.IsHexAddress(data.Receiver) {
+		return nil, ErrBadReceiverAddr
 	}
 
 	amount, ok := math.ParseBig256(data.Amount)

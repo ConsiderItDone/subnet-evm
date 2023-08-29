@@ -114,10 +114,11 @@ func _sendPacket(opts *callOpts[MsgSendPacket]) error {
 	return nil
 }
 
-func _recvPacket(opts *callOpts[MsgRecvPacket]) error {
+func _recvPacket(opts *callOpts[IIBCMsgRecvPacket]) error {
 	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
 	std.RegisterInterfaces(interfaceRegistry)
 	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
+	channeltypes.RegisterInterfaces(interfaceRegistry)
 	marshaler := codec.NewProtoCodec(interfaceRegistry)
 
 	found, err := GetCapability(opts.accessibleState.GetStateDB(), opts.args.Packet.DestinationPort, opts.args.Packet.DestinationChannel)
@@ -175,14 +176,22 @@ func _recvPacket(opts *callOpts[MsgRecvPacket]) error {
 
 	// check if packet timeouted by comparing it with the latest timestamp of the chain
 	if opts.args.Packet.TimeoutTimestamp.Uint64() != 0 && opts.accessibleState.GetBlockContext().Timestamp().Uint64() >= opts.args.Packet.TimeoutTimestamp.Uint64() {
-		return fmt.Errorf("block timestamp >= packet timeout timestamp (%d >= %d)", opts.accessibleState.GetBlockContext().Timestamp().Uint64(), int64(opts.args.Packet.TimeoutTimestamp.Uint64()))
+		return fmt.Errorf("block timestamp >= packet timeout timestamp (%d >= %d)", opts.accessibleState.GetBlockContext().Timestamp().Uint64(), time.Unix(0, int64(opts.args.Packet.TimeoutTimestamp.Uint64())).Unix())
 	}
 
-	packet := channeltypes.NewPacket(opts.args.Packet.Data, opts.args.Packet.Sequence.Uint64(), opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel,
-		channel.Counterparty.PortId, channel.Counterparty.ChannelId, clienttypes.Height{
+	packet := channeltypes.NewPacket(
+		opts.args.Packet.Data,
+		opts.args.Packet.Sequence.Uint64(),
+		opts.args.Packet.SourcePort,
+		opts.args.Packet.SourceChannel,
+		channel.Counterparty.PortId,
+		channel.Counterparty.ChannelId,
+		clienttypes.Height{
 			RevisionNumber: opts.args.Packet.TimeoutHeight.RevisionNumber.Uint64(),
 			RevisionHeight: opts.args.Packet.TimeoutHeight.RevisionHeight.Uint64(),
-		}, opts.args.Packet.TimeoutTimestamp.Uint64())
+		},
+		opts.args.Packet.TimeoutTimestamp.Uint64(),
+	)
 
 	commitment := channeltypes.CommitPacket(marshaler, packet)
 
@@ -339,7 +348,7 @@ func writeAcknowledgement(
 	return nil
 }
 
-func _timeout(opts *callOpts[MsgTimeout]) error {
+func _timeout(opts *callOpts[IIBCMsgTimeout]) error {
 	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
 	std.RegisterInterfaces(interfaceRegistry)
 	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
@@ -379,7 +388,7 @@ func _timeout(opts *callOpts[MsgTimeout]) error {
 	return err
 }
 
-func _timeoutOnClose(opts *callOpts[MsgTimeoutOnClose]) error {
+func _timeoutOnClose(opts *callOpts[IIBCMsgTimeoutOnClose]) error {
 	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
 	std.RegisterInterfaces(interfaceRegistry)
 	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
@@ -510,7 +519,7 @@ func _timeoutOnClose(opts *callOpts[MsgTimeoutOnClose]) error {
 	return nil
 }
 
-func _acknowledgement(opts *callOpts[MsgAcknowledgement]) error {
+func _acknowledgement(opts *callOpts[IIBCMsgAcknowledgement]) error {
 	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
 	std.RegisterInterfaces(interfaceRegistry)
 	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)

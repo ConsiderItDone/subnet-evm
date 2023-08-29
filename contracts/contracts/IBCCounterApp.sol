@@ -5,8 +5,9 @@ import "./IBCApp.sol";
 
 contract IBCCounterApp is IBCApp {
     int64 public counter = 0;
-    function OnRecvPacket(Packet memory packet, bytes memory) override external {
+    function OnRecvPacket(Packet memory packet, bytes memory) override external returns (bool) {
         int64 value = abi.decode(packet.data, (int64));
         counter += value;
+        return true;
     }
 }

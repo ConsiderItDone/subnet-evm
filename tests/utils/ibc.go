@@ -21,6 +21,7 @@ import (
 	ibctm "github.com/cosmos/ibc-go/v7/modules/light-clients/07-tendermint"
 	ibctesting "github.com/cosmos/ibc-go/v7/testing"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,8 +38,11 @@ import (
 	"github.com/ava-labs/subnet-evm/ethclient/subnetevmclient"
 	"github.com/ava-labs/subnet-evm/plugin/evm"
 	"github.com/ava-labs/subnet-evm/precompile/contracts/ibc"
+	"github.com/ava-labs/subnet-evm/precompile/contracts/ics20"
 	"github.com/ava-labs/subnet-evm/rpc"
 	contractBind "github.com/ava-labs/subnet-evm/tests/precompile/contract"
+	"github.com/ava-labs/subnet-evm/tests/precompile/contract/ics20/ics20bank"
+	"github.com/ava-labs/subnet-evm/tests/precompile/contract/ics20/ics20transferer"
 	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
 )
 
@@ -465,6 +469,122 @@ func RunTestIncChannelOpenConfirm(t *testing.T) {
 	require.NoError(t, err)
 	_, err = waitForReceiptAndGet(ctx, ethClient, tx)
 	require.NoError(t, err)
+}
+
+func RunTestIbcRecvPacket(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	ics20bankAddr, ics20bankTx, ics20bank, err := ics20bank.DeployIcs20bank(auth, ethClient)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, ics20bankTx)
+	require.NoError(t, err)
+
+	ics20transfererAddr, ics20transfererTx, ics20transferer, err := ics20transferer.DeployIcs20transferer(auth, ethClient, ibc.ContractAddress, ics20bankAddr)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, ics20transfererTx)
+	require.NoError(t, err)
+
+	setOperTx1, err := ics20bank.SetOperator(auth, auth.From)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, setOperTx1)
+	require.NoError(t, err)
+
+	setOperTx2, err := ics20bank.SetOperator(auth, ibc.ContractAddress)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, setOperTx2)
+	require.NoError(t, err)
+
+	setOperTx3, err := ics20bank.SetOperator(auth, ics20transfererAddr)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, setOperTx3)
+	require.NoError(t, err)
+
+	bindTx, err := ics20transferer.BindPort(auth, ibc.ContractAddress, "transfer")
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, bindTx)
+	require.NoError(t, err)
+
+	connectionKey := host.ConnectionKey(path.EndpointB.ConnectionID)
+	proof, proofHeight := chainB.QueryProof(connectionKey)
+
+	mintFungibleTokenPacketData, err := json.Marshal(ics20.FungibleTokenPacketData{
+		Denom:    "ETH",
+		Amount:   "1000",
+		Sender:   auth.From.Hex(),
+		Receiver: auth.From.Hex(),
+		Memo:     "some memo",
+	})
+	require.NoError(t, err)
+	mintRecvPacketTx, err := ibcContract.RecvPacket(auth, contractBind.IIBCMsgRecvPacket{
+		Packet: contractBind.Packet{
+			Sequence:           big.NewInt(0),
+			SourcePort:         ibctesting.MockPort,
+			SourceChannel:      ibctesting.FirstChannelID,
+			DestinationPort:    "transfer",
+			DestinationChannel: ibctesting.FirstChannelID,
+			Data:               mintFungibleTokenPacketData,
+			TimeoutHeight: contractBind.Height{
+				RevisionNumber: big.NewInt(1000),
+				RevisionHeight: big.NewInt(1000),
+			},
+			TimeoutTimestamp: big.NewInt(time.Now().Unix() + 10000),
+		},
+		ProofCommitment: proof,
+		ProofHeight: contractBind.Height{
+			RevisionNumber: big.NewInt(int64(proofHeight.RevisionNumber)),
+			RevisionHeight: big.NewInt(int64(proofHeight.RevisionHeight)),
+		},
+		Signer: "",
+	})
+	require.NoError(t, err)
+	mintRecvPacketReceipt, err := waitForReceiptAndGet(ctx, ethClient, mintRecvPacketTx)
+	require.NoError(t, err)
+	require.Len(t, mintRecvPacketReceipt.Logs, 1, "must be `mint` log")
+	mintLog, err := ics20bank.ParseTransfer(*mintRecvPacketReceipt.Logs[0])
+	require.NoError(t, err)
+	assert.Equal(t, common.Address{}, mintLog.From)
+	assert.Equal(t, auth.From, mintLog.To)
+	assert.Equal(t, big.NewInt(1000), mintLog.Value)
+
+	transferFungibleTokenPacketData, err := json.Marshal(ics20.FungibleTokenPacketData{
+		Denom:    fmt.Sprintf("%s/%s/ETH", ibctesting.FirstChannelID, ibctesting.MockPort),
+		Amount:   "1000",
+		Sender:   auth.From.Hex(),
+		Receiver: auth.From.Hex(),
+		Memo:     "some memo",
+	})
+	require.NoError(t, err)
+	transferRecvPacketTx, err := ibcContract.RecvPacket(auth, contractBind.IIBCMsgRecvPacket{
+		Packet: contractBind.Packet{
+			Sequence:           big.NewInt(0),
+			SourcePort:         ibctesting.MockPort,
+			SourceChannel:      ibctesting.FirstChannelID,
+			DestinationPort:    "transfer",
+			DestinationChannel: ibctesting.FirstChannelID,
+			Data:               transferFungibleTokenPacketData,
+			TimeoutHeight: contractBind.Height{
+				RevisionNumber: big.NewInt(1000),
+				RevisionHeight: big.NewInt(1000),
+			},
+			TimeoutTimestamp: big.NewInt(time.Now().Unix() + 10000),
+		},
+		ProofCommitment: proof,
+		ProofHeight: contractBind.Height{
+			RevisionNumber: big.NewInt(int64(proofHeight.RevisionNumber)),
+			RevisionHeight: big.NewInt(int64(proofHeight.RevisionHeight)),
+		},
+		Signer: "",
+	})
+	require.NoError(t, err)
+	transferRecvPacketReceipt, err := waitForReceiptAndGet(ctx, ethClient, transferRecvPacketTx)
+	require.NoError(t, err)
+	require.Len(t, transferRecvPacketReceipt.Logs, 1, "must be `mint` log")
+	transferLog, err := ics20bank.ParseTransfer(*transferRecvPacketReceipt.Logs[0])
+	require.NoError(t, err)
+	assert.Equal(t, common.Address{}, transferLog.From)
+	assert.Equal(t, auth.From, transferLog.To)
+	assert.Equal(t, big.NewInt(1000), transferLog.Value)
 }
 
 func QueryProofs(t *testing.T) {
