@@ -1,28 +1,118 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+struct Packet {
+    uint64 sequence;
+    string sourcePort;
+    string sourceChannel;
+    string destinationPort;
+    string destinationChannel;
+    bytes data;
+    Height timeoutHeight;
+    uint64 timeoutTimestamp;
+}
+
+struct Height {
+    uint64 revisionNumber;
+    uint64 revisionHeight;
+}
+
 interface IIBC {
   event ClientCreated(string clientId);
   event ConnectionCreated(string clientId, string connectionId);
   event ChannelCreated(string clientId, string connectionId);
+  event PacketSent(
+    bytes data,
+    string timeoutHeight,
+    uint64 timeoutTimestamp,
+    uint64 sequence,
+    string sourcePort,
+    string sourceChannel,
+    string destPort,
+    string destChannel,
+    int32 channelOrdering
+  );
+  event PacketReceived(
+    bytes data,
+    string timeoutHeight,
+    uint64 timeoutTimestamp,
+    uint64 sequence,
+    string sourcePort,
+    string sourceChannel,
+    string destPort,
+    string destChannel,
+    int32 channelOrdering
+  );
+  event AcknowledgementWritten(
+    bytes data,
+    string timeoutHeight,
+    uint64 timeoutTimestamp,
+    uint64 sequence,
+    string sourcePort,
+    string sourceChannel,
+    string destPort,
+    string destChannel,
+    bytes ack,
+    string connectionID
+  );
+  event AcknowledgePacket(
+    string timeoutHeight,
+    uint64 timeoutTimestamp,
+    uint64 sequence,
+    string sourcePort,
+    string sourceChannel,
+    string destPort,
+    string destChannel,
+    int32 channelOrdering,
+    string connectionID
+  );
+  event TimeoutPacket(
+    string timeoutHeight,
+    uint64 timeoutTimestamp,
+    uint64 sequence,
+    string sourcePort,
+    string sourceChannel,
+    string destPort,
+    string destChannel,
+    int32 channelOrdering,
+    string connectionID
+  );
 
-  struct Height {
-      uint64 revisionNumber;
-      uint64 revisionHeight;
+
+  struct MsgRecvPacket {
+    Packet packet;
+    bytes proofCommitment;
+    Height proofHeight;
+    string signer;
   }
 
-  struct Packet {
-      uint64 sequence;
-      string sourcePort;
-      string sourceChannel;
-      string destinationPort;
-      string destinationChannel;
-      bytes data;
-      Height timeoutHeight;
-      uint64 timeoutTimestamp;
+  struct MsgAcknowledgement {
+    Packet packet;
+    bytes acknowledgement;
+    bytes proofAcked;
+    Height proofHeight;
+    string signer;
+
   }
 
-  function OnRecvPacket(Packet memory packet, bytes memory relayer) external;
+  struct MsgTimeoutOnClose {
+    Packet packet;
+    bytes proofUnreceived;
+    bytes proofClose;
+    Height proofHeight;
+    uint64 nextSequenceRecv;
+    string signer;
+  }
+
+  struct MsgTimeout {
+    Packet packet;
+    bytes proofUnreceived;
+    Height proofHeight;
+    uint64 nextSequenceRecv;
+    string signer;
+  }
+
+  function RecvPacket(MsgRecvPacket memory message) external;
 
   function SendPacket(
       uint64 channelCapability,
@@ -32,6 +122,10 @@ interface IIBC {
       uint64 timeoutTimestamp,
       bytes memory data
   ) external;
+
+  function Acknowledgement(MsgAcknowledgement memory message) external;
+  function TimeoutOnClose(MsgTimeoutOnClose memory message) external;
+  function Timeout(MsgTimeout memory message) external;
 
   // Create IBC Client
   function createClient(
