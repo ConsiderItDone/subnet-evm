@@ -66,12 +66,12 @@ func ChannelCapabilitySlot(portID, channelID string) common.Hash {
 }
 
 func ProcessedTimeSlot(height uint64) common.Hash {
-	consensusStateKey := fmt.Sprintf("consensusStates/%s", height)
+	consensusStateKey := fmt.Sprintf("consensusStates/%d", height)
 	return CalculateSlot([]byte(append([]byte(consensusStateKey), []byte("/processedTime")...)))
 }
 
 func ProcessedHeightSlot(height uint64) common.Hash {
-	consensusStateKey := fmt.Sprintf("consensusStates/%s", height)
+	consensusStateKey := fmt.Sprintf("consensusStates/%d", height)
 	return CalculateSlot([]byte(append([]byte(consensusStateKey), []byte("/processedHeight")...)))
 }
 
@@ -182,6 +182,7 @@ func GetCapability(db contract.StateDB, portID, channelID string) (bool, error) 
 func SetCapability(db contract.StateDB, portID, channelID string) error {
 	exist, err := GetCapability(db, portID, channelID)
 	if err != nil && err != ErrEmptyState {
+		fmt.Println("SetCapability")
 		return err
 	}
 	if exist {

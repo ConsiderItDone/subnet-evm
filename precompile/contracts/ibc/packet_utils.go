@@ -3,6 +3,7 @@ package ibc
 import (
 	"bytes"
 	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -51,12 +52,12 @@ func _sendPacket(opts *callOpts[MsgSendPacket]) error {
 	}
 
 	height := clienttypes.Height{
-		RevisionNumber: opts.args.TimeoutHeight.RevisionNumber,
-		RevisionHeight: opts.args.TimeoutHeight.RevisionHeight,
+		RevisionNumber: opts.args.TimeoutHeight.RevisionNumber.Uint64(),
+		RevisionHeight: opts.args.TimeoutHeight.RevisionHeight.Uint64(),
 	}
 
 	packet := channeltypes.NewPacket(opts.args.Data, sequence, opts.args.SourcePort, opts.args.SourceChannel,
-		channel.Counterparty.PortId, channel.Counterparty.ChannelId, height, opts.args.TimeoutTimestamp)
+		channel.Counterparty.PortId, channel.Counterparty.ChannelId, height, opts.args.TimeoutTimestamp.Uint64())
 
 	connectionEnd, err := GetConnection(opts.accessibleState.GetStateDB(), channel.ConnectionHops[0])
 	if err != nil {
@@ -92,9 +93,10 @@ func _sendPacket(opts *callOpts[MsgSendPacket]) error {
 
 	topics, data, err := IBCABI.PackEvent(
 		GeneratedPacketSentIdentifier.RawName,
-		packet.TimeoutHeight,
-		packet.TimeoutTimestamp,
-		sequence,
+		packet.Data,
+		packet.TimeoutHeight.String(),
+		big.NewInt(int64(packet.TimeoutTimestamp)),
+		big.NewInt(int64(sequence)),
 		packet.SourcePort,
 		packet.SourceChannel,
 		packet.DestinationPort,
@@ -159,12 +161,12 @@ func _recvPacket(opts *callOpts[MsgRecvPacket]) error {
 
 	// check if packet timeouted by comparing it with the latest height of the chain
 	selfHeight := clienttypes.Height{
-		RevisionNumber: opts.args.Packet.TimeoutHeight.RevisionNumber, // TODO
+		RevisionNumber: opts.args.Packet.TimeoutHeight.RevisionNumber.Uint64(), // TODO
 		RevisionHeight: opts.accessibleState.GetBlockContext().Number().Uint64(),
 	}
 	timeoutHeight := clienttypes.Height{
-		RevisionNumber: opts.args.Packet.TimeoutHeight.RevisionNumber,
-		RevisionHeight: opts.args.Packet.TimeoutHeight.RevisionHeight,
+		RevisionNumber: opts.args.Packet.TimeoutHeight.RevisionNumber.Uint64(),
+		RevisionHeight: opts.args.Packet.TimeoutHeight.RevisionHeight.Uint64(),
 	}
 
 	if !timeoutHeight.IsZero() && selfHeight.GTE(timeoutHeight) {
@@ -172,16 +174,22 @@ func _recvPacket(opts *callOpts[MsgRecvPacket]) error {
 	}
 
 	// check if packet timeouted by comparing it with the latest timestamp of the chain
-	if opts.args.Packet.TimeoutTimestamp != 0 && opts.accessibleState.GetBlockContext().Timestamp().Uint64() >= opts.args.Packet.TimeoutTimestamp {
-		return fmt.Errorf("%w, block timestamp >= packet timeout timestamp (%s >= %s)", opts.accessibleState.GetBlockContext().Timestamp().Uint64(), time.Unix(0, int64(opts.args.Packet.TimeoutTimestamp)))
+	if opts.args.Packet.TimeoutTimestamp.Uint64() != 0 && opts.accessibleState.GetBlockContext().Timestamp().Uint64() >= opts.args.Packet.TimeoutTimestamp.Uint64() {
+		return fmt.Errorf("block timestamp >= packet timeout timestamp (%d >= %d)", opts.accessibleState.GetBlockContext().Timestamp().Uint64(), int64(opts.args.Packet.TimeoutTimestamp.Uint64()))
 	}
 
-	packet := channeltypes.NewPacket(opts.args.Packet.Data, opts.args.Packet.Sequence, opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel,
-		channel.Counterparty.PortId, channel.Counterparty.ChannelId, clienttypes.Height(opts.args.Packet.TimeoutHeight), opts.args.Packet.TimeoutTimestamp)
+	packet := channeltypes.NewPacket(opts.args.Packet.Data, opts.args.Packet.Sequence.Uint64(), opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel,
+		channel.Counterparty.PortId, channel.Counterparty.ChannelId, clienttypes.Height{
+			RevisionNumber: opts.args.Packet.TimeoutHeight.RevisionNumber.Uint64(),
+			RevisionHeight: opts.args.Packet.TimeoutHeight.RevisionHeight.Uint64(),
+		}, opts.args.Packet.TimeoutTimestamp.Uint64())
 
 	commitment := channeltypes.CommitPacket(marshaler, packet)
 
-	height := clienttypes.Height(opts.args.ProofHeight)
+	height := clienttypes.Height{
+		RevisionNumber: opts.args.Packet.TimeoutHeight.RevisionNumber.Uint64(),
+		RevisionHeight: opts.args.Packet.TimeoutHeight.RevisionHeight.Uint64(),
+	}
 
 	// verify that the counterparty did commit to sending this packet
 	if err := VerifyPacketCommitment(
@@ -198,7 +206,6 @@ func _recvPacket(opts *callOpts[MsgRecvPacket]) error {
 		// check if the packet receipt has been received already for unordered channels
 		_, found := getPacketReceipt(opts.accessibleState.GetStateDB(), packet.GetDestPort(), packet.GetDestChannel(), packet.GetSequence())
 		if found {
-
 			topics, data, err := IBCABI.PackEvent(GeneratedPacketReceivedIdentifier.RawName,
 				packet.Data,
 				packet.TimeoutHeight.String(),
@@ -309,13 +316,13 @@ func writeAcknowledgement(
 		fmt.Errorf("%w, channel state is not OPEN (got %s)", channeltypes.ErrInvalidChannelState, channel.State.String())
 	}
 
-	if hasPacketAcknowledgement(accessibleState.GetStateDB(), packet.DestinationPort, packet.DestinationChannel, packet.Sequence) {
+	if hasPacketAcknowledgement(accessibleState.GetStateDB(), packet.DestinationPort, packet.DestinationChannel, packet.Sequence.Uint64()) {
 		return channeltypes.ErrAcknowledgementExists
 	}
 
 	// set the acknowledgement so that it can be verified on the other side
 	setPacketAcknowledgement(
-		accessibleState.GetStateDB(), packet.DestinationPort, packet.DestinationChannel, packet.Sequence,
+		accessibleState.GetStateDB(), packet.DestinationPort, packet.DestinationChannel, packet.Sequence.Uint64(),
 		channeltypes.CommitAcknowledgement([]byte{1}),
 	)
 
@@ -337,8 +344,8 @@ func _timeout(opts *callOpts[MsgTimeout]) error {
 	}
 
 	height := clienttypes.Height{
-		RevisionNumber: opts.args.Packet.TimeoutHeight.RevisionNumber,
-		RevisionHeight: opts.args.Packet.TimeoutHeight.RevisionHeight,
+		RevisionNumber: opts.args.Packet.TimeoutHeight.RevisionNumber.Uint64(),
+		RevisionHeight: opts.args.Packet.TimeoutHeight.RevisionHeight.Uint64(),
 	}
 
 	channel, err := GetChannel(
@@ -350,15 +357,15 @@ func _timeout(opts *callOpts[MsgTimeout]) error {
 		return err
 	}
 
-	packet := channeltypes.NewPacket(opts.args.Packet.Data, opts.args.Packet.Sequence, opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel,
-		channel.Counterparty.PortId, channel.Counterparty.ChannelId, height, opts.args.Packet.TimeoutTimestamp)
+	packet := channeltypes.NewPacket(opts.args.Packet.Data, opts.args.Packet.Sequence.Uint64(), opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel,
+		channel.Counterparty.PortId, channel.Counterparty.ChannelId, height, opts.args.Packet.TimeoutTimestamp.Uint64())
 
 	proofHeight := clienttypes.Height{
-		RevisionNumber: opts.args.ProofHeight.RevisionNumber,
-		RevisionHeight: opts.args.ProofHeight.RevisionHeight,
+		RevisionNumber: opts.args.ProofHeight.RevisionNumber.Uint64(),
+		RevisionHeight: opts.args.ProofHeight.RevisionHeight.Uint64(),
 	}
 
-	err = TimeoutPacket(marshaler, packet, opts.args.ProofUnreceived, proofHeight, opts.args.NextSequenceRecv, opts.accessibleState)
+	err = TimeoutPacket(marshaler, packet, opts.args.ProofUnreceived, proofHeight, opts.args.NextSequenceRecv.Uint64(), opts.accessibleState)
 	return err
 }
 
@@ -377,8 +384,8 @@ func _timeoutOnClose(opts *callOpts[MsgTimeoutOnClose]) error {
 	}
 
 	height := clienttypes.Height{
-		RevisionNumber: opts.args.Packet.TimeoutHeight.RevisionNumber,
-		RevisionHeight: opts.args.Packet.TimeoutHeight.RevisionHeight,
+		RevisionNumber: opts.args.Packet.TimeoutHeight.RevisionNumber.Uint64(),
+		RevisionHeight: opts.args.Packet.TimeoutHeight.RevisionHeight.Uint64(),
 	}
 
 	channel, err := GetChannel(
@@ -390,8 +397,8 @@ func _timeoutOnClose(opts *callOpts[MsgTimeoutOnClose]) error {
 		return err
 	}
 
-	packet := channeltypes.NewPacket(opts.args.Packet.Data, opts.args.Packet.Sequence, opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel,
-		channel.Counterparty.PortId, channel.Counterparty.ChannelId, height, opts.args.Packet.TimeoutTimestamp)
+	packet := channeltypes.NewPacket(opts.args.Packet.Data, opts.args.Packet.Sequence.Uint64(), opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel,
+		channel.Counterparty.PortId, channel.Counterparty.ChannelId, height, opts.args.Packet.TimeoutTimestamp.Uint64())
 
 	if packet.GetDestPort() != channel.Counterparty.PortId {
 		return fmt.Errorf("%w, packet destination port doesn't match the counterparty's port (%s ≠ %s)", channeltypes.ErrInvalidPacket, packet.GetDestPort(), channel.Counterparty.PortId)
@@ -450,7 +457,10 @@ func _timeoutOnClose(opts *callOpts[MsgTimeoutOnClose]) error {
 		channeltypes.CLOSED, channel.Ordering, counterparty, counterpartyHops, channel.Version,
 	)
 
-	proofHeight := clienttypes.Height(opts.args.ProofHeight)
+	proofHeight := clienttypes.Height{
+		RevisionNumber: opts.args.ProofHeight.RevisionNumber.Uint64(),
+		RevisionHeight: opts.args.ProofHeight.RevisionHeight.Uint64(),
+	}
 
 	// check that the opposing channel end has closed
 	if err := VerifyChannelState(
@@ -464,14 +474,14 @@ func _timeoutOnClose(opts *callOpts[MsgTimeoutOnClose]) error {
 	switch channel.Ordering {
 	case channeltypes.ORDERED:
 		// check that packet has not been received
-		if opts.args.NextSequenceRecv > packet.GetSequence() {
-			return fmt.Errorf("%w, packet already received, next sequence receive > packet sequence (%d > %d", channeltypes.ErrInvalidPacket, opts.args.NextSequenceRecv, packet.GetSequence())
+		if opts.args.NextSequenceRecv.Uint64() > packet.GetSequence() {
+			return fmt.Errorf("%w, packet already received, next sequence receive > packet sequence (%d > %d", channeltypes.ErrInvalidPacket, opts.args.NextSequenceRecv.Uint64(), packet.GetSequence())
 		}
 
 		// check that the recv sequence is as claimed
 		err = VerifyNextSequenceRecv(
 			marshaler, connectionEnd, proofHeight, opts.args.ProofUnreceived,
-			packet.GetDestPort(), packet.GetDestChannel(), opts.args.NextSequenceRecv, opts.accessibleState,
+			packet.GetDestPort(), packet.GetDestChannel(), opts.args.NextSequenceRecv.Uint64(), opts.accessibleState,
 		)
 	case channeltypes.UNORDERED:
 		err = VerifyPacketReceiptAbsence(
@@ -512,10 +522,13 @@ func _acknowledgement(opts *callOpts[MsgAcknowledgement]) error {
 		return err
 	}
 
-	height := clienttypes.Height(opts.args.Packet.TimeoutHeight)
+	height := clienttypes.Height{
+		RevisionNumber: opts.args.Packet.TimeoutHeight.RevisionNumber.Uint64(),
+		RevisionHeight: opts.args.Packet.TimeoutHeight.RevisionHeight.Uint64(),
+	}
 
-	packet := channeltypes.NewPacket(opts.args.Packet.Data, opts.args.Packet.Sequence, opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel,
-		channel.Counterparty.PortId, channel.Counterparty.ChannelId, height, opts.args.Packet.TimeoutTimestamp)
+	packet := channeltypes.NewPacket(opts.args.Packet.Data, opts.args.Packet.Sequence.Uint64(), opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel,
+		channel.Counterparty.PortId, channel.Counterparty.ChannelId, height, opts.args.Packet.TimeoutTimestamp.Uint64())
 
 	if channel.State != channeltypes.OPEN {
 		return fmt.Errorf("%w, channel state is not OPEN (got %s)", channeltypes.ErrInvalidChannelState, channel.State.String())
@@ -584,7 +597,10 @@ func _acknowledgement(opts *callOpts[MsgAcknowledgement]) error {
 		return fmt.Errorf("%w, commitment bytes are not equal: got (%v), expected (%v)", channeltypes.ErrInvalidPacket, packetCommitment, commitment)
 	}
 
-	height = clienttypes.Height(opts.args.ProofHeight)
+	height = clienttypes.Height{
+		RevisionNumber: opts.args.ProofHeight.RevisionNumber.Uint64(),
+		RevisionHeight: opts.args.ProofHeight.RevisionHeight.Uint64(),
+	}
 
 	if err := VerifyPacketAcknowledgement(
 		marshaler,
@@ -608,18 +624,18 @@ func _acknowledgement(opts *callOpts[MsgAcknowledgement]) error {
 			return err
 		}
 
-		if opts.args.Packet.Sequence != nextSequenceAck {
-			return fmt.Errorf("%w, packet sequence ≠ next ack sequence (%d ≠ %d)", channeltypes.ErrPacketSequenceOutOfOrder, opts.args.Packet.Sequence, nextSequenceAck)
+		if opts.args.Packet.Sequence.Uint64() != nextSequenceAck {
+			return fmt.Errorf("%w, packet sequence ≠ next ack sequence (%d ≠ %d)", channeltypes.ErrPacketSequenceOutOfOrder, opts.args.Packet.Sequence.Uint64(), nextSequenceAck)
 		}
 
 		// All verification complete, in the case of ORDERED channels we must increment nextSequenceAck
 		nextSequenceAck++
 
-		setNextSequenceAck(opts.accessibleState.GetStateDB(), opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel, opts.args.Packet.Sequence)
+		setNextSequenceAck(opts.accessibleState.GetStateDB(), opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel, opts.args.Packet.Sequence.Uint64())
 	}
 
 	// Delete packet commitment, since the packet has been acknowledged, the commitement is no longer necessary
-	deletePacketCommitment(opts.accessibleState.GetStateDB(), opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel, opts.args.Packet.Sequence)
+	deletePacketCommitment(opts.accessibleState.GetStateDB(), opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel, opts.args.Packet.Sequence.Uint64())
 
 	// emit an event marking that we have processed the acknowledgement
 	topics, data, err := IBCABI.PackEvent(GeneratedAcknowledgePacketIdentifier.RawName,
@@ -726,7 +742,7 @@ func TimeoutPacket(
 
 	// verify we sent the packet and haven't cleared it out yet
 	if !bytes.Equal(commitment, packetCommitment) {
-		return fmt.Errorf("%w, packet commitment bytes are not equal: got (%v), expected (%v)", channeltypes.ErrInvalidPacket, channel.State.String(), commitment, packetCommitment)
+		return fmt.Errorf("%w, packet commitment bytes are not equal: got (%v), expected (%v)", channeltypes.ErrInvalidPacket, commitment, packetCommitment)
 	}
 
 	switch channel.Ordering {
@@ -779,7 +795,7 @@ func TimeoutExecuted(
 		return fmt.Errorf("caller does not own port capability for port ID %s, %w", packet.SourcePort, err)
 	}
 
-	deletePacketCommitment(accessibleState.GetStateDB(), packet.SourcePort, packet.SourceChannel, packet.Sequence)
+	deletePacketCommitment(accessibleState.GetStateDB(), packet.SourcePort, packet.SourceChannel, packet.Sequence.Uint64())
 
 	if channel.Ordering == channeltypes.ORDERED {
 		channel.State = channeltypes.CLOSED

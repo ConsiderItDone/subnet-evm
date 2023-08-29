@@ -13,19 +13,19 @@ import (
 )
 
 type Height struct {
-	RevisionNumber uint64
-	RevisionHeight uint64
+	RevisionNumber *big.Int
+	RevisionHeight *big.Int
 }
 
 type Packet struct {
-	Sequence           uint64
+	Sequence           *big.Int
 	SourcePort         string
 	SourceChannel      string
 	DestinationPort    string
 	DestinationChannel string
 	Data               []byte
 	TimeoutHeight      Height
-	TimeoutTimestamp   uint64
+	TimeoutTimestamp   *big.Int
 }
 
 type MsgAcknowledgement struct {
@@ -46,7 +46,7 @@ type MsgTimeout struct {
 	Packet           Packet
 	ProofUnreceived  []byte
 	ProofHeight      Height
-	NextSequenceRecv uint64
+	NextSequenceRecv *big.Int
 	Signer           string
 }
 
@@ -60,7 +60,7 @@ type MsgTimeoutOnClose struct {
 	ProofUnreceived  []byte
 	ProofClose       []byte
 	ProofHeight      Height
-	NextSequenceRecv uint64
+	NextSequenceRecv *big.Int
 	Signer           string
 }
 
@@ -70,11 +70,11 @@ type OnTimeoutOnCloseInput struct {
 }
 
 type MsgSendPacket struct {
-	ChannelCapability uint64
+	ChannelCapability *big.Int
 	SourcePort        string
 	SourceChannel     string
 	TimeoutHeight     Height
-	TimeoutTimestamp  uint64
+	TimeoutTimestamp  *big.Int
 	Data              []byte
 }
 
@@ -114,14 +114,14 @@ func PackOnAcknowledgementInput(inputStruct OnAcknowledgementInput) ([]byte, err
 // assumes that [input] does not include selector (omits first 4 func signature bytes)
 func UnpackSendPacketInput(input []byte) (MsgSendPacket, error) {
 	inputStruct := MsgSendPacket{}
-	err := IBCABI.UnpackInputIntoInterface(&inputStruct, "SendPacket", input)
+	err := IBCABI.UnpackInputIntoInterface(&inputStruct, "sendPacket", input)
 
 	return inputStruct, err
 }
 
 // PackSendPacket packs [inputStruct] of type SendPacketInput into the appropriate arguments for SendPacket.
 func PackSendPacket(inputStruct MsgSendPacket) ([]byte, error) {
-	return IBCABI.Pack("SendPacket", inputStruct.ChannelCapability, inputStruct.SourcePort, inputStruct.SourceChannel, inputStruct.TimeoutHeight, inputStruct.TimeoutTimestamp, inputStruct.Data)
+	return IBCABI.Pack("sendPacket", inputStruct.ChannelCapability, inputStruct.SourcePort, inputStruct.SourceChannel, inputStruct.TimeoutHeight, inputStruct.TimeoutTimestamp, inputStruct.Data)
 }
 
 func sendPacket(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
@@ -161,8 +161,10 @@ func sendPacket(accessibleState contract.AccessibleState, caller common.Address,
 // assumes that [input] does not include selector (omits first 4 func signature bytes)
 func UnpackRecvPacketInput(input []byte) (MsgRecvPacket, error) {
 	inputStruct := MsgRecvPacket{}
-	err := IBCABI.UnpackInputIntoInterface(&inputStruct, "RecvPacket", input)
-
+	err := IBCABI.UnpackInputIntoInterface(&inputStruct, "recvPacket", input)
+	if err != nil {
+		fmt.Println("UnpackInputIntoInterface")
+	}
 	return inputStruct, err
 }
 
@@ -170,7 +172,7 @@ func UnpackRecvPacketInput(input []byte) (MsgRecvPacket, error) {
 // the packed bytes include selector (first 4 func signature bytes).
 // This function is mostly used for tests.
 func PackRecvPacket(message MsgRecvPacket) ([]byte, error) {
-	return IBCABI.Pack("RecvPacket", message)
+	return IBCABI.Pack("recvPacket", message.Packet, message.ProofCommitment, message.ProofHeight, message.Signer)
 }
 
 func recvPacket(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
@@ -222,7 +224,7 @@ func recvPacket(accessibleState contract.AccessibleState, caller common.Address,
 // UnpackTimeoutInput attempts to unpack [input] into the IIBCMsgTimeout type argument
 // assumes that [input] does not include selector (omits first 4 func signature bytes)
 func UnpackTimeoutInput(input []byte) (*MsgTimeout, error) {
-	res, err := IBCABI.UnpackInput("Timeout", input)
+	res, err := IBCABI.UnpackInput("timeout", input)
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +236,7 @@ func UnpackTimeoutInput(input []byte) (*MsgTimeout, error) {
 // the packed bytes include selector (first 4 func signature bytes).
 // This function is mostly used for tests.
 func PackTimeout(message MsgTimeout) ([]byte, error) {
-	return IBCABI.Pack("Timeout", message)
+	return IBCABI.Pack("timeout", message)
 }
 
 func timeout(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
@@ -291,7 +293,7 @@ func timeout(accessibleState contract.AccessibleState, caller common.Address, ad
 // UnpackTimeoutOnCloseInput attempts to unpack [input] into the IIBCMsgTimeoutOnClose type argument
 // assumes that [input] does not include selector (omits first 4 func signature bytes)
 func UnpackTimeoutOnCloseInput(input []byte) (*MsgTimeoutOnClose, error) {
-	res, err := IBCABI.UnpackInput("TimeoutOnClose", input)
+	res, err := IBCABI.UnpackInput("timeoutOnClose", input)
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +305,7 @@ func UnpackTimeoutOnCloseInput(input []byte) (*MsgTimeoutOnClose, error) {
 // the packed bytes include selector (first 4 func signature bytes).
 // This function is mostly used for tests.
 func PackTimeoutOnClose(message MsgTimeoutOnClose) ([]byte, error) {
-	return IBCABI.Pack("TimeoutOnClose", message)
+	return IBCABI.Pack("timeoutOnClose", message)
 }
 
 func timeoutOnClose(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
@@ -329,7 +331,7 @@ func timeoutOnClose(accessibleState contract.AccessibleState, caller common.Addr
 		suppliedGas:     suppliedGas,
 		readOnly:        readOnly,
 		args:            *inputStruct,
-	});
+	})
 	switch err {
 	case nil:
 	case channeltypes.ErrNoOpMsg:
@@ -348,7 +350,6 @@ func timeoutOnClose(accessibleState contract.AccessibleState, caller common.Addr
 	}
 	ret, remainingGas, err = accessibleState.CallFromPrecompile(ContractAddress, recvAddr, data, remainingGas, big.NewInt(0))
 
-
 	// Delete packet commitment
 	if err = TimeoutExecuted(accessibleState, inputStruct.Packet); err != nil {
 		return nil, remainingGas, err
@@ -359,13 +360,13 @@ func timeoutOnClose(accessibleState contract.AccessibleState, caller common.Addr
 }
 
 func (h Height) String() string {
-	return fmt.Sprintf("%d-%d", h.RevisionNumber, h.RevisionHeight)
+	return fmt.Sprintf("%d-%d", h.RevisionNumber.Uint64(), h.RevisionHeight.Uint64())
 }
 
 // UnpackAcknowledgementInput attempts to unpack [input] into the IIBCMsgAcknowledgement type argument
 // assumes that [input] does not include selector (omits first 4 func signature bytes)
 func UnpackAcknowledgementInput(input []byte) (*MsgAcknowledgement, error) {
-	res, err := IBCABI.UnpackInput("Acknowledgement", input)
+	res, err := IBCABI.UnpackInput("acknowledgement", input)
 	if err != nil {
 		return nil, err
 	}
@@ -377,7 +378,7 @@ func UnpackAcknowledgementInput(input []byte) (*MsgAcknowledgement, error) {
 // the packed bytes include selector (first 4 func signature bytes).
 // This function is mostly used for tests.
 func PackAcknowledgement(message MsgAcknowledgement) ([]byte, error) {
-	return IBCABI.Pack("Acknowledgement", message)
+	return IBCABI.Pack("acknowledgement", message)
 }
 
 func acknowledgement(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
@@ -406,7 +407,7 @@ func acknowledgement(accessibleState contract.AccessibleState, caller common.Add
 		suppliedGas:     suppliedGas,
 		readOnly:        readOnly,
 		args:            *inputStruct,
-	});
+	})
 	switch err {
 	case nil:
 	case channeltypes.ErrNoOpMsg:

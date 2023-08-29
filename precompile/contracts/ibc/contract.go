@@ -79,7 +79,7 @@ func createIBCPrecompile() contract.StatefulPrecompiledContract {
 	var functions []*contract.StatefulPrecompileFunction
 
 	abiFunctionMap := map[string]contract.RunStatefulPrecompileFunc{
-		"bindPort":            bindPort,
+		//"bindPort":            bindPort,
 		"chanOpenInit":        chanOpenInit,
 		"chanOpenTry":         chanOpenTry,
 		"channelCloseConfirm": channelCloseConfirm,

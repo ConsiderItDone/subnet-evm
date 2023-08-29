@@ -321,8 +321,8 @@ func verifyDelayPeriodPassed(
 
 		// NOTE: delay block period is inclusive, so if currentHeight is validHeight, then we return no error
 		if currentHeight < validHeight.RevisionHeight {
-			return fmt.Errorf("cannot verify packet until height: %s, current height: %s",
-				validHeight, currentHeight)
+			return fmt.Errorf("cannot verify packet until height: %s, current height: %d",
+				validHeight.String(), currentHeight)
 		}
 	}
 
