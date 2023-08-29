@@ -96,6 +96,12 @@
         },
         {
           "indexed": false,
+          "internalType": "string",
+          "name": "path",
+          "type": "string"
+        },
+        {
+          "indexed": false,
           "internalType": "uint256",
           "name": "value",
           "type": "uint256"

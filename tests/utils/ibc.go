@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -509,9 +510,9 @@ func RunTestIbcRecvPacket(t *testing.T) {
 	proof, proofHeight := chainB.QueryProof(connectionKey)
 
 	mintFungibleTokenPacketData, err := json.Marshal(ics20.FungibleTokenPacketData{
-		Denom:    "ETH",
+		Denom:    "USDT",
 		Amount:   "1000",
-		Sender:   auth.From.Hex(),
+		Sender:   common.Address{}.Hex(),
 		Receiver: auth.From.Hex(),
 		Memo:     "some memo",
 	})
@@ -547,11 +548,28 @@ func RunTestIbcRecvPacket(t *testing.T) {
 	assert.Equal(t, auth.From, mintLog.To)
 	assert.Equal(t, big.NewInt(1000), mintLog.Value)
 
+	mintBalance, err := ics20bank.BalanceOf(nil, auth.From, "transfer/channel-0/USDT")
+	require.NoError(t, err)
+	assert.Equal(t, big.NewInt(1000), mintBalance)
+
+	newEsrowAddrTx, err := ics20transferer.SetChannelEscrowAddresses(auth, "channel-0", auth.From)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, newEsrowAddrTx)
+	require.NoError(t, err)
+
+	mintTx, err := ics20bank.Mint(auth, auth.From, fmt.Sprintf("%s/%s/USDT", ibctesting.MockPort, ibctesting.FirstChannelID), big.NewInt(1000))
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, mintTx)
+	require.NoError(t, err)
+
+	randomAddr, err := getRandomAddr()
+	denom := fmt.Sprintf("%s/%s/USDT", ibctesting.MockPort, ibctesting.FirstChannelID)
+	require.NoError(t, err)
 	transferFungibleTokenPacketData, err := json.Marshal(ics20.FungibleTokenPacketData{
-		Denom:    fmt.Sprintf("%s/%s/ETH", ibctesting.FirstChannelID, ibctesting.MockPort),
+		Denom:    denom,
 		Amount:   "1000",
 		Sender:   auth.From.Hex(),
-		Receiver: auth.From.Hex(),
+		Receiver: randomAddr.Hex(),
 		Memo:     "some memo",
 	})
 	require.NoError(t, err)
@@ -582,9 +600,17 @@ func RunTestIbcRecvPacket(t *testing.T) {
 	require.Len(t, transferRecvPacketReceipt.Logs, 1, "must be `mint` log")
 	transferLog, err := ics20bank.ParseTransfer(*transferRecvPacketReceipt.Logs[0])
 	require.NoError(t, err)
-	assert.Equal(t, common.Address{}, transferLog.From)
-	assert.Equal(t, auth.From, transferLog.To)
+	assert.Equal(t, auth.From, transferLog.From)
+	assert.Equal(t, randomAddr, transferLog.To)
 	assert.Equal(t, big.NewInt(1000), transferLog.Value)
+
+	transferBalanceSender, err := ics20bank.BalanceOf(nil, auth.From, denom)
+	require.NoError(t, err)
+	assert.Equal(t, big.NewInt(0).Cmp(transferBalanceSender), 0)
+
+	transferBalanceReceiver, err := ics20bank.BalanceOf(nil, randomAddr, denom)
+	require.NoError(t, err)
+	assert.Equal(t, big.NewInt(1000).Cmp(transferBalanceReceiver), 0)
 }
 
 func QueryProofs(t *testing.T) {
@@ -642,4 +668,19 @@ func waitForReceiptAndGet(ctx context.Context, client ethclient.Client, tx *type
 		return nil, err
 	}
 	return receipt, nil
+}
+
+func getRandomAddr() (common.Address, error) {
+	privateKey, err := crypto.GenerateKey()
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		return common.Address{}, fmt.Errorf("cannot assert type: publicKey is not of type *ecdsa.PublicKey")
+	}
+
+	return crypto.PubkeyToAddress(*publicKeyECDSA), nil
 }
