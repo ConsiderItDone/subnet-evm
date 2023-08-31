@@ -47,7 +47,7 @@ func VerifyPacketCommitment(
 	if err := VerifyMembership(
 		*clientState, cdc, height,
 		timeDelay, blockDelay, accessibleState,
-		proof, merklePath, commitmentBytes,
+		proof, merklePath, commitmentBytes, clientID,
 	); err != nil {
 		return fmt.Errorf("%w, failed packet commitment verification for client (%s)", err, clientID)
 	}
@@ -85,7 +85,7 @@ func VerifyPacketAcknowledgement(
 	if err := VerifyMembership(
 		*clientState, cdc, height,
 		timeDelay, blockDelay, accessibleState,
-		proof, merklePath, channeltypes.CommitAcknowledgement(acknowledgement),
+		proof, merklePath, channeltypes.CommitAcknowledgement(acknowledgement), clientID,
 	); err != nil {
 		return fmt.Errorf("%w, failed packet acknowledgement verification for client (%s)", err, clientID)
 	}
@@ -128,7 +128,7 @@ func VerifyChannelState(
 	if err := VerifyMembership(
 		*clientState, cdc, height,
 		0, 0, // skip delay period checks for non-packet processing verification
-		accessibleState, proof, merklePath, bz,
+		accessibleState, proof, merklePath, bz, clientID,
 	); err != nil {
 		return fmt.Errorf("%w, failed channel state verification for client (%s)", err, clientID)
 	}
@@ -167,6 +167,7 @@ func VerifyNextSequenceRecv(
 		*clientState, cdc, height,
 		timeDelay, blockDelay,
 		accessibleState, proof, merklePath, sdk.Uint64ToBigEndian(nextSequenceRecv),
+		clientID,
 	); err != nil {
 		return fmt.Errorf("%w, failed next sequence receive verification for client (%s)", err, clientID)
 	}
@@ -221,6 +222,7 @@ func VerifyMembership(
 	proof []byte,
 	path exported.Path,
 	value []byte,
+	clientID string,
 ) error {
 
 	if cs.GetLatestHeight().LT(height) {
@@ -241,7 +243,7 @@ func VerifyMembership(
 		return fmt.Errorf(", expected %T, got %T", commitmenttypes.MerklePath{}, path)
 	}
 
-	consensusState, err := GetConsensusState(accessibleState.GetStateDB(), cs.ChainId, height)
+	consensusState, err := GetConsensusState(accessibleState.GetStateDB(), clientID, height)
 	if err != nil {
 		return fmt.Errorf("%w, %w, please ensure the proof was constructed against a height that exists on the client", clienttypes.ErrConsensusStateNotFound, err)
 	}

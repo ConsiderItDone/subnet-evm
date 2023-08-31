@@ -187,8 +187,8 @@ func _recvPacket(opts *callOpts[MsgRecvPacket]) error {
 	commitment := channeltypes.CommitPacket(marshaler, packet)
 
 	height := clienttypes.Height{
-		RevisionNumber: opts.args.Packet.TimeoutHeight.RevisionNumber.Uint64(),
-		RevisionHeight: opts.args.Packet.TimeoutHeight.RevisionHeight.Uint64(),
+		RevisionNumber: opts.args.ProofHeight.RevisionNumber.Uint64(),
+		RevisionHeight: opts.args.ProofHeight.RevisionHeight.Uint64(),
 	}
 
 	// verify that the counterparty did commit to sending this packet

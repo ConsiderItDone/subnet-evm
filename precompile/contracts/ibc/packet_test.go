@@ -1,6 +1,7 @@
 package ibc
 
 import (
+	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
@@ -10,52 +11,84 @@ import (
 	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/ava-labs/subnet-evm/precompile/testutils"
 	"github.com/cometbft/cometbft/libs/bytes"
+	"github.com/cosmos/cosmos-sdk/codec"
+	cosmostypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/std"
 	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
 	connectiontypes "github.com/cosmos/ibc-go/v7/modules/core/03-connection/types"
 	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
 	"github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
+	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
+	ibctm "github.com/cosmos/ibc-go/v7/modules/light-clients/07-tendermint"
 	tendermint "github.com/cosmos/ibc-go/v7/modules/light-clients/07-tendermint"
+	ibctesting "github.com/cosmos/ibc-go/v7/testing"
 	ics23 "github.com/cosmos/ics23/go"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/require"
 )
 
+var (
+	disabledTimeoutTimestamp = uint64(0)
+	disabledTimeoutHeight    = clienttypes.ZeroHeight()
+	defaultTimeoutHeight     = clienttypes.NewHeight(1, 1)
+
+	// for when the testing package cannot be used
+	connIDA = "connA"
+	connIDB = "connB"
+)
+
 func TestRecvPacket(t *testing.T) {
+	coordinator := ibctesting.NewCoordinator(t, 2)
+	chainA := coordinator.GetChain(ibctesting.GetChainID(1))
+	chainB := coordinator.GetChain(ibctesting.GetChainID(2))
+
+	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
+	std.RegisterInterfaces(interfaceRegistry)
+	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+
+	path := ibctesting.NewPath(chainA, chainB)
+	coordinator.Setup(path)
+
 	destinationChannel := "DestinationChannel"
 	portID := "portName"
 	data := []byte("00000000000000000000000000000000000000000000000000000000000000d5")
 	sourcePort := "SourcePort"
 	sourceChannel := "SourceChannel"
-	connectionID := "connectionID"
-	clientId := "clientId"
-	prefix := types.MerklePrefix{}
-	sequence := int64(1)
+
+	sequence, _ := path.EndpointA.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, data)
+
+	require.NoError(t, path.EndpointA.UpdateClient())
+	
 
 	tests := map[string]testutils.PrecompileTest{
 		"sucsess case": {
 			Caller: common.Address{1},
 			InputFn: func(t testing.TB) []byte {
 
+				packetKey := host.PacketCommitmentKey(sourcePort, sourceChannel, sequence)
+				proof, proofHeight := path.EndpointA.QueryProof(packetKey)
+
 				input, err := PackRecvPacket(MsgRecvPacket{
 					Packet: Packet{
-						Sequence:           big.NewInt(sequence),
-						SourcePort:         sourcePort,
-						SourceChannel:      sourceChannel,
-						DestinationPort:    portID,
-						DestinationChannel: destinationChannel,
+						Sequence:           big.NewInt(int64(sequence)),
+						SourcePort:         path.EndpointA.ChannelConfig.PortID,
+						SourceChannel:      path.EndpointA.ChannelID,
+						DestinationPort:    path.EndpointB.ChannelConfig.PortID,
+						DestinationChannel: path.EndpointB.ChannelID,
 						Data:               data,
 						TimeoutHeight: Height{
-							RevisionNumber: big.NewInt(1),
-							RevisionHeight: big.NewInt(1),
+							RevisionNumber: big.NewInt(int64(defaultTimeoutHeight.RevisionNumber)),
+							RevisionHeight: big.NewInt(int64(defaultTimeoutHeight.RevisionHeight)),
 						},
-						TimeoutTimestamp: big.NewInt(time.Now().UnixNano()),
+						TimeoutTimestamp: big.NewInt(int64(disabledTimeoutTimestamp)),
 					},
 					ProofHeight: Height{
-						RevisionNumber: big.NewInt(1),
-						RevisionHeight: big.NewInt(1),
+						RevisionNumber: big.NewInt(int64(proofHeight.RevisionNumber)),
+						RevisionHeight: big.NewInt(int64(proofHeight.RevisionHeight)),
 					},
-					ProofCommitment: []byte("Proof"),
+					ProofCommitment: proof,
 					Signer:          "Signer",
 				})
 				require.NoError(t, err)
@@ -75,52 +108,23 @@ func TestRecvPacket(t *testing.T) {
 					t.Error(err)
 				}
 
-				SetChannel(state, portID, destinationChannel, &channeltypes.Channel{
-					State:    0,
-					Ordering: channeltypes.UNORDERED,
-					Counterparty: channeltypes.Counterparty{
-						PortId:    sourcePort,
-						ChannelId: sourceChannel,
-					},
-					ConnectionHops: []string{connectionID},
-					Version:        "version",
-				})
+				SetCapability(state, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID)
 
-				SetConnection(state, connectionID, &connectiontypes.ConnectionEnd{
-					ClientId: clientId,
-					Versions: []*connectiontypes.Version{},
-					State:    connectiontypes.OPEN,
-					Counterparty: connectiontypes.Counterparty{
-						ClientId:     clientId,
-						ConnectionId: connectionID,
-						Prefix:       prefix,
-					},
-					DelayPeriod: 2,
-				})
+				channel, _ := chainB.App.GetIBCKeeper().ChannelKeeper.GetChannel(chainB.GetContext(), path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID)
+				SetChannel(state, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, &channel)
 
-				SetClientState(state, clientId, &tendermint.ClientState{
-					ChainId: clientId,
-					TrustLevel: tendermint.Fraction{
-						Numerator:   1,
-						Denominator: 3,
-					},
-					TrustingPeriod:  100,
-					UnbondingPeriod: 100,
-					MaxClockDrift:   100,
-					FrozenHeight: clienttypes.Height{
-						RevisionNumber: 0,
-						RevisionHeight: 0,
-					},
-					LatestHeight: clienttypes.Height{
-						RevisionNumber: 0,
-						RevisionHeight: uint64(0),
-					},
-					ProofSpecs:                   []*ics23.ProofSpec{},
-					UpgradePath:                  []string{},
-					AllowUpdateAfterExpiry:       false,
-					AllowUpdateAfterMisbehaviour: false,
-				},
-				)
+				connection, _ := chainB.App.GetIBCKeeper().ConnectionKeeper.GetConnection(chainB.GetContext(), path.EndpointB.ConnectionID)
+				SetConnection(state, path.EndpointB.ConnectionID, &connection)
+
+				cs, _ := chainB.App.GetIBCKeeper().ClientKeeper.GetClientState(chainB.GetContext(), path.EndpointB.ClientID)
+				cStore := chainB.App.GetIBCKeeper().ClientKeeper.ClientStore(chainB.GetContext(), path.EndpointB.ClientID)
+				if cs != nil {
+					clientState := cs.(*ibctm.ClientState)
+					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
+					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
+					SetClientState(state, connection.GetClientID(), clientState)
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+				}
 			},
 			AfterHook: func(t testing.TB, state contract.StateDB) {
 				contractAddress := common.BytesToAddress([]byte("counter"))
