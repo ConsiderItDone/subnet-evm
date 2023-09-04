@@ -2,19 +2,19 @@
 pragma solidity ^0.8.0;
 
 struct Packet {
-    uint sequence;
-    string sourcePort;
-    string sourceChannel;
-    string destinationPort;
-    string destinationChannel;
-    bytes data;
-    Height timeoutHeight;
-    uint timeoutTimestamp;
+  uint sequence;
+  string sourcePort;
+  string sourceChannel;
+  string destinationPort;
+  string destinationChannel;
+  bytes data;
+  Height timeoutHeight;
+  uint timeoutTimestamp;
 }
 
 struct Height {
-    uint revisionNumber;
-    uint revisionHeight;
+  uint revisionNumber;
+  uint revisionHeight;
 }
 
 interface IIBC {
@@ -176,10 +176,7 @@ interface IIBC {
     bytes memory consensusState
   ) external returns (string memory clientID);
 
-  function updateClient(
-    string memory clientID, 
-    bytes memory clientMessage
-  ) external;
+  function updateClient(string memory clientID, bytes memory clientMessage) external;
 
   function upgradeClient(
     string memory clientID,
@@ -221,16 +218,9 @@ interface IIBC {
     bytes memory consensusHeight
   ) external;
 
-  function connOpenConfirm(
-    string memory connectionID, 
-    bytes memory proofAck, bytes 
-    memory proofHeight
-  ) external;
+  function connOpenConfirm(string memory connectionID, bytes memory proofAck, bytes memory proofHeight) external;
 
-  function chanOpenInit(
-    string memory portID, 
-    bytes memory channel
-  ) external;
+  function chanOpenInit(string memory portID, bytes memory channel) external;
 
   function chanOpenTry(
     string memory portID,
@@ -256,10 +246,7 @@ interface IIBC {
     bytes memory proofHeight
   ) external;
 
-  function channelCloseInit(
-    string memory portID, 
-    string memory channelID
-  ) external;
+  function channelCloseInit(string memory portID, string memory channelID) external;
 
   function channelCloseConfirm(
     string memory portID,
@@ -268,14 +255,9 @@ interface IIBC {
     bytes memory proofHeight
   ) external;
 
-  function bindPort(
-    string memory portID
-  ) external;
+  function bindPort(string memory portID) external;
 
-  function OnRecvPacket(
-	  Packet  memory packet,
-	  bytes memory Relayer
-  ) external;
+  function OnRecvPacket(Packet memory packet, bytes memory Relayer) external;
 
   function OnTimeout(
 	  Packet  memory packet,
