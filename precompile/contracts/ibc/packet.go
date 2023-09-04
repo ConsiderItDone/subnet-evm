@@ -421,8 +421,8 @@ func UnpackAcknowledgementInput(input []byte) (*IIBCMsgAcknowledgement, error) {
 // PackAcknowledgement packs [message] of type IIBCMsgAcknowledgement into the appropriate arguments for Acknowledgement.
 // the packed bytes include selector (first 4 func signature bytes).
 // This function is mostly used for tests.
-func PackAcknowledgement(message IIBCMsgAcknowledgement) ([]byte, error) {
-	return IBCABI.Pack("acknowledgement", message)
+func PackAcknowledgement(inputStruct IIBCMsgAcknowledgement) ([]byte, error) {
+	return IBCABI.Pack("acknowledgement", inputStruct.Packet, inputStruct.Acknowledgement, inputStruct.ProofAcked, inputStruct.ProofHeight, inputStruct.Signer)
 }
 
 func acknowledgement(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
@@ -440,19 +440,18 @@ func acknowledgement(accessibleState contract.AccessibleState, caller common.Add
 		return nil, remainingGas, err
 	}
 
-	packedOutput := []byte{}
 	err = _acknowledgement(&callOpts[IIBCMsgAcknowledgement]{
 		accessibleState: accessibleState,
 		caller:          caller,
 		addr:            addr,
 		suppliedGas:     suppliedGas,
 		readOnly:        readOnly,
-		args:            *inputStruct,
+		args:            inputStruct,
 	})
 	switch err {
 	case nil:
 	case channeltypes.ErrNoOpMsg:
-		return packedOutput, remainingGas, nil
+		return []byte{}, remainingGas, nil
 	default:
 		return nil, remainingGas, err
 	}
@@ -467,8 +466,11 @@ func acknowledgement(accessibleState contract.AccessibleState, caller common.Add
 	}
 	_, remainingGas, err = accessibleState.CallFromPrecompile(ContractAddress, recvAddr, data, remainingGas, big.NewInt(0))
 	if err != nil {
-		return nil, remainingGas, err
+		return nil, remainingGas, fmt.Errorf("can't call fuction via CallFromPrecompile: %w", err)
 	}
+
+	packedOutput := []byte{}
+
 	// Return the packed output and the remaining gas
 	return packedOutput, remainingGas, nil
 }

@@ -45,6 +45,7 @@ func TestIBC(t *testing.T) {
 		t.Run("channel open init", utils.RunTestIncChannelOpenInit)
 		t.Run("channel open ack", utils.RunTestIncChannelOpenAck)
 		t.Run("recv packet", utils.RunTestIbcRecvPacket)
+		t.Run("ack packet", utils.RunTestIbcAckPacket)
 	})
 
 	//t.Run("part b", func(t *testing.T) {

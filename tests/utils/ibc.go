@@ -66,6 +66,9 @@ var (
 	ibcContractFilterer *contractBind.ContractFilterer
 	auth                *bind.TransactOpts
 
+	ics20Bank       *ics20bank.Ics20bank
+	ics20Transferer *ics20transferer.Ics20transferer
+
 	coordinator *ibctesting.Coordinator
 	chainA      *ibctesting.TestChain
 	chainB      *ibctesting.TestChain
@@ -153,6 +156,33 @@ func RunTestIbcInit(t *testing.T) {
 	auth, err = bind.NewKeyedTransactorWithChainID(testKey, chainId)
 	require.NoError(t, err)
 	t.Log("transactor created")
+
+	ics20bankAddr, ics20bankTx, ics20bank, err := ics20bank.DeployIcs20bank(auth, ethClient)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, ics20bankTx)
+	require.NoError(t, err)
+	ics20Bank = ics20bank
+
+	ics20transfererAddr, ics20transfererTx, ics20transferer, err := ics20transferer.DeployIcs20transferer(auth, ethClient, ibc.ContractAddress, ics20bankAddr)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, ics20transfererTx)
+	require.NoError(t, err)
+	ics20Transferer = ics20transferer
+
+	setOperTx1, err := ics20bank.SetOperator(auth, auth.From)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, setOperTx1)
+	require.NoError(t, err)
+
+	setOperTx2, err := ics20bank.SetOperator(auth, ibc.ContractAddress)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, setOperTx2)
+	require.NoError(t, err)
+
+	setOperTx3, err := ics20bank.SetOperator(auth, ics20transfererAddr)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, setOperTx3)
+	require.NoError(t, err)
 
 	coordinator = ibctesting.NewCoordinator(t, 2)
 	chainA = coordinator.GetChain(ibctesting.GetChainID(1))
@@ -476,32 +506,7 @@ func RunTestIbcRecvPacket(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	ics20bankAddr, ics20bankTx, ics20bank, err := ics20bank.DeployIcs20bank(auth, ethClient)
-	require.NoError(t, err)
-	_, err = waitForReceiptAndGet(ctx, ethClient, ics20bankTx)
-	require.NoError(t, err)
-
-	ics20transfererAddr, ics20transfererTx, ics20transferer, err := ics20transferer.DeployIcs20transferer(auth, ethClient, ibc.ContractAddress, ics20bankAddr)
-	require.NoError(t, err)
-	_, err = waitForReceiptAndGet(ctx, ethClient, ics20transfererTx)
-	require.NoError(t, err)
-
-	setOperTx1, err := ics20bank.SetOperator(auth, auth.From)
-	require.NoError(t, err)
-	_, err = waitForReceiptAndGet(ctx, ethClient, setOperTx1)
-	require.NoError(t, err)
-
-	setOperTx2, err := ics20bank.SetOperator(auth, ibc.ContractAddress)
-	require.NoError(t, err)
-	_, err = waitForReceiptAndGet(ctx, ethClient, setOperTx2)
-	require.NoError(t, err)
-
-	setOperTx3, err := ics20bank.SetOperator(auth, ics20transfererAddr)
-	require.NoError(t, err)
-	_, err = waitForReceiptAndGet(ctx, ethClient, setOperTx3)
-	require.NoError(t, err)
-
-	bindTx, err := ics20transferer.BindPort(auth, ibc.ContractAddress, "transfer")
+	bindTx, err := ics20Transferer.BindPort(auth, ibc.ContractAddress, "transfer")
 	require.NoError(t, err)
 	_, err = waitForReceiptAndGet(ctx, ethClient, bindTx)
 	require.NoError(t, err)
@@ -542,22 +547,22 @@ func RunTestIbcRecvPacket(t *testing.T) {
 	mintRecvPacketReceipt, err := waitForReceiptAndGet(ctx, ethClient, mintRecvPacketTx)
 	require.NoError(t, err)
 	require.Len(t, mintRecvPacketReceipt.Logs, 1, "must be `mint` log")
-	mintLog, err := ics20bank.ParseTransfer(*mintRecvPacketReceipt.Logs[0])
+	mintLog, err := ics20Bank.ParseTransfer(*mintRecvPacketReceipt.Logs[0])
 	require.NoError(t, err)
 	assert.Equal(t, common.Address{}, mintLog.From)
 	assert.Equal(t, auth.From, mintLog.To)
 	assert.Equal(t, big.NewInt(1000), mintLog.Value)
 
-	mintBalance, err := ics20bank.BalanceOf(nil, auth.From, "transfer/channel-0/USDT")
+	mintBalance, err := ics20Bank.BalanceOf(nil, auth.From, "transfer/channel-0/USDT")
 	require.NoError(t, err)
 	assert.Equal(t, big.NewInt(1000), mintBalance)
 
-	newEsrowAddrTx, err := ics20transferer.SetChannelEscrowAddresses(auth, "channel-0", auth.From)
+	newEsrowAddrTx, err := ics20Transferer.SetChannelEscrowAddresses(auth, "channel-0", auth.From)
 	require.NoError(t, err)
 	_, err = waitForReceiptAndGet(ctx, ethClient, newEsrowAddrTx)
 	require.NoError(t, err)
 
-	mintTx, err := ics20bank.Mint(auth, auth.From, fmt.Sprintf("%s/%s/USDT", ibctesting.MockPort, ibctesting.FirstChannelID), big.NewInt(1000))
+	mintTx, err := ics20Bank.Mint(auth, auth.From, fmt.Sprintf("%s/%s/USDT", ibctesting.MockPort, ibctesting.FirstChannelID), big.NewInt(1000))
 	require.NoError(t, err)
 	_, err = waitForReceiptAndGet(ctx, ethClient, mintTx)
 	require.NoError(t, err)
@@ -575,7 +580,7 @@ func RunTestIbcRecvPacket(t *testing.T) {
 	require.NoError(t, err)
 	transferRecvPacketTx, err := ibcContract.RecvPacket(auth, contractBind.IIBCMsgRecvPacket{
 		Packet: contractBind.Packet{
-			Sequence:           big.NewInt(0),
+			Sequence:           big.NewInt(1),
 			SourcePort:         ibctesting.MockPort,
 			SourceChannel:      ibctesting.FirstChannelID,
 			DestinationPort:    "transfer",
@@ -598,19 +603,65 @@ func RunTestIbcRecvPacket(t *testing.T) {
 	transferRecvPacketReceipt, err := waitForReceiptAndGet(ctx, ethClient, transferRecvPacketTx)
 	require.NoError(t, err)
 	require.Len(t, transferRecvPacketReceipt.Logs, 1, "must be `mint` log")
-	transferLog, err := ics20bank.ParseTransfer(*transferRecvPacketReceipt.Logs[0])
+	transferLog, err := ics20Bank.ParseTransfer(*transferRecvPacketReceipt.Logs[0])
 	require.NoError(t, err)
 	assert.Equal(t, auth.From, transferLog.From)
 	assert.Equal(t, randomAddr, transferLog.To)
 	assert.Equal(t, big.NewInt(1000), transferLog.Value)
 
-	transferBalanceSender, err := ics20bank.BalanceOf(nil, auth.From, denom)
+	transferBalanceSender, err := ics20Bank.BalanceOf(nil, auth.From, denom)
 	require.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Cmp(transferBalanceSender), 0)
 
-	transferBalanceReceiver, err := ics20bank.BalanceOf(nil, randomAddr, denom)
+	transferBalanceReceiver, err := ics20Bank.BalanceOf(nil, randomAddr, denom)
 	require.NoError(t, err)
 	assert.Equal(t, big.NewInt(1000).Cmp(transferBalanceReceiver), 0)
+}
+
+func RunTestIbcAckPacket(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	connectionKey := host.ConnectionKey(path.EndpointB.ConnectionID)
+	proof, proofHeight := chainB.QueryProof(connectionKey)
+
+	randomAddr, err := getRandomAddr()
+	denom := fmt.Sprintf("%s/%s/USDT", ibctesting.MockPort, ibctesting.FirstChannelID)
+	require.NoError(t, err)
+	transferFungibleTokenPacketData, err := json.Marshal(ics20.FungibleTokenPacketData{
+		Denom:    denom,
+		Amount:   "1000",
+		Sender:   auth.From.Hex(),
+		Receiver: randomAddr.Hex(),
+		Memo:     "some memo",
+	})
+	packetAckTx, err := ibcContract.Acknowledgement(
+		auth,
+		contractBind.Packet{
+			Sequence:           big.NewInt(1),
+			SourcePort:         ibctesting.MockPort,
+			SourceChannel:      ibctesting.FirstChannelID,
+			DestinationPort:    "transfer",
+			DestinationChannel: ibctesting.FirstChannelID,
+			Data:               transferFungibleTokenPacketData,
+			TimeoutHeight: contractBind.Height{
+				RevisionNumber: big.NewInt(1000),
+				RevisionHeight: big.NewInt(1000),
+			},
+			TimeoutTimestamp: big.NewInt(time.Now().Unix() + 10000),
+		},
+		[]byte{},
+		proof,
+		contractBind.Height{
+			RevisionNumber: big.NewInt(int64(proofHeight.RevisionNumber)),
+			RevisionHeight: big.NewInt(int64(proofHeight.RevisionHeight)),
+		},
+		"",
+	)
+	require.NoError(t, err)
+	packetAckRe, err := waitForReceiptAndGet(ctx, ethClient, packetAckTx)
+	require.NoError(t, err)
+	require.Len(t, packetAckRe.Logs, 1, "must be `mint` log")
 }
 
 func QueryProofs(t *testing.T) {
