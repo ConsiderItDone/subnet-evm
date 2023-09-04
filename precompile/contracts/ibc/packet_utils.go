@@ -215,7 +215,7 @@ func _recvPacket(opts *callOpts[MsgRecvPacket]) error {
 				packet.SourceChannel,
 				packet.DestinationPort,
 				packet.DestinationChannel,
-				channel.Ordering.String(),
+				channel.Ordering,
 			)
 			if err != nil {
 				return fmt.Errorf("error packing event: %w", err)
@@ -246,13 +246,13 @@ func _recvPacket(opts *callOpts[MsgRecvPacket]) error {
 			topics, data, err := IBCABI.PackEvent(GeneratedPacketReceivedIdentifier.RawName,
 				packet.Data,
 				packet.TimeoutHeight.String(),
-				packet.TimeoutTimestamp,
-				packet.Sequence,
+				big.NewInt(int64(packet.TimeoutTimestamp)),
+				big.NewInt(int64(packet.Sequence)),
 				packet.SourcePort,
 				packet.SourceChannel,
 				packet.DestinationPort,
 				packet.DestinationChannel,
-				channel.Ordering.String(),
+				channel.Ordering,
 			)
 			if err != nil {
 				return fmt.Errorf("error packing event: %w", err)
@@ -282,13 +282,13 @@ func _recvPacket(opts *callOpts[MsgRecvPacket]) error {
 	topics, data, err := IBCABI.PackEvent(GeneratedPacketReceivedIdentifier.RawName,
 		packet.Data,
 		packet.TimeoutHeight.String(),
-		packet.TimeoutTimestamp,
-		packet.Sequence,
+		big.NewInt(int64(packet.TimeoutTimestamp)),
+		big.NewInt(int64(packet.Sequence)),
 		packet.SourcePort,
 		packet.SourceChannel,
 		packet.DestinationPort,
 		packet.DestinationChannel,
-		channel.Ordering.String(),
+		channel.Ordering,
 	)
 	if err != nil {
 		return fmt.Errorf("error packing event: %w", err)
@@ -421,13 +421,14 @@ func _timeoutOnClose(opts *callOpts[MsgTimeoutOnClose]) error {
 	if len(commitment) == 0 {
 		// emit an event marking that we have processed the timeout
 		topics, data, err := IBCABI.PackEvent(GeneratedTimeoutPacketIdentifier.RawName,
+			opts.args.Packet.TimeoutHeight.String(),
 			opts.args.Packet.TimeoutTimestamp,
 			opts.args.Packet.Sequence,
 			opts.args.Packet.SourcePort,
 			opts.args.Packet.SourceChannel,
 			opts.args.Packet.DestinationPort,
 			opts.args.Packet.DestinationChannel,
-			channel.Ordering.String(),
+			channel.Ordering,
 			channel.ConnectionHops[0],
 		)
 		if err != nil {
@@ -574,7 +575,7 @@ func _acknowledgement(opts *callOpts[MsgAcknowledgement]) error {
 			opts.args.Packet.SourceChannel,
 			opts.args.Packet.DestinationPort,
 			opts.args.Packet.DestinationChannel,
-			channel.Ordering.String(),
+			channel.Ordering,
 			channel.ConnectionHops[0],
 		)
 		if err != nil {
@@ -646,7 +647,7 @@ func _acknowledgement(opts *callOpts[MsgAcknowledgement]) error {
 		opts.args.Packet.SourceChannel,
 		opts.args.Packet.DestinationPort,
 		opts.args.Packet.DestinationChannel,
-		channel.Ordering.String(),
+		channel.Ordering,
 		channel.ConnectionHops[0],
 	)
 	if err != nil {
@@ -712,13 +713,14 @@ func TimeoutPacket(
 	if len(commitment) == 0 {
 		// emit an event marking that we have processed the timeout
 		topics, data, err := IBCABI.PackEvent(GeneratedTimeoutPacketIdentifier.RawName,
-			packet.GetTimeoutTimestamp(),
-			packet.GetSequence(),
+			packet.GetTimeoutHeight().String(),
+			big.NewInt(int64(packet.GetTimeoutTimestamp())),
+			big.NewInt(int64(packet.GetSequence())),
 			packet.GetSourcePort(),
 			packet.GetSourceChannel(),
 			packet.GetDestPort(),
 			packet.GetDestChannel(),
-			channel.Ordering.String(),
+			channel.Ordering,
 			channel.ConnectionHops[0],
 		)
 		if err != nil {
@@ -808,13 +810,14 @@ func TimeoutExecuted(
 
 	// emit an event marking that we have processed the timeout
 	topics, data, err := IBCABI.PackEvent(GeneratedTimeoutPacketIdentifier.RawName,
+		packet.TimeoutHeight.String(),
 		packet.TimeoutTimestamp,
 		packet.Sequence,
 		packet.SourcePort,
 		packet.SourceChannel,
 		packet.DestinationPort,
 		packet.DestinationChannel,
-		channel.Ordering.String(),
+		channel.Ordering,
 		channel.ConnectionHops[0],
 	)
 	if err != nil {

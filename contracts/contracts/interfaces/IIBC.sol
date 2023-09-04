@@ -222,4 +222,14 @@ interface IIBC {
   function bindPort(
     string memory portID
   ) external;
+
+  function OnRecvPacket(
+	  Packet  memory packet,
+	  bytes memory Relayer
+  ) external;
+
+    function OnTimeout(
+	  Packet  memory packet,
+	  bytes memory Relayer
+  ) external;
 }

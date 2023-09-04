@@ -100,9 +100,9 @@ func PackOnTimeoutOnCloseInput(inputStruct OnTimeoutOnCloseInput) ([]byte, error
 	return IBCABI.Pack("OnTimeoutOnCloseInput", inputStruct.Packet, inputStruct.Relayer)
 }
 
-// PackOnTimeoutInput packs [inputStruct] of type OnTimeoutInput into the appropriate arguments for OnTimeout.
-func PackOnTimeoutInput(inputStruct OnTimeoutInput) ([]byte, error) {
-	return IBCABI.Pack("OnTimeoutInput", inputStruct.Packet, inputStruct.Relayer)
+// PackOnTimeout packs [inputStruct] of type OnTimeoutInput into the appropriate arguments for OnTimeout.
+func PackOnTimeout(inputStruct OnTimeoutInput) ([]byte, error) {
+	return IBCABI.Pack("OnTimeout", inputStruct.Packet, inputStruct.Relayer)
 }
 
 // PackOnAcknowledgementInput packs [inputStruct] of type OnAcknowledgementInput into the appropriate arguments for OnAcknowledgement.
@@ -210,7 +210,11 @@ func recvPacket(accessibleState contract.AccessibleState, caller common.Address,
 	if err != nil {
 		return nil, remainingGas, err
 	}
-	ret, remainingGas, err = accessibleState.CallFromPrecompile(ContractAddress, recvAddr, data, remainingGas, big.NewInt(0))
+	res, remainingGas, err := accessibleState.CallFromPrecompile(ContractAddress, recvAddr, data, remainingGas, big.NewInt(0))
+	fmt.Printf("res: %s, \n remainingGas: %d,  \n err: %s \n ", res, remainingGas, err)
+	if err != nil {
+		return nil, remainingGas, err
+	}
 
 	writeAcknowledgement(inputStruct.Packet, accessibleState)
 
@@ -223,20 +227,20 @@ func recvPacket(accessibleState contract.AccessibleState, caller common.Address,
 
 // UnpackTimeoutInput attempts to unpack [input] into the IIBCMsgTimeout type argument
 // assumes that [input] does not include selector (omits first 4 func signature bytes)
-func UnpackTimeoutInput(input []byte) (*MsgTimeout, error) {
-	res, err := IBCABI.UnpackInput("timeout", input)
+func UnpackTimeoutInput(input []byte) (MsgTimeout, error) {
+	inputStruct := MsgTimeout{}
+	err := IBCABI.UnpackInputIntoInterface(&inputStruct, "timeout", input)
 	if err != nil {
-		return nil, err
+		fmt.Println("UnpackInputIntoInterface")
 	}
-	unpacked := abi.ConvertType(res[0], new(MsgTimeout)).(*MsgTimeout)
-	return unpacked, nil
+	return inputStruct, err
 }
 
 // PackTimeout packs [message] of type IIBCMsgTimeout into the appropriate arguments for Timeout.
 // the packed bytes include selector (first 4 func signature bytes).
 // This function is mostly used for tests.
 func PackTimeout(message MsgTimeout) ([]byte, error) {
-	return IBCABI.Pack("timeout", message)
+	return IBCABI.Pack("timeout", message.Packet, message.ProofUnreceived, message.ProofHeight, message.NextSequenceRecv, message.Signer)
 }
 
 func timeout(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
@@ -261,7 +265,7 @@ func timeout(accessibleState contract.AccessibleState, caller common.Address, ad
 		addr:            addr,
 		suppliedGas:     suppliedGas,
 		readOnly:        readOnly,
-		args:            *inputStruct,
+		args:            inputStruct,
 	})
 	switch err {
 	case nil:
@@ -275,7 +279,7 @@ func timeout(accessibleState contract.AccessibleState, caller common.Address, ad
 	if err != nil {
 		return nil, remainingGas, fmt.Errorf("%w, port with portID: %s already bound", err, inputStruct.Packet.DestinationPort)
 	}
-	data, err := PackOnTimeoutInput(OnTimeoutInput{Packet: inputStruct.Packet, Relayer: []byte(inputStruct.Signer)})
+	data, err := PackOnTimeout(OnTimeoutInput{Packet: inputStruct.Packet, Relayer: []byte(inputStruct.Signer)})
 	if err != nil {
 		return nil, remainingGas, err
 	}
