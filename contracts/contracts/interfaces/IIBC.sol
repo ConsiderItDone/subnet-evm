@@ -121,4 +121,13 @@ interface IIBC {
   ) external;
 
   function bindPort(string memory portID) external;
+
+  // query methods
+  function queryClientState(string memory clientId) external returns (bytes memory);
+
+  function queryConsensusState(string memory clientId) external returns (bytes memory);
+
+  function queryConnection(string memory connectionID) external returns (bytes memory);
+
+  function queryChannel(string memory portID, string memory channelID) external returns (bytes memory);
 }

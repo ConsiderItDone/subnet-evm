@@ -163,6 +163,11 @@ func RunTestIbcCreateClient(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
+	//ibcContract.QueryClientState(...)
+	//ibcContract.QueryConsensusState(...)
+	//ibcContract.QueryConnection(...)
+	//ibcContract.QueryChannel(...)
+
 	clientStateA, existA := chainA.App.GetIBCKeeper().ClientKeeper.GetClientState(chainA.GetContext(), path.EndpointA.ClientID)
 	require.True(t, existA)
 	clientStateByteA, err := clientStateA.(*ibctm.ClientState).Marshal()
