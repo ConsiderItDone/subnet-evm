@@ -7,7 +7,6 @@ import (
 	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/ava-labs/subnet-evm/accounts/abi"
 	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/ava-labs/subnet-evm/vmerrs"
 )
@@ -97,7 +96,7 @@ func PackOnRecvPacket(inputStruct OnRecvPacketInput) ([]byte, error) {
 
 // PackOnTimeoutOnCloseInput packs [inputStruct] of type OnTimeoutOnCloseInput into the appropriate arguments for OnTimeoutOnClose.
 func PackOnTimeoutOnCloseInput(inputStruct OnTimeoutOnCloseInput) ([]byte, error) {
-	return IBCABI.Pack("OnTimeoutOnCloseInput", inputStruct.Packet, inputStruct.Relayer)
+	return IBCABI.Pack("OnTimeoutOnClose", inputStruct.Packet, inputStruct.Relayer)
 }
 
 // PackOnTimeout packs [inputStruct] of type OnTimeoutInput into the appropriate arguments for OnTimeout.
@@ -107,7 +106,7 @@ func PackOnTimeout(inputStruct OnTimeoutInput) ([]byte, error) {
 
 // PackOnAcknowledgementInput packs [inputStruct] of type OnAcknowledgementInput into the appropriate arguments for OnAcknowledgement.
 func PackOnAcknowledgementInput(inputStruct OnAcknowledgementInput) ([]byte, error) {
-	return IBCABI.Pack("OnAcknowledgementInput", inputStruct.Packet, inputStruct.Acknowledgement, inputStruct.Relayer)
+	return IBCABI.Pack("OnAcknowledgement", inputStruct.Packet, inputStruct.Acknowledgement, inputStruct.Relayer)
 }
 
 // UnpackSendPacketInput attempts to unpack [input] as SendPacketInput
@@ -210,8 +209,7 @@ func recvPacket(accessibleState contract.AccessibleState, caller common.Address,
 	if err != nil {
 		return nil, remainingGas, err
 	}
-	res, remainingGas, err := accessibleState.CallFromPrecompile(ContractAddress, recvAddr, data, remainingGas, big.NewInt(0))
-	fmt.Printf("res: %s, \n remainingGas: %d,  \n err: %s \n ", res, remainingGas, err)
+	_, remainingGas, err = accessibleState.CallFromPrecompile(ContractAddress, recvAddr, data, remainingGas, big.NewInt(0))
 	if err != nil {
 		return nil, remainingGas, err
 	}
@@ -283,8 +281,10 @@ func timeout(accessibleState contract.AccessibleState, caller common.Address, ad
 	if err != nil {
 		return nil, remainingGas, err
 	}
-	ret, remainingGas, err = accessibleState.CallFromPrecompile(ContractAddress, recvAddr, data, remainingGas, big.NewInt(0))
-
+	_, remainingGas, err = accessibleState.CallFromPrecompile(ContractAddress, recvAddr, data, remainingGas, big.NewInt(0))
+	if err != nil {
+		return nil, remainingGas, err
+	}
 	// Delete packet commitment
 	if err = TimeoutExecuted(accessibleState, inputStruct.Packet); err != nil {
 		return nil, remainingGas, err
@@ -296,20 +296,20 @@ func timeout(accessibleState contract.AccessibleState, caller common.Address, ad
 
 // UnpackTimeoutOnCloseInput attempts to unpack [input] into the IIBCMsgTimeoutOnClose type argument
 // assumes that [input] does not include selector (omits first 4 func signature bytes)
-func UnpackTimeoutOnCloseInput(input []byte) (*MsgTimeoutOnClose, error) {
-	res, err := IBCABI.UnpackInput("timeoutOnClose", input)
+func UnpackTimeoutOnCloseInput(input []byte) (MsgTimeoutOnClose, error) {
+	inputStruct := MsgTimeoutOnClose{}
+	err := IBCABI.UnpackInputIntoInterface(&inputStruct, "timeoutOnClose", input)
 	if err != nil {
-		return nil, err
+		fmt.Println("UnpackInputIntoInterface")
 	}
-	unpacked := abi.ConvertType(res[0], new(MsgTimeoutOnClose)).(*MsgTimeoutOnClose)
-	return unpacked, nil
+	return inputStruct, err
 }
 
 // PackTimeoutOnClose packs [message] of type IIBCMsgTimeoutOnClose into the appropriate arguments for TimeoutOnClose.
 // the packed bytes include selector (first 4 func signature bytes).
 // This function is mostly used for tests.
 func PackTimeoutOnClose(message MsgTimeoutOnClose) ([]byte, error) {
-	return IBCABI.Pack("timeoutOnClose", message)
+	return IBCABI.Pack("timeoutOnClose", message.Packet, message.ProofUnreceived, message.ProofClose, message.ProofHeight, message.NextSequenceRecv, message.Signer)
 }
 
 func timeoutOnClose(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
@@ -334,7 +334,7 @@ func timeoutOnClose(accessibleState contract.AccessibleState, caller common.Addr
 		addr:            addr,
 		suppliedGas:     suppliedGas,
 		readOnly:        readOnly,
-		args:            *inputStruct,
+		args:            inputStruct,
 	})
 	switch err {
 	case nil:
@@ -352,8 +352,10 @@ func timeoutOnClose(accessibleState contract.AccessibleState, caller common.Addr
 	if err != nil {
 		return nil, remainingGas, err
 	}
-	ret, remainingGas, err = accessibleState.CallFromPrecompile(ContractAddress, recvAddr, data, remainingGas, big.NewInt(0))
-
+	_, remainingGas, err = accessibleState.CallFromPrecompile(ContractAddress, recvAddr, data, remainingGas, big.NewInt(0))
+	if err != nil {
+		return nil, remainingGas, err
+	}
 	// Delete packet commitment
 	if err = TimeoutExecuted(accessibleState, inputStruct.Packet); err != nil {
 		return nil, remainingGas, err
@@ -369,20 +371,20 @@ func (h Height) String() string {
 
 // UnpackAcknowledgementInput attempts to unpack [input] into the IIBCMsgAcknowledgement type argument
 // assumes that [input] does not include selector (omits first 4 func signature bytes)
-func UnpackAcknowledgementInput(input []byte) (*MsgAcknowledgement, error) {
-	res, err := IBCABI.UnpackInput("acknowledgement", input)
+func UnpackAcknowledgementInput(input []byte) (MsgAcknowledgement, error) {
+	inputStruct := MsgAcknowledgement{}
+	err := IBCABI.UnpackInputIntoInterface(&inputStruct, "acknowledgement", input)
 	if err != nil {
-		return nil, err
+		fmt.Println("UnpackInputIntoInterface")
 	}
-	unpacked := abi.ConvertType(res[0], new(MsgAcknowledgement)).(*MsgAcknowledgement)
-	return unpacked, nil
+	return inputStruct, err
 }
 
 // PackAcknowledgement packs [message] of type IIBCMsgAcknowledgement into the appropriate arguments for Acknowledgement.
 // the packed bytes include selector (first 4 func signature bytes).
 // This function is mostly used for tests.
 func PackAcknowledgement(message MsgAcknowledgement) ([]byte, error) {
-	return IBCABI.Pack("acknowledgement", message)
+	return IBCABI.Pack("acknowledgement", message.Packet, message.Acknowledgement, message.ProofAcked, message.ProofHeight, message.Signer)
 }
 
 func acknowledgement(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
@@ -400,8 +402,6 @@ func acknowledgement(accessibleState contract.AccessibleState, caller common.Add
 		return nil, remainingGas, err
 	}
 
-	// CUSTOM CODE STARTS HERE
-	_ = inputStruct // CUSTOM CODE OPERATES ON INPUT
 	packedOutput := []byte{}
 
 	err = _acknowledgement(&callOpts[MsgAcknowledgement]{
@@ -410,7 +410,7 @@ func acknowledgement(accessibleState contract.AccessibleState, caller common.Add
 		addr:            addr,
 		suppliedGas:     suppliedGas,
 		readOnly:        readOnly,
-		args:            *inputStruct,
+		args:            inputStruct,
 	})
 	switch err {
 	case nil:
@@ -428,8 +428,10 @@ func acknowledgement(accessibleState contract.AccessibleState, caller common.Add
 	if err != nil {
 		return nil, remainingGas, err
 	}
-	ret, remainingGas, err = accessibleState.CallFromPrecompile(ContractAddress, recvAddr, data, remainingGas, big.NewInt(0))
-
+	_, remainingGas, err = accessibleState.CallFromPrecompile(ContractAddress, recvAddr, data, remainingGas, big.NewInt(0))
+	if err != nil {
+		return nil, remainingGas, err
+	}
 	// Return the packed output and the remaining gas
 	return packedOutput, remainingGas, nil
 }

@@ -228,8 +228,19 @@ interface IIBC {
 	  bytes memory Relayer
   ) external;
 
-    function OnTimeout(
+  function OnTimeout(
 	  Packet  memory packet,
 	  bytes memory Relayer
+  ) external;
+
+  function OnTimeoutOnClose(
+	  Packet  memory packet,
+	  bytes memory Relayer
+  ) external;
+
+  function OnAcknowledgement(
+    Packet calldata packet, 
+    bytes calldata acknowledgement, 
+    bytes calldata
   ) external;
 }

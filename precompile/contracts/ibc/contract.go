@@ -97,6 +97,7 @@ func createIBCPrecompile() contract.StatefulPrecompiledContract {
 		"sendPacket":          sendPacket,
 		"timeout":             timeout,
 		"timeoutOnClose":      timeoutOnClose,
+		"acknowledgement":     acknowledgement,
 	}
 
 	for name, function := range abiFunctionMap {
