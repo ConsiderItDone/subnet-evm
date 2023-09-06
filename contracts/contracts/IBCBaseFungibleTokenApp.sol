@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/utils/Context.sol";
 import "solidity-stringutils/src/strings.sol";
+import "solidity-bytes-utils/contracts/BytesLib.sol";
 import {Packet} from "./interfaces/IIBC.sol";
 import {IBCApp} from "./IBCApp.sol";
 
@@ -16,6 +17,7 @@ struct FungibleTokenPacketData {
 
 abstract contract IBCBaseFungibleTokenApp is IBCApp, Context {
   using strings for *;
+  using BytesLib for bytes;
 
   mapping(string => address) channelEscrowAddresses;
 
@@ -43,6 +45,34 @@ abstract contract IBCBaseFungibleTokenApp is IBCApp, Context {
     }
     string memory prefixedDenom = _makeDenomPrefix(packet.destinationPort, packet.destinationChannel).concat(denom);
     return _mint(data.receiver, prefixedDenom, data.amount);
+  }
+
+  function OnAcknowledgementInput(
+    Packet calldata packet,
+    bytes calldata acknowledgement,
+    address
+  ) external override onlyIBC {
+    if (!_isSuccessAcknowledgement(acknowledgement)) {
+      FungibleTokenPacketData memory data = abi.decode(packet.data, (FungibleTokenPacketData));
+      _refundTokens(data, packet.sourcePort, packet.sourceChannel);
+    }
+  }
+
+  function _isSuccessAcknowledgement(bytes memory acknowledgement) internal pure virtual returns (bool) {
+    require(acknowledgement.length == 1);
+    return acknowledgement[0] == 0x01;
+  }
+
+  function _refundTokens(
+    FungibleTokenPacketData memory data,
+    string memory sourcePort,
+    string memory sourceChannel
+  ) internal virtual {
+    if (!data.denom.toSlice().startsWith(_makeDenomPrefix(sourcePort, sourceChannel))) {
+      require(_transferFrom(_getEscrowAddress(sourceChannel), data.sender.toAddress(0), data.denom, data.amount));
+    } else {
+      require(_mint(data.sender.toAddress(0), data.denom, data.amount));
+    }
   }
 
   function _mint(address account, string memory denom, uint256 amount) internal virtual returns (bool);
