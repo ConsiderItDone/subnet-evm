@@ -138,7 +138,7 @@ func _recvPacket(opts *callOpts[MsgRecvPacket]) error {
 	}
 
 	if channel.State != channeltypes.OPEN {
-		fmt.Errorf("%w, channel state is not OPEN (got %s)", channeltypes.ErrInvalidChannelState, channel.State.String())
+		return fmt.Errorf("%w, channel state is not OPEN (got %s)", channeltypes.ErrInvalidChannelState, channel.State.String())
 	}
 
 	// packet must come from the channel's counterparty
@@ -521,6 +521,10 @@ func _acknowledgement(opts *callOpts[MsgAcknowledgement]) error {
 	)
 	if err != nil {
 		return err
+	}
+
+	if channel.State != channeltypes.OPEN {
+		return fmt.Errorf("%w, channel state is not OPEN (got %s)", channeltypes.ErrInvalidChannelState, channel.State.String())
 	}
 
 	height := clienttypes.Height{
