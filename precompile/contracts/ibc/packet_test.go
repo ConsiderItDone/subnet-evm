@@ -1355,19 +1355,6 @@ func TestTimeoutPacket(t *testing.T) {
 				commitment := chainA.App.GetIBCKeeper().ChannelKeeper.GetPacketCommitment(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				setPacketCommitment(state, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence, commitment)
 			},
-			AfterHook: func(t testing.TB, state contract.StateDB) {
-				contractAddress := common.BytesToAddress([]byte("counter"))
-				// common.Hash{} -> 0x0000000000000000000000000000000000000000000000000000
-				newState := state.GetState(contractAddress, common.Hash{})
-				// newState = 0x 000000 10 (dec)
-
-				fmt.Println(newState.Bytes())
-				fmt.Println(data)
-
-				// if !reflect.DeepEqual(newState.Bytes(), data) {
-				// 	t.Error("return value of test contract not equal data")
-				// }
-			},
 			SuppliedGas: BindPortGasCost,
 			ReadOnly:    false,
 			ExpectedRes: []byte{},
@@ -1501,19 +1488,6 @@ func TestTimeoutOnClosePacket(t *testing.T) {
 				commitment := chainA.App.GetIBCKeeper().ChannelKeeper.GetPacketCommitment(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				setPacketCommitment(state, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence, commitment)
 			},
-			AfterHook: func(t testing.TB, state contract.StateDB) {
-				contractAddress := common.BytesToAddress([]byte("counter"))
-				// common.Hash{} -> 0x0000000000000000000000000000000000000000000000000000
-				newState := state.GetState(contractAddress, common.Hash{})
-				// newState = 0x 000000 10 (dec)
-
-				fmt.Println(newState.Bytes())
-				fmt.Println(data)
-
-				// if !reflect.DeepEqual(newState.Bytes(), data) {
-				// 	t.Error("return value of test contract not equal data")
-				// }
-			},
 			SuppliedGas: BindPortGasCost,
 			ReadOnly:    false,
 			ExpectedRes: []byte{},
@@ -1535,17 +1509,14 @@ func TestAcknowledgement(t *testing.T) {
 	ack := ibcmock.MockAcknowledgement
 
 	var (
-		packet   Packet
-		sequence = uint64(1)
-		err      error
+		packet      Packet
+		sequence    = uint64(1)
+		err         error
+		chainA      *ibctesting.TestChain
+		chainB      *ibctesting.TestChain
+		path        *ibctesting.Path
+		coordinator *ibctesting.Coordinator
 	)
-
-	coordinator := ibctesting.NewCoordinator(t, 2)
-	chainA := coordinator.GetChain(ibctesting.GetChainID(1))
-	chainB := coordinator.GetChain(ibctesting.GetChainID(2))
-	coordinator.CommitNBlocks(chainA, 2)
-	coordinator.CommitNBlocks(chainB, 2)
-	path := ibctesting.NewPath(chainA, chainB)
 
 	tests := map[string]testutils.PrecompileTest{
 		"success on ordered channel": {
@@ -2049,7 +2020,7 @@ func TestAcknowledgement(t *testing.T) {
 					t.Error("nextSequenceAck is not exist")
 				}
 				setNextSequenceAck(state, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, nextSequenceAck)
-				
+
 				state.CreateAccount(contractAddress)
 				state.SetCode(contractAddress, hexutil.MustDecode(bytecode))
 				SetPort(state, path.EndpointA.ChannelConfig.PortID, contractAddress)
@@ -2067,7 +2038,7 @@ func TestAcknowledgement(t *testing.T) {
 			},
 			SuppliedGas: BindPortGasCost,
 			ReadOnly:    false,
-			ExpectedErr: "aaaaaaa",
+			ExpectedErr: "empty precompile state",
 		},
 		"connection not OPEN": {
 			Caller: common.Address{1},
@@ -2331,11 +2302,18 @@ func TestAcknowledgement(t *testing.T) {
 			},
 			SuppliedGas: BindPortGasCost,
 			ReadOnly:    false,
-			ExpectedErr: "aaaaaaa",
+			ExpectedErr: "empty precompile state",
 		},
 	}
 	// Run tests.
 	for name, test := range tests {
+		coordinator = ibctesting.NewCoordinator(t, 2)
+		chainA = coordinator.GetChain(ibctesting.GetChainID(1))
+		chainB = coordinator.GetChain(ibctesting.GetChainID(2))
+		coordinator.CommitNBlocks(chainA, 2)
+		coordinator.CommitNBlocks(chainB, 2)
+		path = ibctesting.NewPath(chainA, chainB)
+
 		t.Run(name, func(t *testing.T) {
 			test.Run(t, Module, state.NewTestStateDB(t))
 		})
