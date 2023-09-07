@@ -205,7 +205,7 @@ func VerifyPacketReceiptAbsence(
 	if err := VerifyNonMembership(
 		*clientState, cdc, height,
 		timeDelay, blockDelay,
-		accessibleState, proof, merklePath,
+		accessibleState, proof, merklePath, clientID,
 	); err != nil {
 		return fmt.Errorf("%w, failed packet receipt absence verification for client (%s)", err, clientID)
 	}
@@ -260,6 +260,7 @@ func VerifyNonMembership(
 	accessibleState contract.AccessibleState,
 	proof []byte,
 	path exported.Path,
+	clientID string,
 ) error {
 
 	if cs.GetLatestHeight().LT(height) {
@@ -280,7 +281,7 @@ func VerifyNonMembership(
 		return fmt.Errorf(", expected %T, got %T", commitmenttypes.MerklePath{}, path)
 	}
 
-	consensusState, err := GetConsensusState(accessibleState.GetStateDB(), cs.ChainId, height)
+	consensusState, err := GetConsensusState(accessibleState.GetStateDB(), clientID, height)
 	if err != nil {
 		return fmt.Errorf("%w, %w, please ensure the proof was constructed against a height that exists on the client", clienttypes.ErrConsensusStateNotFound, err)
 	}
