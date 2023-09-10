@@ -6,12 +6,13 @@ import (
 
 	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/cosmos/cosmos-sdk/codec"
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	cosmostypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/std"
 	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
 	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
 	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
-	exported "github.com/cosmos/ibc-go/v7/modules/core/exported"
+	"github.com/cosmos/ibc-go/v7/modules/core/exported"
 	ibctm "github.com/cosmos/ibc-go/v7/modules/light-clients/07-tendermint"
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -60,11 +61,24 @@ func _createClient(opts *callOpts[CreateClientInput]) (string, error) {
 }
 
 func _updateClient(opts *callOpts[UpdateClientInput]) error {
+	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
+	std.RegisterInterfaces(interfaceRegistry)
+	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+
 	statedb := opts.accessibleState.GetStateDB()
 
 	clientState, err := GetClientState(statedb, opts.args.ClientID)
 	if err != nil {
 		return fmt.Errorf("can't get client state: %w", err)
+	}
+
+	var msg *codectypes.Any
+	marshaler.UnmarshalInterface(opts.args.ClientMessage, msg)
+	clientMsg, err := clienttypes.UnpackClientMessage(msg)
+
+	if err := VerifyClientMessage(clientState, marshaler, opts.args.ClientID, opts.accessibleState, clientMsg); err != nil {
+		return err
 	}
 
 	consensusState, err := GetConsensusState(statedb, opts.args.ClientID, clientState.GetLatestHeight())
