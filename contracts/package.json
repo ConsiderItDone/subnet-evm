@@ -40,7 +40,8 @@
     "release:prepare": "rm -rf ./dist ./node_modules && npm install && npm run build"
   },
   "dependencies": {
-    "ds-test": "https://github.com/dapphub/ds-test.git"
+    "ds-test": "https://github.com/dapphub/ds-test.git",
+    "solidity-bytes-utils": "^0.8.0"
   },
   "engines": {
     "npm": ">6.0.0",

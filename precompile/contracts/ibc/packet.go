@@ -41,7 +41,7 @@ type IIBCMsgAcknowledgement struct {
 	Signer          string
 }
 
-type OnAcknowledgementInput struct {
+type OnAcknowledgementPacketInput struct {
 	Packet          Packet
 	Acknowledgement []byte
 	Relayer         []byte
@@ -113,9 +113,9 @@ func PackOnTimeout(inputStruct OnTimeoutInput) ([]byte, error) {
 	return IBCABI.Pack("OnTimeout", inputStruct.Packet, inputStruct.Relayer)
 }
 
-// PackOnAcknowledgementInput packs [inputStruct] of type OnAcknowledgementInput into the appropriate arguments for OnAcknowledgement.
-func PackOnAcknowledgementInput(inputStruct OnAcknowledgementInput) ([]byte, error) {
-	return IBCABI.Pack("OnAcknowledgement", inputStruct.Packet, inputStruct.Acknowledgement, inputStruct.Relayer)
+// PackOnAcknowledgementPacket packs [inputStruct] of type OnAcknowledgementPacketInput into the appropriate arguments for OnAcknowledgementPacket.
+func PackOnAcknowledgementPacket(inputStruct OnAcknowledgementPacketInput) ([]byte, error) {
+	return IBCABI.Pack("OnAcknowledgementPacket", inputStruct.Packet, inputStruct.Acknowledgement, inputStruct.Relayer)
 }
 
 // UnpackSendPacketInput attempts to unpack [input] as SendPacketInput
@@ -409,13 +409,11 @@ func (h Height) String() string {
 
 // UnpackAcknowledgementInput attempts to unpack [input] into the IIBCMsgAcknowledgement type argument
 // assumes that [input] does not include selector (omits first 4 func signature bytes)
-func UnpackAcknowledgementInput(input []byte) (*IIBCMsgAcknowledgement, error) {
-	res, err := IBCABI.UnpackInput("acknowledgement", input)
-	if err != nil {
-		fmt.Println("UnpackInputIntoInterface")
-	}
-	unpacked := *abi.ConvertType(res[0], new(IIBCMsgAcknowledgement)).(*IIBCMsgAcknowledgement)
-	return &unpacked, nil
+func UnpackAcknowledgementInput(input []byte) (IIBCMsgAcknowledgement, error) {
+	inputStruct := IIBCMsgAcknowledgement{}
+	err := IBCABI.UnpackInputIntoInterface(&inputStruct, "acknowledgement", input)
+
+	return inputStruct, err
 }
 
 // PackAcknowledgement packs [message] of type IIBCMsgAcknowledgement into the appropriate arguments for Acknowledgement.
@@ -440,27 +438,27 @@ func acknowledgement(accessibleState contract.AccessibleState, caller common.Add
 		return nil, remainingGas, err
 	}
 
-	err = _acknowledgement(&callOpts[IIBCMsgAcknowledgement]{
-		accessibleState: accessibleState,
-		caller:          caller,
-		addr:            addr,
-		suppliedGas:     suppliedGas,
-		readOnly:        readOnly,
-		args:            inputStruct,
-	})
-	switch err {
-	case nil:
-	case channeltypes.ErrNoOpMsg:
-		return []byte{}, remainingGas, nil
-	default:
-		return nil, remainingGas, err
-	}
+	//err = _acknowledgement(&callOpts[IIBCMsgAcknowledgement]{
+	//	accessibleState: accessibleState,
+	//	caller:          caller,
+	//	addr:            addr,
+	//	suppliedGas:     suppliedGas,
+	//	readOnly:        readOnly,
+	//	args:            *inputStruct,
+	//})
+	//switch err {
+	//case nil:
+	//case channeltypes.ErrNoOpMsg:
+	//	return []byte{}, remainingGas, nil
+	//default:
+	//	return nil, remainingGas, err
+	//}
 
 	recvAddr, err := GetPort(accessibleState.GetStateDB(), inputStruct.Packet.DestinationPort)
 	if err != nil {
 		return nil, remainingGas, fmt.Errorf("%w, port with portID: %s already bound", err, inputStruct.Packet.DestinationPort)
 	}
-	data, err := PackOnAcknowledgementInput(OnAcknowledgementInput{Packet: inputStruct.Packet, Acknowledgement: inputStruct.Acknowledgement, Relayer: []byte(inputStruct.Signer)})
+	data, err := PackOnAcknowledgementPacket(OnAcknowledgementPacketInput{Packet: inputStruct.Packet, Acknowledgement: inputStruct.Acknowledgement, Relayer: []byte(inputStruct.Signer)})
 	if err != nil {
 		return nil, remainingGas, err
 	}
@@ -469,6 +467,7 @@ func acknowledgement(accessibleState contract.AccessibleState, caller common.Add
 		return nil, remainingGas, fmt.Errorf("can't call fuction via CallFromPrecompile: %w", err)
 	}
 
+	// this function does not return an output, leave this one as is
 	packedOutput := []byte{}
 
 	// Return the packed output and the remaining gas

@@ -547,7 +547,7 @@
       },
       {
         "internalType": "bytes",
-        "name": "acknowledgement",
+        "name": "ack",
         "type": "bytes"
       },
       {
@@ -556,7 +556,7 @@
         "type": "bytes"
       }
     ],
-    "name": "OnAcknowledgement",
+    "name": "OnAcknowledgementPacket",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

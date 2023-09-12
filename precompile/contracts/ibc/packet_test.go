@@ -127,7 +127,7 @@ func TestRecvPacket(t *testing.T) {
 				packetKey := host.PacketCommitmentKey(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				proof, proofHeight := path.EndpointA.QueryProof(packetKey)
 
-				input, err := PackRecvPacket(MsgRecvPacket{
+				input, err := PackRecvPacket(IIBCMsgRecvPacket{
 					Packet: Packet{
 						Sequence:           big.NewInt(int64(sequence)),
 						SourcePort:         path.EndpointA.ChannelConfig.PortID,
@@ -192,7 +192,7 @@ func TestRecvPacket(t *testing.T) {
 				packetKey := host.PacketCommitmentKey(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				proof, proofHeight := path.EndpointA.QueryProof(packetKey)
 
-				input, err := PackRecvPacket(MsgRecvPacket{
+				input, err := PackRecvPacket(IIBCMsgRecvPacket{
 					Packet: Packet{
 						Sequence:           big.NewInt(int64(sequence)),
 						SourcePort:         path.EndpointA.ChannelConfig.PortID,
@@ -254,7 +254,7 @@ func TestRecvPacket(t *testing.T) {
 				packetKey := host.PacketCommitmentKey(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				proof, proofHeight := path.EndpointA.QueryProof(packetKey)
 
-				input, err := PackRecvPacket(MsgRecvPacket{
+				input, err := PackRecvPacket(IIBCMsgRecvPacket{
 					Packet: Packet{
 						Sequence:           big.NewInt(int64(sequence)),
 						SourcePort:         path.EndpointA.ChannelConfig.PortID,
@@ -320,7 +320,7 @@ func TestRecvPacket(t *testing.T) {
 				packetKey := host.PacketCommitmentKey(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				proof, proofHeight := path.EndpointA.QueryProof(packetKey)
 
-				input, err := PackRecvPacket(MsgRecvPacket{
+				input, err := PackRecvPacket(IIBCMsgRecvPacket{
 					Packet: Packet{
 						Sequence:           big.NewInt(int64(sequence)),
 						SourcePort:         path.EndpointA.ChannelConfig.PortID,
@@ -380,7 +380,7 @@ func TestRecvPacket(t *testing.T) {
 				packetKey := host.PacketCommitmentKey(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				proof, proofHeight := path.EndpointA.QueryProof(packetKey)
 
-				input, err := PackRecvPacket(MsgRecvPacket{
+				input, err := PackRecvPacket(IIBCMsgRecvPacket{
 					Packet: Packet{
 						Sequence:           big.NewInt(int64(sequence)),
 						SourcePort:         path.EndpointA.ChannelConfig.PortID,
@@ -432,7 +432,7 @@ func TestRecvPacket(t *testing.T) {
 				packetKey := host.PacketCommitmentKey(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				proof, proofHeight := path.EndpointA.QueryProof(packetKey)
 
-				input, err := PackRecvPacket(MsgRecvPacket{
+				input, err := PackRecvPacket(IIBCMsgRecvPacket{
 					Packet: Packet{
 						Sequence:           big.NewInt(int64(sequence)),
 						SourcePort:         path.EndpointA.ChannelConfig.PortID,
@@ -498,7 +498,7 @@ func TestRecvPacket(t *testing.T) {
 				packetKey := host.PacketCommitmentKey(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				proof, proofHeight := path.EndpointA.QueryProof(packetKey)
 
-				input, err := PackRecvPacket(MsgRecvPacket{
+				input, err := PackRecvPacket(IIBCMsgRecvPacket{
 					Packet: Packet{
 						Sequence:           big.NewInt(int64(sequence)),
 						SourcePort:         path.EndpointA.ChannelConfig.PortID,
@@ -1360,7 +1360,7 @@ func TestTimeoutPacket(t *testing.T) {
 
 				proof, proofHeight = path.EndpointB.QueryProof(unorderedPacketKey)
 
-				input, err := PackTimeout(MsgTimeout{
+				input, err := PackTimeout(IIBCMsgTimeout{
 					Packet: packet,
 					ProofHeight: Height{
 						RevisionNumber: big.NewInt(int64(proofHeight.GetRevisionNumber())),
@@ -1448,7 +1448,7 @@ func TestTimeoutPacket(t *testing.T) {
 
 				proof, proofHeight = path.EndpointB.QueryProof(orderedPacketKey)
 
-				input, err := PackTimeout(MsgTimeout{
+				input, err := PackTimeout(IIBCMsgTimeout{
 					Packet: packet,
 					ProofHeight: Height{
 						RevisionNumber: big.NewInt(int64(proofHeight.GetRevisionNumber())),
@@ -1534,7 +1534,7 @@ func TestTimeoutPacket(t *testing.T) {
 
 				proof, proofHeight = path.EndpointB.QueryProof(orderedPacketKey)
 
-				input, err := PackTimeout(MsgTimeout{
+				input, err := PackTimeout(IIBCMsgTimeout{
 					Packet: packet,
 					ProofHeight: Height{
 						RevisionNumber: big.NewInt(int64(proofHeight.GetRevisionNumber())),
@@ -1624,7 +1624,7 @@ func TestTimeoutPacket(t *testing.T) {
 
 				proof, proofHeight = path.EndpointB.QueryProof(orderedPacketKey)
 
-				input, err := PackTimeout(MsgTimeout{
+				input, err := PackTimeout(IIBCMsgTimeout{
 					Packet: packet,
 					ProofHeight: Height{
 						RevisionNumber: big.NewInt(int64(proofHeight.GetRevisionNumber())),
@@ -1709,7 +1709,7 @@ func TestTimeoutPacket(t *testing.T) {
 
 				proof, proofHeight = path.EndpointB.QueryProof(orderedPacketKey)
 
-				input, err := PackTimeout(MsgTimeout{
+				input, err := PackTimeout(IIBCMsgTimeout{
 					Packet: packet,
 					ProofHeight: Height{
 						RevisionNumber: big.NewInt(int64(proofHeight.GetRevisionNumber())),
@@ -1786,7 +1786,7 @@ func TestTimeoutPacket(t *testing.T) {
 
 				proof, proofHeight = path.EndpointB.QueryProof(orderedPacketKey)
 
-				input, err := PackTimeout(MsgTimeout{
+				input, err := PackTimeout(IIBCMsgTimeout{
 					Packet: packet,
 					ProofHeight: Height{
 						RevisionNumber: big.NewInt(int64(proofHeight.GetRevisionNumber())),
@@ -1914,7 +1914,7 @@ func TestTimeoutOnClosePacket(t *testing.T) {
 
 				proof, _ = chainB.QueryProof(orderedPacketKey)
 
-				input, err := PackTimeoutOnClose(MsgTimeoutOnClose{
+				input, err := PackTimeoutOnClose(IIBCMsgTimeoutOnClose{
 					Packet: packet,
 					ProofHeight: Height{
 						RevisionNumber: big.NewInt(int64(proofHeight.GetRevisionNumber())),
@@ -2006,7 +2006,7 @@ func TestTimeoutOnClosePacket(t *testing.T) {
 
 				proof, _ = chainB.QueryProof(unorderedPacketKey)
 
-				input, err := PackTimeoutOnClose(MsgTimeoutOnClose{
+				input, err := PackTimeoutOnClose(IIBCMsgTimeoutOnClose{
 					Packet: packet,
 					ProofHeight: Height{
 						RevisionNumber: big.NewInt(int64(proofHeight.GetRevisionNumber())),
@@ -2096,7 +2096,7 @@ func TestTimeoutOnClosePacket(t *testing.T) {
 
 				proof, _ = chainB.QueryProof(orderedPacketKey)
 
-				input, err := PackTimeoutOnClose(MsgTimeoutOnClose{
+				input, err := PackTimeoutOnClose(IIBCMsgTimeoutOnClose{
 					Packet: packet,
 					ProofHeight: Height{
 						RevisionNumber: big.NewInt(int64(proofHeight.GetRevisionNumber())),
@@ -2186,7 +2186,7 @@ func TestTimeoutOnClosePacket(t *testing.T) {
 
 				proof, _ = chainB.QueryProof(orderedPacketKey)
 
-				input, err := PackTimeoutOnClose(MsgTimeoutOnClose{
+				input, err := PackTimeoutOnClose(IIBCMsgTimeoutOnClose{
 					Packet: packet,
 					ProofHeight: Height{
 						RevisionNumber: big.NewInt(int64(proofHeight.GetRevisionNumber())),
@@ -2274,7 +2274,7 @@ func TestTimeoutOnClosePacket(t *testing.T) {
 
 				proof, _ = chainB.QueryProof(orderedPacketKey)
 
-				input, err := PackTimeoutOnClose(MsgTimeoutOnClose{
+				input, err := PackTimeoutOnClose(IIBCMsgTimeoutOnClose{
 					Packet: packet,
 					ProofHeight: Height{
 						RevisionNumber: big.NewInt(int64(proofHeight.GetRevisionNumber())),
@@ -2354,7 +2354,7 @@ func TestTimeoutOnClosePacket(t *testing.T) {
 
 				proof, _ = chainB.QueryProof(orderedPacketKey)
 
-				input, err := PackTimeoutOnClose(MsgTimeoutOnClose{
+				input, err := PackTimeoutOnClose(IIBCMsgTimeoutOnClose{
 					Packet: packet,
 					ProofHeight: Height{
 						RevisionNumber: big.NewInt(int64(proofHeight.GetRevisionNumber())),
@@ -2473,7 +2473,7 @@ func TestAcknowledgement(t *testing.T) {
 				packetKey := host.PacketAcknowledgementKey(path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, sequence)
 				proof, proofHeight := path.EndpointB.QueryProof(packetKey)
 
-				input, err := PackAcknowledgement(MsgAcknowledgement{
+				input, err := PackAcknowledgement(IIBCMsgAcknowledgement{
 					Packet:          packet,
 					Acknowledgement: ack.Acknowledgement(),
 					ProofHeight: Height{
@@ -2563,7 +2563,7 @@ func TestAcknowledgement(t *testing.T) {
 				packetKey := host.PacketAcknowledgementKey(path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, sequence)
 				proof, proofHeight := path.EndpointB.QueryProof(packetKey)
 
-				input, err := PackAcknowledgement(MsgAcknowledgement{
+				input, err := PackAcknowledgement(IIBCMsgAcknowledgement{
 					Packet:          packet,
 					Acknowledgement: ack.Acknowledgement(),
 					ProofHeight: Height{
@@ -2652,7 +2652,7 @@ func TestAcknowledgement(t *testing.T) {
 				packetKey := host.PacketAcknowledgementKey(path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, sequence)
 				proof, proofHeight := path.EndpointB.QueryProof(packetKey)
 
-				input, err := PackAcknowledgement(MsgAcknowledgement{
+				input, err := PackAcknowledgement(IIBCMsgAcknowledgement{
 					Packet:          packet,
 					Acknowledgement: ack.Acknowledgement(),
 					ProofHeight: Height{
@@ -2740,7 +2740,7 @@ func TestAcknowledgement(t *testing.T) {
 				packetKey := host.PacketAcknowledgementKey(path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, sequence)
 				proof, proofHeight := path.EndpointB.QueryProof(packetKey)
 
-				input, err := PackAcknowledgement(MsgAcknowledgement{
+				input, err := PackAcknowledgement(IIBCMsgAcknowledgement{
 					Packet:          packet,
 					Acknowledgement: ack.Acknowledgement(),
 					ProofHeight: Height{
@@ -2831,7 +2831,7 @@ func TestAcknowledgement(t *testing.T) {
 				packetKey := host.PacketAcknowledgementKey(path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, sequence)
 				proof, proofHeight := path.EndpointB.QueryProof(packetKey)
 
-				input, err := PackAcknowledgement(MsgAcknowledgement{
+				input, err := PackAcknowledgement(IIBCMsgAcknowledgement{
 					Packet:          packet,
 					Acknowledgement: ack.Acknowledgement(),
 					ProofHeight: Height{
@@ -2915,7 +2915,7 @@ func TestAcknowledgement(t *testing.T) {
 				packetKey := host.PacketAcknowledgementKey(path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, sequence)
 				proof, proofHeight := path.EndpointB.QueryProof(packetKey)
 
-				input, err := PackAcknowledgement(MsgAcknowledgement{
+				input, err := PackAcknowledgement(IIBCMsgAcknowledgement{
 					Packet:          packet,
 					Acknowledgement: ack.Acknowledgement(),
 					ProofHeight: Height{
@@ -2994,7 +2994,7 @@ func TestAcknowledgement(t *testing.T) {
 				packetKey := host.PacketAcknowledgementKey(path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, sequence)
 				proof, proofHeight := path.EndpointB.QueryProof(packetKey)
 
-				input, err := PackAcknowledgement(MsgAcknowledgement{
+				input, err := PackAcknowledgement(IIBCMsgAcknowledgement{
 					Packet:          packet,
 					Acknowledgement: ack.Acknowledgement(),
 					ProofHeight: Height{
@@ -3085,7 +3085,7 @@ func TestAcknowledgement(t *testing.T) {
 				packetKey := host.PacketAcknowledgementKey(path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, sequence)
 				proof, proofHeight := path.EndpointB.QueryProof(packetKey)
 
-				input, err := PackAcknowledgement(MsgAcknowledgement{
+				input, err := PackAcknowledgement(IIBCMsgAcknowledgement{
 					Packet:          packet,
 					Acknowledgement: ack.Acknowledgement(),
 					ProofHeight: Height{
@@ -3173,7 +3173,7 @@ func TestAcknowledgement(t *testing.T) {
 				packetKey := host.PacketAcknowledgementKey(path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, sequence)
 				proof, proofHeight := path.EndpointB.QueryProof(packetKey)
 
-				input, err := PackAcknowledgement(MsgAcknowledgement{
+				input, err := PackAcknowledgement(IIBCMsgAcknowledgement{
 					Packet:          packet,
 					Acknowledgement: ack.Acknowledgement(),
 					ProofHeight: Height{

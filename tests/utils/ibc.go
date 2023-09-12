@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"os"
 	"testing"
 	"time"
@@ -66,8 +67,10 @@ var (
 	ibcContractFilterer *contractBind.ContractFilterer
 	auth                *bind.TransactOpts
 
-	ics20Bank       *ics20bank.Ics20bank
-	ics20Transferer *ics20transferer.Ics20transferer
+	ics20BankAddr       common.Address
+	ics20Bank           *ics20bank.Ics20bank
+	ics20TransfererAddr common.Address
+	ics20Transferer     *ics20transferer.Ics20transferer
 
 	coordinator *ibctesting.Coordinator
 	chainA      *ibctesting.TestChain
@@ -162,12 +165,14 @@ func RunTestIbcInit(t *testing.T) {
 	_, err = waitForReceiptAndGet(ctx, ethClient, ics20bankTx)
 	require.NoError(t, err)
 	ics20Bank = ics20bank
+	ics20BankAddr = ics20bankAddr
 
 	ics20transfererAddr, ics20transfererTx, ics20transferer, err := ics20transferer.DeployIcs20transferer(auth, ethClient, ibc.ContractAddress, ics20bankAddr)
 	require.NoError(t, err)
 	_, err = waitForReceiptAndGet(ctx, ethClient, ics20transfererTx)
 	require.NoError(t, err)
 	ics20Transferer = ics20transferer
+	ics20TransfererAddr = ics20transfererAddr
 
 	setOperTx1, err := ics20bank.SetOperator(auth, auth.From)
 	require.NoError(t, err)
@@ -619,6 +624,8 @@ func RunTestIbcRecvPacket(t *testing.T) {
 }
 
 func RunTestIbcAckPacket(t *testing.T) {
+	amount := big.NewInt(int64(rand.Uint64()))
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
@@ -626,23 +633,28 @@ func RunTestIbcAckPacket(t *testing.T) {
 	proof, proofHeight := chainB.QueryProof(connectionKey)
 
 	randomAddr, err := getRandomAddr()
-	denom := fmt.Sprintf("%s/%s/USDT", ibctesting.MockPort, ibctesting.FirstChannelID)
 	require.NoError(t, err)
-	transferFungibleTokenPacketData, err := json.Marshal(ics20.FungibleTokenPacketData{
-		Denom:    denom,
-		Amount:   "1000",
-		Sender:   auth.From.Hex(),
-		Receiver: randomAddr.Hex(),
+
+	jsonTransferFungibleTokenPacketData, err := json.Marshal(ics20.FungibleTokenPacketData{
+		Denom:    "transfer/channel-0/USDT",
+		Amount:   amount.String(),
+		Sender:   randomAddr.Hex(),
+		Receiver: auth.From.Hex(),
 		Memo:     "some memo",
 	})
+	require.NoError(t, err)
+
+	transferFungibleTokenPacketData, err := ics20.FungibleTokenPacketDataToABI(jsonTransferFungibleTokenPacketData)
+	require.NoError(t, err)
+
 	packetAckTx, err := ibcContract.Acknowledgement(
 		auth,
 		contractBind.Packet{
 			Sequence:           big.NewInt(1),
-			SourcePort:         ibctesting.MockPort,
-			SourceChannel:      ibctesting.FirstChannelID,
+			SourcePort:         "transfer",
+			SourceChannel:      "channel-0",
 			DestinationPort:    "transfer",
-			DestinationChannel: ibctesting.FirstChannelID,
+			DestinationChannel: "channel-0",
 			Data:               transferFungibleTokenPacketData,
 			TimeoutHeight: contractBind.Height{
 				RevisionNumber: big.NewInt(1000),
@@ -650,7 +662,7 @@ func RunTestIbcAckPacket(t *testing.T) {
 			},
 			TimeoutTimestamp: big.NewInt(time.Now().Unix() + 10000),
 		},
-		[]byte{},
+		common.FromHex("0x00"),
 		proof,
 		contractBind.Height{
 			RevisionNumber: big.NewInt(int64(proofHeight.RevisionNumber)),
@@ -661,7 +673,10 @@ func RunTestIbcAckPacket(t *testing.T) {
 	require.NoError(t, err)
 	packetAckRe, err := waitForReceiptAndGet(ctx, ethClient, packetAckTx)
 	require.NoError(t, err)
-	require.Len(t, packetAckRe.Logs, 1, "must be `mint` log")
+	assert.True(t, len(packetAckRe.Logs) > 0, "must be `mint` log")
+	mintedBalance, err := ics20Bank.BalanceOf(nil, randomAddr, "transfer/channel-0/USDT")
+	require.NoError(t, err)
+	assert.Equal(t, amount, mintedBalance)
 }
 
 func QueryProofs(t *testing.T) {

@@ -5,9 +5,9 @@ pragma experimental ABIEncoderV2;
 struct FungibleTokenPacketData {
   string denom;
   uint256 amount;
-  string sender;
-  address receiver;
-  string memo;
+  bytes sender;
+  bytes receiver;
+  bytes memo;
 }
 
 contract ICS20PacketDataCodec {

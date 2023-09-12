@@ -269,10 +269,10 @@ interface IIBC {
 	  bytes memory Relayer
   ) external;
 
-  function OnAcknowledgement(
-    Packet calldata packet, 
-    bytes calldata acknowledgement, 
-    bytes calldata
+  function OnAcknowledgementPacket(
+    Packet memory packet, 
+    bytes memory ack, 
+    bytes memory
   ) external;
 
     // query methods
