@@ -9,7 +9,6 @@ import (
 	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/cometbft/cometbft/light"
 	tmtypes "github.com/cometbft/cometbft/types"
-	"github.com/cosmos/cosmos-sdk/codec"
 	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
 	connectiontypes "github.com/cosmos/ibc-go/v7/modules/core/03-connection/types"
 	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
@@ -199,16 +198,15 @@ func SetCapability(db contract.StateDB, portID, channelID string) error {
 
 func VerifyClientMessage(
 	cs *ibctm.ClientState,
-	cdc codec.BinaryCodec,
 	clientID string,
 	accessibleState contract.AccessibleState,
 	clientMsg exported.ClientMessage,
 ) error {
 	switch msg := clientMsg.(type) {
 	case *ibctm.Header:
-		return verifyHeader(cs, cdc, accessibleState, msg, clientID)
+		return verifyHeader(cs, accessibleState, msg, clientID)
 	case *ibctm.Misbehaviour:
-		return verifyMisbehaviour(cs, cdc, accessibleState, msg, clientID)
+		return verifyMisbehaviour(cs, accessibleState, msg, clientID)
 	default:
 		return clienttypes.ErrInvalidClientType
 	}
@@ -216,16 +214,16 @@ func VerifyClientMessage(
 
 func verifyHeader(
 	cs *ibctm.ClientState,
-	cdc codec.BinaryCodec,
 	accessibleState contract.AccessibleState,
 	header *ibctm.Header,
 	clientID string,
 ) error {
-	currentTimestamp := time.Unix(accessibleState.GetBlockContext().Timestamp().Int64(), 0)
+	timeInt := accessibleState.GetBlockContext().Timestamp().Int64()
+	currentTimestamp := time.Unix(timeInt, 0)
 
 	consState, err := GetConsensusState(accessibleState.GetStateDB(), clientID, header.TrustedHeight)
 	if err != nil {
-		return fmt.Errorf("error loading consensus state, err: %w", err)
+		return fmt.Errorf("can't get consensus state, err: %w", err)
 	}
 
 	if err := checkTrustedHeader(header, consState); err != nil {
@@ -255,7 +253,7 @@ func verifyHeader(
 
 	// assert header height is newer than consensus state
 	if header.GetHeight().LTE(header.TrustedHeight) {
-		return fmt.Errorf("header height ≤ consensus state height (%s ≤ %s), err: %w", clienttypes.ErrInvalidHeader, header.GetHeight(), header.TrustedHeight)
+		return fmt.Errorf("header height ≤ consensus state height (%s ≤ %s), err: %w", header.GetHeight(), header.TrustedHeight, clienttypes.ErrInvalidHeader)
 	}
 
 	// Construct a trusted header using the fields in consensus state
@@ -290,7 +288,6 @@ func verifyHeader(
 
 func verifyMisbehaviour(
 	cs *ibctm.ClientState,
-	cdc codec.BinaryCodec,
 	accessibleState contract.AccessibleState,
 	misbehaviour *ibctm.Misbehaviour,
 	clientID string,
@@ -300,12 +297,12 @@ func verifyMisbehaviour(
 	// Retrieve trusted consensus states for each Header in misbehaviour
 	tmConsensusState1, err := GetConsensusState(accessibleState.GetStateDB(), clientID, misbehaviour.Header1.TrustedHeight)
 	if err != nil {
-		return fmt.Errorf("could not get trusted consensus state from clientStore for Header1 at TrustedHeight: %s, err: %w", misbehaviour.Header1.TrustedHeight, err)
+		return fmt.Errorf("can't get consensus state, could not get trusted consensus state from clientStore for Header1 at TrustedHeight: %s, err: %w", misbehaviour.Header1.TrustedHeight, err)
 	}
 
-	tmConsensusState2, err := GetConsensusState(accessibleState.GetStateDB(), clientID, misbehaviour.Header1.TrustedHeight)
+	tmConsensusState2, err := GetConsensusState(accessibleState.GetStateDB(), clientID, misbehaviour.Header2.TrustedHeight)
 	if err != nil {
-		return fmt.Errorf("could not get trusted consensus state from clientStore for Header2 at TrustedHeight: %s, err: %w", misbehaviour.Header2.TrustedHeight, err)
+		return fmt.Errorf("can't get consensus state, could not get trusted consensus state from clientStore for Header2 at TrustedHeight: %s, err: %w", misbehaviour.Header2.TrustedHeight, err)
 	}
 
 	// Check the validity of the two conflicting headers against their respective
@@ -351,7 +348,7 @@ func checkMisbehaviourHeader(
 
 	// assert that the age of the trusted consensus state is not older than the trusting period
 	if currentTimestamp.Sub(consState.Timestamp) >= clientState.TrustingPeriod {
-		return fmt.Errorf("current timestamp minus the latest consensus state timestamp is greater than or equal to the trusting period (%d >= %d), err: %w", ibctm.ErrTrustingPeriodExpired, currentTimestamp.Sub(consState.Timestamp), clientState.TrustingPeriod)
+		return fmt.Errorf("current timestamp minus the latest consensus state timestamp is greater than or equal to the trusting period (%d >= %d), err: %w", currentTimestamp.Sub(consState.Timestamp), clientState.TrustingPeriod, ibctm.ErrTrustingPeriodExpired)
 	}
 
 	chainID := clientState.GetChainID()
@@ -384,8 +381,37 @@ func checkTrustedHeader(header *ibctm.Header, consState *ibctm.ConsensusState) e
 	// to do this, we check that trustedVals.Hash() == consState.NextValidatorsHash
 	tvalHash := tmTrustedValidators.Hash()
 	if !bytes.Equal(consState.NextValidatorsHash, tvalHash) {
-		return fmt.Errorf("trusted validators %s, does not hash to latest trusted validators. Expected: %X, got: %X",
+		return fmt.Errorf("trusted validators %s, does not hash to latest trusted validators. Expected: %X, got: %X, err: %w",
 			header.TrustedValidators, consState.NextValidatorsHash, tvalHash, ibctm.ErrInvalidValidatorSet)
 	}
 	return nil
+}
+
+func Status(
+	accessibleState contract.AccessibleState,
+	cs ibctm.ClientState,
+	clientId string,
+) exported.Status {
+	if !cs.FrozenHeight.IsZero() {
+		return exported.Frozen
+	}
+
+	// get latest consensus state from clientStore to check for expiry
+	consState, err := GetConsensusState(accessibleState.GetStateDB(), clientId, cs.GetLatestHeight())
+	if err != nil {
+		// if the client state does not have an associated consensus state for its latest height
+		// then it must be expired
+		return exported.Expired
+	}
+
+	now := time.Unix(accessibleState.GetBlockContext().Timestamp().Int64(), 0)
+	if cs.IsExpired(consState.Timestamp, now) {
+		return exported.Expired
+	}
+
+	return exported.Active
+}
+func IsExpired(latestTimestamp time.Time,	cs ibctm.ClientState, now time.Time) bool {
+	expirationTime := latestTimestamp.Add(cs.TrustingPeriod)
+	return !expirationTime.After(now)
 }

@@ -6,7 +6,6 @@ import (
 
 	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/cosmos/cosmos-sdk/codec"
-	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	cosmostypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/std"
 	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
@@ -65,7 +64,6 @@ func _updateClient(opts *callOpts[UpdateClientInput]) error {
 	std.RegisterInterfaces(interfaceRegistry)
 	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
 	marshaler := codec.NewProtoCodec(interfaceRegistry)
-
 	statedb := opts.accessibleState.GetStateDB()
 
 	clientState, err := GetClientState(statedb, opts.args.ClientID)
@@ -73,11 +71,16 @@ func _updateClient(opts *callOpts[UpdateClientInput]) error {
 		return fmt.Errorf("can't get client state: %w", err)
 	}
 
-	var msg *codectypes.Any
-	marshaler.UnmarshalInterface(opts.args.ClientMessage, msg)
-	clientMsg, err := clienttypes.UnpackClientMessage(msg)
+	if Status(opts.accessibleState, *clientState, opts.args.ClientID) != exported.Active {
+		return fmt.Errorf("client is not active")
+	}
 
-	if err := VerifyClientMessage(clientState, marshaler, opts.args.ClientID, opts.accessibleState, clientMsg); err != nil {
+	clientMsg, err := clienttypes.UnmarshalClientMessage(marshaler, opts.args.ClientMessage)
+	if err != nil {
+		return fmt.Errorf("can't unmarshal client message: %w", err)
+	}
+
+	if err := VerifyClientMessage(clientState, opts.args.ClientID, opts.accessibleState, clientMsg); err != nil {
 		return err
 	}
 
