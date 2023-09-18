@@ -77,6 +77,17 @@ interface IIBC {
     int32 channelOrdering,
     string connectionID
   );
+  event AcknowledgementError(
+    bytes data,
+    string timeoutHeight,
+    uint timeoutTimestamp,
+    uint sequence,
+    string sourcePort,
+    string sourceChannel,
+    string destPort,
+    string destChannel,
+    string error
+  );
 
   function recvPacket(
     Packet memory packet,

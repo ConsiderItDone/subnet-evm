@@ -9,6 +9,7 @@ import (
 
 	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/ava-labs/subnet-evm/vmerrs"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 type Height struct {
@@ -209,12 +210,33 @@ func recvPacket(accessibleState contract.AccessibleState, caller common.Address,
 	if err != nil {
 		return nil, remainingGas, err
 	}
+
+	ack := channeltypes.NewResultAcknowledgement([]byte{byte(1)})
 	_, remainingGas, err = accessibleState.CallFromPrecompile(ContractAddress, recvAddr, data, remainingGas, big.NewInt(0))
 	if err != nil {
-		return nil, remainingGas, err
+		topics, data, err := IBCABI.PackEvent(GeneratedAcknowledgementErrorIdentifier.RawName,
+			inputStruct.Packet.Data,
+			inputStruct.Packet.TimeoutHeight.String(),
+			big.NewInt(inputStruct.Packet.TimeoutTimestamp.Int64()),
+			big.NewInt(inputStruct.Packet.Sequence.Int64()),
+			inputStruct.Packet.SourcePort,
+			inputStruct.Packet.SourceChannel,
+			inputStruct.Packet.DestinationPort,
+			inputStruct.Packet.DestinationChannel,
+			fmt.Sprintf("%w", err),
+		)
+		if err != nil {
+			return nil, remainingGas,  fmt.Errorf("error packing event: %w", err)
+		}
+		blockNumber := accessibleState.GetBlockContext().Number().Uint64()
+		accessibleState.GetStateDB().AddLog(ContractAddress, topics, data, blockNumber)
+
+		log.Warn("EXEPTION: recvPacket has bad request from CallFromPrecompile")
+
+		ack = channeltypes.NewErrorAcknowledgement(err)
 	}
 
-	writeAcknowledgement(inputStruct.Packet, accessibleState)
+	writeAcknowledgement(inputStruct.Packet, accessibleState, ack)
 
 	// this function does not return an output, leave this one as is
 	packedOutput := []byte{}

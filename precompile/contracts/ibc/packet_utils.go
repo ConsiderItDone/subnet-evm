@@ -302,6 +302,7 @@ func _recvPacket(opts *callOpts[MsgRecvPacket]) error {
 func writeAcknowledgement(
 	packet Packet,
 	accessibleState contract.AccessibleState,
+	ack exported.Acknowledgement,
 ) error {
 	channel, err := GetChannel(
 		accessibleState.GetStateDB(),
@@ -313,17 +314,26 @@ func writeAcknowledgement(
 	}
 
 	if channel.State != channeltypes.OPEN {
-		fmt.Errorf("%w, channel state is not OPEN (got %s)", channeltypes.ErrInvalidChannelState, channel.State.String())
+		return fmt.Errorf("%w, channel state is not OPEN (got %s)", channeltypes.ErrInvalidChannelState, channel.State.String())
 	}
 
 	if hasPacketAcknowledgement(accessibleState.GetStateDB(), packet.DestinationPort, packet.DestinationChannel, packet.Sequence.Uint64()) {
 		return channeltypes.ErrAcknowledgementExists
 	}
 
+	if ack == nil {
+		return fmt.Errorf("%w, acknowledgement cannot be nil", channeltypes.ErrInvalidAcknowledgement)
+	}
+
+	bz := ack.Acknowledgement()
+	if len(bz) == 0 {
+		return fmt.Errorf("%w, acknowledgement cannot be empty", channeltypes.ErrInvalidAcknowledgement)
+	}
+
 	// set the acknowledgement so that it can be verified on the other side
 	setPacketAcknowledgement(
 		accessibleState.GetStateDB(), packet.DestinationPort, packet.DestinationChannel, packet.Sequence.Uint64(),
-		channeltypes.CommitAcknowledgement([]byte{1}),
+		channeltypes.CommitAcknowledgement(bz),
 	)
 
 	return nil
