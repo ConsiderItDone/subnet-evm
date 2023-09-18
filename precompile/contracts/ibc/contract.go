@@ -36,6 +36,11 @@ const (
 	BindPortGasCost uint64 = 1 /* SET A GAS COST HERE */
 
 	SendPacketGasCost uint64 = 1
+
+	QueryClientStateGasCost    uint64 = 1 /* SET A GAS COST HERE */
+	QueryConsensusStateGasCost uint64 = 1 /* SET A GAS COST HERE */
+	QueryConnectionGasCost     uint64 = 1 /* SET A GAS COST HERE */
+	QueryChannelGasCost        uint64 = 1 /* SET A GAS COST HERE */
 )
 
 // CUSTOM CODE STARTS HERE
@@ -84,6 +89,11 @@ func createIBCPrecompile() contract.StatefulPrecompiledContract {
 		"createClient":        createClient,
 		"updateClient":        updateClient,
 		"upgradeClient":       upgradeClient,
+
+		"queryClientState":    queryClientState,
+		"queryConsensusState": queryConsensusState,
+		"queryConnection":     queryConnection,
+		"queryChannel":        queryChannel,
 	}
 
 	for name, function := range abiFunctionMap {
