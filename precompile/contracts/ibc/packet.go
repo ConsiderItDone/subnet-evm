@@ -198,16 +198,16 @@ func recvPacket(accessibleState contract.AccessibleState, caller common.Address,
 		return nil, remainingGas, err
 	}
 
-	//if err := _recvPacket(&callOpts[IIBCMsgRecvPacket]{
-	//	accessibleState: accessibleState,
-	//	caller:          caller,
-	//	addr:            addr,
-	//	suppliedGas:     suppliedGas,
-	//	readOnly:        readOnly,
-	//	args:            *inputStruct,
-	//}); err != nil {
-	//	return nil, remainingGas, err
-	//}
+	if err := _recvPacket(&callOpts[IIBCMsgRecvPacket]{
+		accessibleState: accessibleState,
+		caller:          caller,
+		addr:            addr,
+		suppliedGas:     suppliedGas,
+		readOnly:        readOnly,
+		args:            *inputStruct,
+	}); err != nil {
+		return nil, remainingGas, err
+	}
 
 	recvAddr, err := GetPort(accessibleState.GetStateDB(), inputStruct.Packet.DestinationPort)
 	if err != nil {
@@ -438,21 +438,21 @@ func acknowledgement(accessibleState contract.AccessibleState, caller common.Add
 		return nil, remainingGas, err
 	}
 
-	//err = _acknowledgement(&callOpts[IIBCMsgAcknowledgement]{
-	//	accessibleState: accessibleState,
-	//	caller:          caller,
-	//	addr:            addr,
-	//	suppliedGas:     suppliedGas,
-	//	readOnly:        readOnly,
-	//	args:            *inputStruct,
-	//})
-	//switch err {
-	//case nil:
-	//case channeltypes.ErrNoOpMsg:
-	//	return []byte{}, remainingGas, nil
-	//default:
-	//	return nil, remainingGas, err
-	//}
+	err = _acknowledgement(&callOpts[IIBCMsgAcknowledgement]{
+		accessibleState: accessibleState,
+		caller:          caller,
+		addr:            addr,
+		suppliedGas:     suppliedGas,
+		readOnly:        readOnly,
+		args:            inputStruct,
+	})
+	switch err {
+	case nil:
+	case channeltypes.ErrNoOpMsg:
+		return []byte{}, remainingGas, nil
+	default:
+		return nil, remainingGas, err
+	}
 
 	recvAddr, err := GetPort(accessibleState.GetStateDB(), inputStruct.Packet.DestinationPort)
 	if err != nil {
