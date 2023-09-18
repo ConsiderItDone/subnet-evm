@@ -334,20 +334,20 @@ func timeout(accessibleState contract.AccessibleState, caller common.Address, ad
 
 // UnpackTimeoutOnCloseInput attempts to unpack [input] into the IIBCMsgTimeoutOnClose type argument
 // assumes that [input] does not include selector (omits first 4 func signature bytes)
-func UnpackTimeoutOnCloseInput(input []byte) (*IIBCMsgTimeoutOnClose, error) {
-	res, err := IBCABI.UnpackInput("timeoutOnClose", input)
+func UnpackTimeoutOnCloseInput(input []byte) (IIBCMsgTimeoutOnClose, error) {
+	inputStruct := IIBCMsgTimeoutOnClose{}
+	err := IBCABI.UnpackInputIntoInterface(&inputStruct, "timeoutOnClose", input)
 	if err != nil {
 		fmt.Println("UnpackInputIntoInterface")
 	}
-	unpacked := abi.ConvertType(res[0], new(IIBCMsgTimeoutOnClose)).(*IIBCMsgTimeoutOnClose)
-	return unpacked, nil
+	return inputStruct, err
 }
 
 // PackTimeoutOnClose packs [message] of type IIBCMsgTimeoutOnClose into the appropriate arguments for TimeoutOnClose.
 // the packed bytes include selector (first 4 func signature bytes).
 // This function is mostly used for tests.
 func PackTimeoutOnClose(message IIBCMsgTimeoutOnClose) ([]byte, error) {
-	return IBCABI.Pack("timeoutOnClose", message)
+	return IBCABI.Pack("timeoutOnClose", message.Packet, message.ProofUnreceived, message.ProofClose, message.ProofHeight, message.NextSequenceRecv, message.Signer)
 }
 
 func timeoutOnClose(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
@@ -372,7 +372,7 @@ func timeoutOnClose(accessibleState contract.AccessibleState, caller common.Addr
 		addr:            addr,
 		suppliedGas:     suppliedGas,
 		readOnly:        readOnly,
-		args:            *inputStruct,
+		args:            inputStruct,
 	})
 	switch err {
 	case nil:
