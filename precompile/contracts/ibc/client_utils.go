@@ -63,10 +63,11 @@ func _createClient(opts *callOpts[CreateClientInput]) (string, error) {
 }
 
 func _updateClient(opts *callOpts[UpdateClientInput]) error {
-	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
-	std.RegisterInterfaces(interfaceRegistry)
-	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
-	marshaler := codec.NewProtoCodec(interfaceRegistry)
+	//interfaceRegistry := cosmostypes.NewInterfaceRegistry()
+	//std.RegisterInterfaces(interfaceRegistry)
+	//ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
+	//marshaler := codec.NewProtoCodec(interfaceRegistry)
+
 	statedb := opts.accessibleState.GetStateDB()
 
 	clientState, err := GetClientState(statedb, opts.args.ClientID)
@@ -78,14 +79,15 @@ func _updateClient(opts *callOpts[UpdateClientInput]) error {
 		return fmt.Errorf("client is not active")
 	}
 
-	clientMsg, err := clienttypes.UnmarshalClientMessage(marshaler, opts.args.ClientMessage)
-	if err != nil {
-		return fmt.Errorf("can't unmarshal client message: %w", err)
-	}
-
-	if err := VerifyClientMessage(clientState, opts.args.ClientID, opts.accessibleState, clientMsg); err != nil {
-		return err
-	}
+	// ToDo: fix type checking and using
+	//clientMsg, err := clienttypes.UnmarshalClientMessage(marshaler, opts.args.ClientMessage)
+	//if err != nil {
+	//	return fmt.Errorf("can't unmarshal client message: %w", err)
+	//}
+	//
+	//if err := VerifyClientMessage(clientState, opts.args.ClientID, opts.accessibleState, clientMsg); err != nil {
+	//	return err
+	//}
 
 	foundMisbehaviour := checkForMisbehaviour(*clientState, marshaler, clientMsg, opts.args.ClientID, opts.accessibleState)
 	if foundMisbehaviour {

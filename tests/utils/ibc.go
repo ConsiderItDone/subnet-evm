@@ -190,9 +190,13 @@ func RunTestIbcInit(t *testing.T) {
 	require.NoError(t, err)
 
 	coordinator = ibctesting.NewCoordinator(t, 2)
+	coordinator.CurrentTime = time.Now()
 	chainA = coordinator.GetChain(ibctesting.GetChainID(1))
+	coordinator.UpdateTimeForChain(chainA)
 	chainB = coordinator.GetChain(ibctesting.GetChainID(2))
+	coordinator.UpdateTimeForChain(chainB)
 	path = ibctesting.NewPath(chainA, chainB)
+
 	coordinator.SetupClients(path)
 }
 
@@ -399,7 +403,7 @@ func RunTestIbcConnectionOpenConfirm(t *testing.T) {
 	t.Log(spew.Sdump(re.Logs))
 }
 
-func RunTestIncChannelOpenInit(t *testing.T) {
+func RunTestIbcChannelOpenInit(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	require.NoError(t, path.EndpointA.ConnOpenAck())
@@ -418,7 +422,7 @@ func RunTestIncChannelOpenInit(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func RunTestIncChannelOpenTry(t *testing.T) {
+func RunTestIbcChannelOpenTry(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
@@ -451,7 +455,7 @@ func RunTestIncChannelOpenTry(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func RunTestIncChannelOpenAck(t *testing.T) {
+func RunTestIbcChannelOpenAck(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
@@ -481,7 +485,7 @@ func RunTestIncChannelOpenAck(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func RunTestIncChannelOpenConfirm(t *testing.T) {
+func RunTestIbcChannelOpenConfirm(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
