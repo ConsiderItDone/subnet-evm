@@ -40,6 +40,14 @@ const (
 	AcknowledgementGasCost uint64 = 1
 	TimeoutGasCost         uint64 = 1
 	TimeoutOnCloseGasCost  uint64 = 1
+
+	QueryClientStateGasCost    uint64 = 1
+	QueryConsensusStateGasCost uint64 = 1
+	QueryConnectionGasCost     uint64 = 1
+	QueryChannelGasCost        uint64 = 1
+
+	QueryPacketCommitmentGasCost      uint64 = 1
+	QueryPacketAcknowledgementGasCost uint64 = 1
 )
 
 // CUSTOM CODE STARTS HERE
@@ -99,6 +107,13 @@ func createIBCPrecompile() contract.StatefulPrecompiledContract {
 		"timeout":             timeout,
 		"timeoutOnClose":      timeoutOnClose,
 		"acknowledgement":     acknowledgement,
+
+		"queryClientState":           queryClientState,
+		"queryConsensusState":        queryConsensusState,
+		"queryConnection":            queryConnection,
+		"queryChannel":               queryChannel,
+		"queryPacketCommitment":      queryPacketCommitment,
+		"queryPacketAcknowledgement": queryPacketAcknowledgement,
 	}
 
 	for name, function := range abiFunctionMap {

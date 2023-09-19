@@ -223,7 +223,7 @@ func recvPacket(accessibleState contract.AccessibleState, caller common.Address,
 			inputStruct.Packet.SourceChannel,
 			inputStruct.Packet.DestinationPort,
 			inputStruct.Packet.DestinationChannel,
-			fmt.Sprintf("%w", err),
+			fmt.Sprintf("%s", err),
 		)
 		if err != nil {
 			return nil, remainingGas,  fmt.Errorf("error packing event: %w", err)
