@@ -8,6 +8,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
+	connectiontypes "github.com/cosmos/ibc-go/v7/modules/core/03-connection/types"
 	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
 	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
 	hosttypes "github.com/cosmos/ibc-go/v7/modules/core/24-host"
@@ -31,6 +32,10 @@ func VerifyPacketCommitment(
 	clientState, err := GetClientState(accessibleState.GetStateDB(), clientID)
 	if err != nil {
 		return fmt.Errorf("error loading client state, err: %w", err)
+	}
+
+	if Status(accessibleState, *clientState, clientID) != exported.Active {
+		return fmt.Errorf("client is not active")
 	}
 
 	// get time and block delays
@@ -71,6 +76,10 @@ func VerifyPacketAcknowledgement(
 		return fmt.Errorf("error loading client state, err: %w", err)
 	}
 
+	if Status(accessibleState, *clientState, clientID) != exported.Active {
+		return fmt.Errorf("client is not active")
+	}
+
 	// get time and block delays
 	timeDelay := connection.GetDelayPeriod()
 	expectedTimePerBlock := 2
@@ -107,6 +116,10 @@ func VerifyChannelState(
 	clientState, err := GetClientState(accessibleState.GetStateDB(), clientID)
 	if err != nil {
 		return fmt.Errorf("error loading client state, err: %w", err)
+	}
+
+	if Status(accessibleState, *clientState, clientID) != exported.Active {
+		return fmt.Errorf("client is not active")
 	}
 
 	merklePath := commitmenttypes.NewMerklePath(hosttypes.ChannelPath(portID, channelID))
@@ -152,6 +165,10 @@ func VerifyNextSequenceRecv(
 		return fmt.Errorf("error loading client state, err: %w", err)
 	}
 
+	if Status(accessibleState, *clientState, clientID) != exported.Active {
+		return fmt.Errorf("client is not active")
+	}
+
 	// get time and block delays
 	timeDelay := connection.GetDelayPeriod()
 	expectedTimePerBlock := 2
@@ -189,6 +206,10 @@ func VerifyPacketReceiptAbsence(
 	clientState, err := GetClientState(accessibleState.GetStateDB(), clientID)
 	if err != nil {
 		return fmt.Errorf("error loading client state, err: %w", err)
+	}
+
+	if Status(accessibleState, *clientState, clientID) != exported.Active {
+		return fmt.Errorf("client is not active")
 	}
 
 	// get time and block delays
@@ -330,4 +351,105 @@ func verifyDelayPeriodPassed(
 	}
 
 	return nil
+}
+
+func verifyConnection(
+	connection connectiontypes.ConnectionEnd,
+	connectionEnd connectiontypes.ConnectionEnd,
+	height exported.Height,
+	accessibleState contract.AccessibleState,
+	marshaler *codec.ProtoCodec,
+	connectionID string,
+	proof []byte,
+) error {
+	clientID := connection.GetClientID()
+
+	clientState, err := GetClientState(accessibleState.GetStateDB(), clientID)
+	if err != nil {
+		return fmt.Errorf("error loading client state, err: %w", err)
+	}
+
+	if Status(accessibleState, *clientState, clientID) != exported.Active {
+		return fmt.Errorf("client is not active")
+	}
+
+	consensusState, err := GetConsensusState(accessibleState.GetStateDB(), clientID, clientState.GetLatestHeight())
+	if err != nil {
+		return fmt.Errorf("error loading consensus state, err: %w", err)
+	}
+
+	merklePath := commitmenttypes.NewMerklePath(hosttypes.ConnectionPath(connectionID))
+	merklePath, err = commitmenttypes.ApplyPrefix(connection.GetCounterparty().GetPrefix(), merklePath)
+	if err != nil {
+		return fmt.Errorf("can't apply prefix %s: %w", connection.GetCounterparty().GetPrefix(), err)
+	}
+
+	bz, err := marshaler.Marshal(&connectionEnd)
+	if err != nil {
+		return err
+	}
+
+	if clientState.GetLatestHeight().LT(height) {
+		return fmt.Errorf("client state height < proof height (%d < %d), please ensure the client has been updated", clientState.GetLatestHeight(), height)
+	}
+
+	var merkleProof commitmenttypes.MerkleProof
+	if err := marshaler.Unmarshal(proof, &merkleProof); err != nil {
+		return fmt.Errorf("failed to unmarshal proof into ICS 23 commitment merkle proof")
+	}
+	err = merkleProof.VerifyMembership(clientState.ProofSpecs, consensusState.GetRoot(), merklePath, bz)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func verifyClient(
+	connection connectiontypes.ConnectionEnd,
+	clientState exported.ClientState,
+	proofHeight exported.Height,
+	accessibleState contract.AccessibleState,
+	marshaler *codec.ProtoCodec,
+	proofClientbyte []byte,
+) error {
+	clientID := connection.GetClientID()
+
+	targetClientState, err := GetClientState(accessibleState.GetStateDB(), clientID)
+	if err != nil {
+		return fmt.Errorf("error loading client state, err: %w", err)
+	}
+
+	if Status(accessibleState, *targetClientState, clientID) != exported.Active {
+		return fmt.Errorf("client is not active")
+	}
+
+	consensusState, err := GetConsensusState(accessibleState.GetStateDB(), clientID, targetClientState.GetLatestHeight())
+	if err != nil {
+		return fmt.Errorf("error loading consensus state, err: %w", err)
+	}
+
+	merklePath := commitmenttypes.NewMerklePath(hosttypes.FullClientStatePath(connection.GetCounterparty().GetClientID()))
+	merklePath, err = commitmenttypes.ApplyPrefix(connection.GetCounterparty().GetPrefix(), merklePath)
+	if err != nil {
+		return err
+	}
+
+	bz, err := marshaler.MarshalInterface(clientState)
+	if err != nil {
+		return err
+	}
+
+	if targetClientState.GetLatestHeight().LT(proofHeight) {
+		return fmt.Errorf("client state height < proof height (%d < %d), please ensure the client has been updated", targetClientState.GetLatestHeight(), proofHeight)
+	}
+
+	var merkleProof commitmenttypes.MerkleProof
+	if err := marshaler.Unmarshal(proofClientbyte, &merkleProof); err != nil {
+		return fmt.Errorf("failed to unmarshal proof into ICS 23 commitment merkle proof")
+	}
+	err = merkleProof.VerifyMembership(targetClientState.ProofSpecs, consensusState.GetRoot(), merklePath, bz)
+	if err != nil {
+		return err
+	}
+	return err
 }

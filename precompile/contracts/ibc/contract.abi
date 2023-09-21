@@ -423,6 +423,68 @@
     "type": "event"
   },
   {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "sourcePort",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "sourceChannel",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "destPort",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "destChannel",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "ConnectionID",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "ChannelOrdering",
+        "type": "string"
+      }
+    ],
+    "name": "TypeChannelClosed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "clientID",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "clientType",
+        "type": "string"
+      }
+    ],
+    "name": "TypeSubmitMisbehaviour",
+    "type": "event"
+  },
+  {
     "inputs": [
       {
         "components": [
@@ -1709,11 +1771,6 @@
         "internalType": "string",
         "name": "clientID",
         "type": "string"
-      },
-      {
-        "internalType": "bytes",
-        "name": "upgradePath",
-        "type": "bytes"
       },
       {
         "internalType": "bytes",

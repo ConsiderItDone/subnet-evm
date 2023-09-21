@@ -247,9 +247,13 @@ func _chanOpenInit(opts *callOpts[ChanOpenInitInput]) error {
 		)
 	}
 
-	_, err = GetClientState(statedb, connectionEnd.ClientId)
+	clientState, err := GetClientState(statedb, connectionEnd.ClientId)
 	if err != nil {
 		return fmt.Errorf("can't read client state: %w", err)
+	}
+
+	if Status(opts.accessibleState, *clientState, connectionEnd.ClientId) != exported.Active {
+		return fmt.Errorf("client is not active")
 	}
 
 	channelID := makeChannelID(statedb)
@@ -284,6 +288,10 @@ func channelStateVerification(
 	clientState, err := GetClientState(accessibleState.GetStateDB(), clientID)
 	if err != nil {
 		return fmt.Errorf("can't read client state: %w", err)
+	}
+
+	if Status(accessibleState, *clientState, clientID) != exported.Active {
+		return fmt.Errorf("client is not active")
 	}
 
 	consensusState, err := GetConsensusState(accessibleState.GetStateDB(), clientID, clientState.GetLatestHeight())
@@ -542,9 +550,13 @@ func _channelCloseInit(opts *callOpts[ChannelCloseInitInput]) error {
 		return fmt.Errorf("can't read connection: %w", err)
 	}
 
-	_, err = GetClientState(opts.accessibleState.GetStateDB(), connectionEnd.ClientId)
+	clientState, err := GetClientState(opts.accessibleState.GetStateDB(), connectionEnd.ClientId)
 	if err != nil {
 		return fmt.Errorf("can't read client state: %w", err)
+	}
+
+	if Status(opts.accessibleState, *clientState, connectionEnd.ClientId) != exported.Active {
+		return fmt.Errorf("client is not active")
 	}
 
 	if connectionEnd.GetState() != int32(connectiontypes.OPEN) {

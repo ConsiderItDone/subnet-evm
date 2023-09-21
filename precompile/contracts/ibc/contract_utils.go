@@ -53,6 +53,10 @@ func ConsensusStateSlot(clientID string, height exported.Height) common.Hash {
 	return CalculateSlot(host.FullConsensusStateKey(clientID, height))
 }
 
+func ConsensusStatePreviusSlot(clientID string, height exported.Height) common.Hash {
+	return CalculateSlot(host.FullConsensusStateKey(clientID, height))
+}
+
 func ConnectionSlot(connectionID string) common.Hash {
 	return CalculateSlot(host.ConnectionKey(connectionID))
 }
@@ -117,8 +121,57 @@ func GetConsensusState(db contract.StateDB, clientId string, height exported.Hei
 	return consensusState, nil
 }
 
+type ConsensusStateStore struct {
+	consState     *ibctm.ConsensusState
+	previusHeight clienttypes.Height
+}
+
 func SetConsensusState(db contract.StateDB, clientId string, height exported.Height, consensusState *ibctm.ConsensusState) error {
 	return SetState(db, ConsensusStateSlot(clientId, height), consensusState)
+}
+
+func GetPreviusHeight(db contract.StateDB, clientId string, height exported.Height) (*clienttypes.Height, error) {
+	state, err := GetState(db, ConsensusStateSlot(clientId, height))
+	if err != nil {
+		return nil, err
+	}
+	previusHeight := new(clienttypes.Height)
+	if err := previusHeight.Unmarshal(state); err != nil {
+		return nil, err
+	}
+	return previusHeight, nil
+}
+
+func SetPreviusHeight(db contract.StateDB, clientId string, height exported.Height, previusHeight *clienttypes.Height) error {
+	return SetState(db, ConsensusStatePreviusSlot(clientId, height), previusHeight)
+}
+
+func GetNextConsensusState(db contract.StateDB, clientState ibctm.ClientState, height exported.Height) (*ibctm.ConsensusState, error) {
+	actualHeight := clientState.LatestHeight
+	flag := true
+	for flag {
+		previusHeight, err := GetPreviusHeight(db, clientState.ChainId, actualHeight)
+		if err != nil {
+			return nil, err
+		}
+		if previusHeight.Compare(height) == 0 {
+			return GetConsensusState(db, clientState.ChainId, actualHeight)
+		} else if previusHeight.Compare(height) == 1 {
+			actualHeight = *previusHeight
+		} else {
+			return nil, fmt.Errorf("Iterator out of range")
+		}
+	}
+	return nil, fmt.Errorf("Iterator out of range")
+}
+
+func GetPreviousConsensusState(db contract.StateDB, clientState ibctm.ClientState, height exported.Height) (*ibctm.ConsensusState, error) {
+	previusHeight, err := GetPreviusHeight(db, clientState.ChainId, height)
+	if err != nil {
+		return nil, err
+	}
+	return GetConsensusState(db, clientState.ChainId, previusHeight)
+
 }
 
 func GetConnection(db contract.StateDB, connectionID string) (*connectiontypes.ConnectionEnd, error) {
@@ -411,7 +464,7 @@ func Status(
 
 	return exported.Active
 }
-func IsExpired(latestTimestamp time.Time,	cs ibctm.ClientState, now time.Time) bool {
+func IsExpired(latestTimestamp time.Time, cs ibctm.ClientState, now time.Time) bool {
 	expirationTime := latestTimestamp.Add(cs.TrustingPeriod)
 	return !expirationTime.After(now)
 }

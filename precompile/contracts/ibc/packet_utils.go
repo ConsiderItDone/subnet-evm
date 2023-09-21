@@ -841,8 +841,19 @@ func TimeoutExecuted(
 	accessibleState.GetStateDB().AddLog(ContractAddress, topics, data, blockNumber)
 
 	if channel.Ordering == channeltypes.ORDERED && channel.State == channeltypes.CLOSED {
-		// TODO
-		// emitChannelClosedEvent(ctx, packet, channel)
+		topics, data, err := IBCABI.PackEvent(GeneratedTypeChannelClosedIdentifier.RawName,
+			packet.SourcePort,
+			packet.SourceChannel,
+			packet.DestinationPort,
+			packet.DestinationChannel,
+			channel.ConnectionHops[0],
+			channel.Ordering.String(),
+		)
+		if err != nil {
+			return fmt.Errorf("error packing event: %w", err)
+		}
+		blockNumber := accessibleState.GetBlockContext().Number().Uint64()
+		accessibleState.GetStateDB().AddLog(ContractAddress, topics, data, blockNumber)
 	}
 
 	return nil

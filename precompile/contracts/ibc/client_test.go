@@ -2,7 +2,6 @@ package ibc
 
 import (
 	"fmt"
-	"math/big"
 	"testing"
 	"time"
 
@@ -113,8 +112,12 @@ func TestUpdateClient(t *testing.T) {
 	marshaler := codec.NewProtoCodec(interfaceRegistry)
 
 	coordinator := ibctesting.NewCoordinator(t, 2)
+	coordinator.CurrentTime = time.Now().Add(-time.Hour * 4)
 	chainA := coordinator.GetChain(ibctesting.GetChainID(1))
+	coordinator.UpdateTimeForChain(chainA)
 	chainB := coordinator.GetChain(ibctesting.GetChainID(2))
+	coordinator.UpdateTimeForChain(chainB)
+
 	//now := time.Date(2020, 1, 2, 0, 0, 0, 0, time.UTC)
 	past := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
 
@@ -320,8 +323,7 @@ func TestUpdateClient(t *testing.T) {
 				test.BeforeHook = nil
 			}
 
-			newConfig := &noopStatefulPrecompileConfig{big.NewInt(time.Now().UnixNano())}
-			test.Config = newConfig
+			test.Timestamp = uint64(time.Now().Unix())
 			test.Caller = common.Address{1}
 			test.SuppliedGas = UpgradeClientGasCost
 			test.ReadOnly = false
@@ -359,7 +361,6 @@ func TestUpgradeClient(t *testing.T) {
 
 			output, err := PackUpgradeClient(UpgradeClientInput{
 				ClientID:              clientId,
-				UpgradePath:           []byte("path"),
 				UpgradedClien:         upgradedClientByte,
 				UpgradedConsState:     upgradedConsStateByte,
 				ProofUpgradeClient:    proofUpgradedClient,

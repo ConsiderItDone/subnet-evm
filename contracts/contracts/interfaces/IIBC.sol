@@ -88,6 +88,18 @@ interface IIBC {
     string destChannel,
     string error
   );
+  event TypeSubmitMisbehaviour(
+    string clientID,
+    string clientType
+  );
+  event TypeChannelClosed(
+    string sourcePort,
+    string sourceChannel,
+    string destPort,
+    string destChannel,
+    string ConnectionID,
+    string ChannelOrdering
+  );
 
   function recvPacket(
     Packet memory packet,
@@ -144,7 +156,6 @@ interface IIBC {
 
   function upgradeClient(
     string memory clientID,
-    bytes memory upgradePath,
     bytes memory upgradedClien,
     bytes memory upgradedConsState,
     bytes memory proofUpgradeClient,

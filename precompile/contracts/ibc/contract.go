@@ -75,6 +75,8 @@ var (
 	GeneratedAcknowledgePacketIdentifier      = IBCABI.Events["AcknowledgePacket"]
 	GeneratedAcknowledgementWrittenIdentifier = IBCABI.Events["AcknowledgementWritten"]
 	GeneratedAcknowledgementErrorIdentifier   = IBCABI.Events["AcknowledgementError"]
+	GeneratedTypeSubmitMisbehaviourIdentifier = IBCABI.Events["TypeSubmitMisbehaviour"]
+	GeneratedTypeChannelClosedIdentifier      = IBCABI.Events["TypeChannelClosed"]
 
 	ClientSequenceSlot     = common.BytesToHash([]byte("client-sequence"))
 	ConnectionSequenceSlot = common.BytesToHash([]byte("connection-sequence"))
