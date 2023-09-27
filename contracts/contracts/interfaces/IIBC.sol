@@ -276,15 +276,15 @@ interface IIBC {
   ) external;
 
     // query methods
-  function queryClientState(string memory clientId) external returns (bytes memory);
+  function queryClientState(string memory clientId) external view returns (bytes memory);
 
-  function queryConsensusState(string memory clientId) external returns (bytes memory);
+  function queryConsensusState(string memory clientId) external view returns (bytes memory);
 
-  function queryConnection(string memory connectionID) external returns (bytes memory);
+  function queryConnection(string memory connectionID) external view returns (bytes memory);
 
-  function queryChannel(string memory portID, string memory channelID) external returns (bytes memory);
+  function queryChannel(string memory portID, string memory channelID) external view returns (bytes memory);
 
-  function queryPacketCommitment(string memory portID, string memory channelID, uint sequence) external returns (bytes memory);
+  function queryPacketCommitment(string memory portID, string memory channelID, uint sequence) external view returns (bytes memory);
 
-  function queryPacketAcknowledgement(string memory portID, string memory channelID, uint sequence) external returns (bytes memory);
+  function queryPacketAcknowledgement(string memory portID, string memory channelID, uint sequence) external view returns (bytes memory);
 }
