@@ -66,12 +66,18 @@ func _updateClient(opts *callOpts[UpdateClientInput]) error {
 	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
 	std.RegisterInterfaces(interfaceRegistry)
 	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
+	clienttypes.RegisterInterfaces(interfaceRegistry)
 	marshaler := codec.NewProtoCodec(interfaceRegistry)
 	statedb := opts.accessibleState.GetStateDB()
 
 	clientState, err := GetClientState(statedb, opts.args.ClientID)
 	if err != nil {
 		return fmt.Errorf("can't get client state: %w", err)
+	}
+
+	consensusState, err := GetConsensusState(statedb, opts.args.ClientID, clientState.GetLatestHeight())
+	if err != nil {
+		return fmt.Errorf("can't get consensus state: %w", err)
 	}
 
 	if Status(opts.accessibleState, *clientState, opts.args.ClientID) != exported.Active {
@@ -84,38 +90,21 @@ func _updateClient(opts *callOpts[UpdateClientInput]) error {
 	}
 
 	if err := VerifyClientMessage(clientState, opts.args.ClientID, opts.accessibleState, clientMsg); err != nil {
-		return err
+		return fmt.Errorf("can't verify message: %w", err)
 	}
 
-	foundMisbehaviour := checkForMisbehaviour(*clientState, marshaler, clientMsg, opts.args.ClientID, opts.accessibleState)
-	if foundMisbehaviour {
-		clientState.FrozenHeight = ibctm.FrozenHeight
-		if err := SetClientState(statedb, opts.args.ClientID, clientState); err != nil {
-			return fmt.Errorf("can't update client state: %w", err)
-		}
-
-		topics, data, err := IBCABI.PackEvent(GeneratedTypeSubmitMisbehaviourIdentifier.RawName,
-			opts.args.ClientID,
-			clientState.ClientType(),
-		)
-		if err != nil {
-			return fmt.Errorf("error packing event: %w", err)
-		}
-		blockNumber := opts.accessibleState.GetBlockContext().Number().Uint64()
-		opts.accessibleState.GetStateDB().AddLog(ContractAddress, topics, data, blockNumber)
-		return nil
+	switch msg := clientMsg.(type) {
+	case *ibctm.Header:
+		clientState.LatestHeight = msg.GetHeight().(clienttypes.Height)
+		consensusState.Timestamp = msg.GetTime()
+		consensusState.Root = commitmenttypes.NewMerkleRoot(msg.Header.GetAppHash())
+		consensusState.NextValidatorsHash = msg.Header.NextValidatorsHash
+	case *ibctm.Misbehaviour:
+		// ToDo: implement me
+		return fmt.Errorf("not implemented")
+	default:
+		return clienttypes.ErrUpdateClientFailed
 	}
-
-	consensusState, err := GetConsensusState(statedb, opts.args.ClientID, clientState.GetLatestHeight())
-	if err != nil {
-		return fmt.Errorf("can't get consensus state: %w", err)
-	}
-
-	header := clientMsg.(*ibctm.Header)
-	clientState.LatestHeight = header.GetHeight().(clienttypes.Height)
-	consensusState.Timestamp = header.GetTime()
-	consensusState.Root = commitmenttypes.NewMerkleRoot(header.Header.GetAppHash())
-	consensusState.NextValidatorsHash = header.Header.NextValidatorsHash
 
 	if err := SetClientState(statedb, opts.args.ClientID, clientState); err != nil {
 		return fmt.Errorf("can't update client state: %w", err)

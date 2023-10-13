@@ -7,16 +7,20 @@ import (
 	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/ava-labs/subnet-evm/accounts/abi"
 	"github.com/ava-labs/subnet-evm/precompile/contract"
+	"github.com/ava-labs/subnet-evm/precompile/contracts/ics20"
 	"github.com/ava-labs/subnet-evm/vmerrs"
 	"github.com/ethereum/go-ethereum/log"
 )
 
+// Height is an auto generated low-level Go binding around an user-defined struct.
 type Height struct {
 	RevisionNumber *big.Int
 	RevisionHeight *big.Int
 }
 
+// Packet is an auto generated low-level Go binding around an user-defined struct.
 type Packet struct {
 	Sequence           *big.Int
 	SourcePort         string
@@ -28,7 +32,8 @@ type Packet struct {
 	TimeoutTimestamp   *big.Int
 }
 
-type MsgAcknowledgement struct {
+// IIBCMsgAcknowledgement is an auto generated low-level Go binding around an user-defined struct.
+type IIBCMsgAcknowledgement struct {
 	Packet          Packet
 	Acknowledgement []byte
 	ProofAcked      []byte
@@ -36,13 +41,14 @@ type MsgAcknowledgement struct {
 	Signer          string
 }
 
-type OnAcknowledgementInput struct {
+type OnAcknowledgementPacketInput struct {
 	Packet          Packet
 	Acknowledgement []byte
 	Relayer         []byte
 }
 
-type MsgTimeout struct {
+// IIBCMsgTimeout is an auto generated low-level Go binding around an user-defined struct.
+type IIBCMsgTimeout struct {
 	Packet           Packet
 	ProofUnreceived  []byte
 	ProofHeight      Height
@@ -55,7 +61,8 @@ type OnTimeoutInput struct {
 	Relayer []byte
 }
 
-type MsgTimeoutOnClose struct {
+// IIBCMsgTimeoutOnClose is an auto generated low-level Go binding around an user-defined struct.
+type IIBCMsgTimeoutOnClose struct {
 	Packet           Packet
 	ProofUnreceived  []byte
 	ProofClose       []byte
@@ -78,7 +85,8 @@ type MsgSendPacket struct {
 	Data              []byte
 }
 
-type MsgRecvPacket struct {
+// IIBCMsgRecvPacket is an auto generated low-level Go binding around an user-defined struct.
+type IIBCMsgRecvPacket struct {
 	Packet          Packet
 	ProofCommitment []byte
 	ProofHeight     Height
@@ -105,9 +113,9 @@ func PackOnTimeout(inputStruct OnTimeoutInput) ([]byte, error) {
 	return IBCABI.Pack("OnTimeout", inputStruct.Packet, inputStruct.Relayer)
 }
 
-// PackOnAcknowledgementInput packs [inputStruct] of type OnAcknowledgementInput into the appropriate arguments for OnAcknowledgement.
-func PackOnAcknowledgementInput(inputStruct OnAcknowledgementInput) ([]byte, error) {
-	return IBCABI.Pack("OnAcknowledgement", inputStruct.Packet, inputStruct.Acknowledgement, inputStruct.Relayer)
+// PackOnAcknowledgementPacket packs [inputStruct] of type OnAcknowledgementPacketInput into the appropriate arguments for OnAcknowledgementPacket.
+func PackOnAcknowledgementPacket(inputStruct OnAcknowledgementPacketInput) ([]byte, error) {
+	return IBCABI.Pack("OnAcknowledgementPacket", inputStruct.Packet, inputStruct.Acknowledgement, inputStruct.Relayer)
 }
 
 // UnpackSendPacketInput attempts to unpack [input] as SendPacketInput
@@ -159,20 +167,20 @@ func sendPacket(accessibleState contract.AccessibleState, caller common.Address,
 
 // UnpackRecvPacketInput attempts to unpack [input] into the IIBCMsgRecvPacket type argument
 // assumes that [input] does not include selector (omits first 4 func signature bytes)
-func UnpackRecvPacketInput(input []byte) (MsgRecvPacket, error) {
-	inputStruct := MsgRecvPacket{}
-	err := IBCABI.UnpackInputIntoInterface(&inputStruct, "recvPacket", input)
+func UnpackRecvPacketInput(input []byte) (*IIBCMsgRecvPacket, error) {
+	res, err := IBCABI.UnpackInput("recvPacket", input)
 	if err != nil {
-		fmt.Println("UnpackInputIntoInterface")
+		return nil, err
 	}
-	return inputStruct, err
+	unpacked := *abi.ConvertType(res[0], new(IIBCMsgRecvPacket)).(*IIBCMsgRecvPacket)
+	return &unpacked, nil
 }
 
 // PackRecvPacket packs [message] of type IIBCMsgRecvPacket into the appropriate arguments for RecvPacket.
 // the packed bytes include selector (first 4 func signature bytes).
 // This function is mostly used for tests.
-func PackRecvPacket(message MsgRecvPacket) ([]byte, error) {
-	return IBCABI.Pack("recvPacket", message.Packet, message.ProofCommitment, message.ProofHeight, message.Signer)
+func PackRecvPacket(message IIBCMsgRecvPacket) ([]byte, error) {
+	return IBCABI.Pack("recvPacket", message)
 }
 
 func recvPacket(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
@@ -190,13 +198,13 @@ func recvPacket(accessibleState contract.AccessibleState, caller common.Address,
 		return nil, remainingGas, err
 	}
 
-	if err := _recvPacket(&callOpts[MsgRecvPacket]{
+	if err := _recvPacket(&callOpts[IIBCMsgRecvPacket]{
 		accessibleState: accessibleState,
 		caller:          caller,
 		addr:            addr,
 		suppliedGas:     suppliedGas,
 		readOnly:        readOnly,
-		args:            inputStruct,
+		args:            *inputStruct,
 	}); err != nil {
 		return nil, remainingGas, err
 	}
@@ -204,6 +212,14 @@ func recvPacket(accessibleState contract.AccessibleState, caller common.Address,
 	recvAddr, err := GetPort(accessibleState.GetStateDB(), inputStruct.Packet.DestinationPort)
 	if err != nil {
 		return nil, remainingGas, fmt.Errorf("%w, port with portID: %s already bound", err, inputStruct.Packet.DestinationPort)
+	}
+
+	if inputStruct.Packet.DestinationPort == "transfer" {
+		packetData, err := ics20.FungibleTokenPacketDataToABI(inputStruct.Packet.Data)
+		if err != nil {
+			return nil, remainingGas, err
+		}
+		inputStruct.Packet.Data = packetData
 	}
 
 	data, err := PackOnRecvPacket(OnRecvPacketInput{Packet: inputStruct.Packet, Relayer: []byte(inputStruct.Signer)})
@@ -226,7 +242,7 @@ func recvPacket(accessibleState contract.AccessibleState, caller common.Address,
 			fmt.Sprintf("%s", err),
 		)
 		if err != nil {
-			return nil, remainingGas,  fmt.Errorf("error packing event: %w", err)
+			return nil, remainingGas, fmt.Errorf("error packing event: %w", err)
 		}
 		blockNumber := accessibleState.GetBlockContext().Number().Uint64()
 		accessibleState.GetStateDB().AddLog(ContractAddress, topics, data, blockNumber)
@@ -247,8 +263,8 @@ func recvPacket(accessibleState contract.AccessibleState, caller common.Address,
 
 // UnpackTimeoutInput attempts to unpack [input] into the IIBCMsgTimeout type argument
 // assumes that [input] does not include selector (omits first 4 func signature bytes)
-func UnpackTimeoutInput(input []byte) (MsgTimeout, error) {
-	inputStruct := MsgTimeout{}
+func UnpackTimeoutInput(input []byte) (IIBCMsgTimeout, error) {
+	inputStruct := IIBCMsgTimeout{}
 	err := IBCABI.UnpackInputIntoInterface(&inputStruct, "timeout", input)
 	if err != nil {
 		fmt.Println("UnpackInputIntoInterface")
@@ -259,7 +275,7 @@ func UnpackTimeoutInput(input []byte) (MsgTimeout, error) {
 // PackTimeout packs [message] of type IIBCMsgTimeout into the appropriate arguments for Timeout.
 // the packed bytes include selector (first 4 func signature bytes).
 // This function is mostly used for tests.
-func PackTimeout(message MsgTimeout) ([]byte, error) {
+func PackTimeout(message IIBCMsgTimeout) ([]byte, error) {
 	return IBCABI.Pack("timeout", message.Packet, message.ProofUnreceived, message.ProofHeight, message.NextSequenceRecv, message.Signer)
 }
 
@@ -279,7 +295,7 @@ func timeout(accessibleState contract.AccessibleState, caller common.Address, ad
 	}
 	packedOutput := []byte{}
 
-	err = _timeout(&callOpts[MsgTimeout]{
+	err = _timeout(&callOpts[IIBCMsgTimeout]{
 		accessibleState: accessibleState,
 		caller:          caller,
 		addr:            addr,
@@ -318,8 +334,8 @@ func timeout(accessibleState contract.AccessibleState, caller common.Address, ad
 
 // UnpackTimeoutOnCloseInput attempts to unpack [input] into the IIBCMsgTimeoutOnClose type argument
 // assumes that [input] does not include selector (omits first 4 func signature bytes)
-func UnpackTimeoutOnCloseInput(input []byte) (MsgTimeoutOnClose, error) {
-	inputStruct := MsgTimeoutOnClose{}
+func UnpackTimeoutOnCloseInput(input []byte) (IIBCMsgTimeoutOnClose, error) {
+	inputStruct := IIBCMsgTimeoutOnClose{}
 	err := IBCABI.UnpackInputIntoInterface(&inputStruct, "timeoutOnClose", input)
 	if err != nil {
 		fmt.Println("UnpackInputIntoInterface")
@@ -330,7 +346,7 @@ func UnpackTimeoutOnCloseInput(input []byte) (MsgTimeoutOnClose, error) {
 // PackTimeoutOnClose packs [message] of type IIBCMsgTimeoutOnClose into the appropriate arguments for TimeoutOnClose.
 // the packed bytes include selector (first 4 func signature bytes).
 // This function is mostly used for tests.
-func PackTimeoutOnClose(message MsgTimeoutOnClose) ([]byte, error) {
+func PackTimeoutOnClose(message IIBCMsgTimeoutOnClose) ([]byte, error) {
 	return IBCABI.Pack("timeoutOnClose", message.Packet, message.ProofUnreceived, message.ProofClose, message.ProofHeight, message.NextSequenceRecv, message.Signer)
 }
 
@@ -350,7 +366,7 @@ func timeoutOnClose(accessibleState contract.AccessibleState, caller common.Addr
 	}
 	packedOutput := []byte{}
 
-	err = _timeoutOnClose(&callOpts[MsgTimeoutOnClose]{
+	err = _timeoutOnClose(&callOpts[IIBCMsgTimeoutOnClose]{
 		accessibleState: accessibleState,
 		caller:          caller,
 		addr:            addr,
@@ -393,20 +409,18 @@ func (h Height) String() string {
 
 // UnpackAcknowledgementInput attempts to unpack [input] into the IIBCMsgAcknowledgement type argument
 // assumes that [input] does not include selector (omits first 4 func signature bytes)
-func UnpackAcknowledgementInput(input []byte) (MsgAcknowledgement, error) {
-	inputStruct := MsgAcknowledgement{}
+func UnpackAcknowledgementInput(input []byte) (IIBCMsgAcknowledgement, error) {
+	inputStruct := IIBCMsgAcknowledgement{}
 	err := IBCABI.UnpackInputIntoInterface(&inputStruct, "acknowledgement", input)
-	if err != nil {
-		fmt.Println("UnpackInputIntoInterface")
-	}
+
 	return inputStruct, err
 }
 
 // PackAcknowledgement packs [message] of type IIBCMsgAcknowledgement into the appropriate arguments for Acknowledgement.
 // the packed bytes include selector (first 4 func signature bytes).
 // This function is mostly used for tests.
-func PackAcknowledgement(message MsgAcknowledgement) ([]byte, error) {
-	return IBCABI.Pack("acknowledgement", message.Packet, message.Acknowledgement, message.ProofAcked, message.ProofHeight, message.Signer)
+func PackAcknowledgement(inputStruct IIBCMsgAcknowledgement) ([]byte, error) {
+	return IBCABI.Pack("acknowledgement", inputStruct.Packet, inputStruct.Acknowledgement, inputStruct.ProofAcked, inputStruct.ProofHeight, inputStruct.Signer)
 }
 
 func acknowledgement(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
@@ -424,9 +438,7 @@ func acknowledgement(accessibleState contract.AccessibleState, caller common.Add
 		return nil, remainingGas, err
 	}
 
-	packedOutput := []byte{}
-
-	err = _acknowledgement(&callOpts[MsgAcknowledgement]{
+	err = _acknowledgement(&callOpts[IIBCMsgAcknowledgement]{
 		accessibleState: accessibleState,
 		caller:          caller,
 		addr:            addr,
@@ -437,7 +449,7 @@ func acknowledgement(accessibleState contract.AccessibleState, caller common.Add
 	switch err {
 	case nil:
 	case channeltypes.ErrNoOpMsg:
-		return packedOutput, remainingGas, nil
+		return []byte{}, remainingGas, nil
 	default:
 		return nil, remainingGas, err
 	}
@@ -446,14 +458,18 @@ func acknowledgement(accessibleState contract.AccessibleState, caller common.Add
 	if err != nil {
 		return nil, remainingGas, fmt.Errorf("%w, port with portID: %s already bound", err, inputStruct.Packet.DestinationPort)
 	}
-	data, err := PackOnAcknowledgementInput(OnAcknowledgementInput{Packet: inputStruct.Packet, Acknowledgement: inputStruct.Acknowledgement, Relayer: []byte(inputStruct.Signer)})
+	data, err := PackOnAcknowledgementPacket(OnAcknowledgementPacketInput{Packet: inputStruct.Packet, Acknowledgement: inputStruct.Acknowledgement, Relayer: []byte(inputStruct.Signer)})
 	if err != nil {
 		return nil, remainingGas, err
 	}
 	_, remainingGas, err = accessibleState.CallFromPrecompile(ContractAddress, recvAddr, data, remainingGas, big.NewInt(0))
 	if err != nil {
-		return nil, remainingGas, err
+		return nil, remainingGas, fmt.Errorf("can't call fuction via CallFromPrecompile: %w", err)
 	}
+
+	// this function does not return an output, leave this one as is
+	packedOutput := []byte{}
+
 	// Return the packed output and the remaining gas
 	return packedOutput, remainingGas, nil
 }

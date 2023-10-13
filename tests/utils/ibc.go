@@ -2,9 +2,11 @@ package utils
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"os"
 	"testing"
 	"time"
@@ -21,6 +23,7 @@ import (
 	ibctm "github.com/cosmos/ibc-go/v7/modules/light-clients/07-tendermint"
 	ibctesting "github.com/cosmos/ibc-go/v7/testing"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,8 +40,11 @@ import (
 	"github.com/ava-labs/subnet-evm/ethclient/subnetevmclient"
 	"github.com/ava-labs/subnet-evm/plugin/evm"
 	"github.com/ava-labs/subnet-evm/precompile/contracts/ibc"
+	"github.com/ava-labs/subnet-evm/precompile/contracts/ics20"
 	"github.com/ava-labs/subnet-evm/rpc"
 	contractBind "github.com/ava-labs/subnet-evm/tests/precompile/contract"
+	"github.com/ava-labs/subnet-evm/tests/precompile/contract/ics20/ics20bank"
+	"github.com/ava-labs/subnet-evm/tests/precompile/contract/ics20/ics20transferer"
 	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
 )
 
@@ -51,15 +57,19 @@ const (
 )
 
 var (
-	testKey, _       = crypto.HexToECDSA("56289e99c94b6912bfc12adc093c9b51124f0dc54ac7a766b2bc5ccf558d8027")
-	chainId          = big.NewInt(99999)
-	testClientHeight = clienttypes.NewHeight(0, 5)
+	testKey, _ = crypto.HexToECDSA("56289e99c94b6912bfc12adc093c9b51124f0dc54ac7a766b2bc5ccf558d8027")
+	chainId    = big.NewInt(99999)
 
 	ethClient           ethclient.Client
 	subnetClient        *subnetevmclient.Client
 	ibcContract         *contractBind.Contract
 	ibcContractFilterer *contractBind.ContractFilterer
 	auth                *bind.TransactOpts
+
+	ics20BankAddr       common.Address
+	ics20Bank           *ics20bank.Ics20bank
+	ics20TransfererAddr common.Address
+	ics20Transferer     *ics20transferer.Ics20transferer
 
 	coordinator *ibctesting.Coordinator
 	chainA      *ibctesting.TestChain
@@ -69,6 +79,10 @@ var (
 	clientIdA     = "07-tendermint-0"
 	clientIdB     = "07-tendermint-1"
 	connectionId0 = "connection-0"
+
+	disabledTimeoutTimestamp = uint64(0)
+	disabledTimeoutHeight    = clienttypes.ZeroHeight()
+	defaultTimeoutHeight     = clienttypes.NewHeight(1, 100)
 
 	marshaler *codec.ProtoCodec
 )
@@ -149,9 +163,41 @@ func RunTestIbcInit(t *testing.T) {
 	require.NoError(t, err)
 	t.Log("transactor created")
 
+	ics20bankAddr, ics20bankTx, ics20bank, err := ics20bank.DeployIcs20bank(auth, ethClient)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, ics20bankTx)
+	require.NoError(t, err)
+	ics20Bank = ics20bank
+	ics20BankAddr = ics20bankAddr
+
+	ics20transfererAddr, ics20transfererTx, ics20transferer, err := ics20transferer.DeployIcs20transferer(auth, ethClient, ibc.ContractAddress, ics20bankAddr)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, ics20transfererTx)
+	require.NoError(t, err)
+	ics20Transferer = ics20transferer
+	ics20TransfererAddr = ics20transfererAddr
+
+	setOperTx1, err := ics20bank.SetOperator(auth, auth.From)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, setOperTx1)
+	require.NoError(t, err)
+
+	setOperTx2, err := ics20bank.SetOperator(auth, ibc.ContractAddress)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, setOperTx2)
+	require.NoError(t, err)
+
+	setOperTx3, err := ics20bank.SetOperator(auth, ics20transfererAddr)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, setOperTx3)
+	require.NoError(t, err)
+
 	coordinator = ibctesting.NewCoordinator(t, 2)
+	coordinator.CurrentTime = time.Now()
 	chainA = coordinator.GetChain(ibctesting.GetChainID(1))
+	coordinator.UpdateTimeForChain(chainA)
 	chainB = coordinator.GetChain(ibctesting.GetChainID(2))
+	coordinator.UpdateTimeForChain(chainB)
 	path = ibctesting.NewPath(chainA, chainB)
 	coordinator.SetupClients(path)
 }
@@ -160,43 +206,8 @@ func RunTestIbcCreateClient(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	clientStateA, existA := chainA.App.GetIBCKeeper().ClientKeeper.GetClientState(chainA.GetContext(), path.EndpointA.ClientID)
-	require.True(t, existA)
-	clientStateByteA, err := clientStateA.(*ibctm.ClientState).Marshal()
-	require.NoError(t, err)
-
-	consensusStateA, foundA := chainA.App.GetIBCKeeper().ClientKeeper.GetLatestClientConsensusState(chainA.GetContext(), path.EndpointA.ClientID)
-	require.True(t, foundA)
-	consensusStateByteA, err := consensusStateA.(*ibctm.ConsensusState).Marshal()
-	require.NoError(t, err)
-
-	txA, err := ibcContract.CreateClient(auth, exported.Tendermint, clientStateByteA, consensusStateByteA)
-	require.NoError(t, err)
-	reA, err := waitForReceiptAndGet(ctx, ethClient, txA)
-	require.NoError(t, err)
-	require.True(t, len(reA.Logs) > 0)
-	eventA, err := ibcContractFilterer.ParseClientCreated(*reA.Logs[0])
-	require.NoError(t, err)
-	assert.Equal(t, clientIdA, eventA.ClientId)
-
-	clientStateB, existB := chainB.App.GetIBCKeeper().ClientKeeper.GetClientState(chainB.GetContext(), path.EndpointB.ClientID)
-	require.True(t, existB)
-	clientStateByteB, err := clientStateB.(*ibctm.ClientState).Marshal()
-	require.NoError(t, err)
-
-	consensusStateB, foundB := chainB.App.GetIBCKeeper().ClientKeeper.GetLatestClientConsensusState(chainB.GetContext(), path.EndpointB.ClientID)
-	require.True(t, foundB)
-	consensusStateByteB, err := consensusStateB.(*ibctm.ConsensusState).Marshal()
-	require.NoError(t, err)
-
-	txB, err := ibcContract.CreateClient(auth, exported.Tendermint, clientStateByteB, consensusStateByteB)
-	require.NoError(t, err)
-	reB, err := waitForReceiptAndGet(ctx, ethClient, txB)
-	require.NoError(t, err)
-	require.True(t, len(reA.Logs) > 0)
-	eventB, err := ibcContractFilterer.ParseClientCreated(*reB.Logs[0])
-	require.NoError(t, err)
-	assert.Equal(t, clientIdB, eventB.ClientId)
+	createIbcClient(t, ctx, path.EndpointA, clientIdA)
+	createIbcClient(t, ctx, path.EndpointB, clientIdB)
 }
 
 func RunTestIbcConnectionOpenInit(t *testing.T) {
@@ -221,18 +232,21 @@ func RunTestIbcConnectionOpenInit(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, clientIdA, ev.ClientId)
 	assert.Equal(t, connectionId0, ev.ConnectionId)
+
+	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.ConnOpenInit)
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.ConnOpenTry)
+	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.UpdateClient)
 }
 
 func RunTestIbcConnectionOpenTry(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	require.NoError(t, path.EndpointA.ConnOpenInit())
+	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.ConnOpenInit)
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.UpdateClient)
 
 	counterpartyClient := chainA.GetClientState(path.EndpointA.ClientID)
 	counterparty := connectiontypes.NewCounterparty(path.EndpointA.ClientID, path.EndpointA.ConnectionID, chainA.GetPrefix())
-
-	updateClient(t, path.EndpointB)
 
 	connectionKey := host.ConnectionKey(path.EndpointA.ConnectionID)
 	proofInit, proofHeight := chainA.QueryProof(connectionKey)
@@ -260,7 +274,7 @@ func RunTestIbcConnectionOpenTry(t *testing.T) {
 	versionsByte, _ := json.Marshal(connectiontypes.ExportedVersionsToProto(versions))
 	fmt.Printf("versions %#v\n", versionsByte)
 
-	proofHeightByte, _ := marshaler.MarshalInterface(&proofHeight)
+	proofHeightByte, _ := proofHeight.Marshal()
 	fmt.Printf("proofHeightByte %#v\n", proofHeightByte)
 
 	consensusHeightByte, _ := marshaler.MarshalInterface(&consensusHeight)
@@ -270,7 +284,7 @@ func RunTestIbcConnectionOpenTry(t *testing.T) {
 		auth,
 		counterpartyByte,
 		0,
-		path.EndpointB.ClientID,
+		clientIdB,
 		clientStateByte,
 		versionsByte,
 		proofInit,
@@ -289,11 +303,7 @@ func RunTestIbcConnectionOpenAck(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	require.NoError(t, path.EndpointA.ConnOpenInit())
-	require.NoError(t, path.EndpointB.ConnOpenTry())
-
 	counterpartyClient := chainB.GetClientState(path.EndpointB.ClientID)
-	updateClient(t, path.EndpointA)
 
 	connectionKey := host.ConnectionKey(path.EndpointB.ConnectionID)
 	proofTry, proofHeight := chainB.QueryProof(connectionKey)
@@ -336,15 +346,19 @@ func RunTestIbcConnectionOpenAck(t *testing.T) {
 	re, err := waitForReceiptAndGet(ctx, ethClient, tx)
 	require.NoError(t, err)
 	t.Log(spew.Sdump(re.Logs))
+
+	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.ConnOpenAck)
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.ConnOpenConfirm)
+	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.UpdateClient)
 }
 
 func RunTestIbcConnectionOpenConfirm(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	require.NoError(t, path.EndpointB.ConnOpenTry())
-	require.NoError(t, path.EndpointA.ConnOpenAck())
-	updateClient(t, path.EndpointB)
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.ConnOpenTry)
+	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointB.ConnOpenAck)
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.UpdateClient)
 
 	connectionKey := host.ConnectionKey(path.EndpointA.ConnectionID)
 	proofAck, proofHeight := chainA.QueryProof(connectionKey)
@@ -359,11 +373,9 @@ func RunTestIbcConnectionOpenConfirm(t *testing.T) {
 	t.Log(spew.Sdump(re.Logs))
 }
 
-func RunTestIncChannelOpenInit(t *testing.T) {
+func RunTestIbcChannelOpenInit(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	require.NoError(t, path.EndpointA.ConnOpenAck())
-	require.NoError(t, path.EndpointB.ConnOpenConfirm())
 
 	path.SetChannelOrdered()
 
@@ -376,17 +388,25 @@ func RunTestIncChannelOpenInit(t *testing.T) {
 	require.NoError(t, err)
 	_, err = waitForReceiptAndGet(ctx, ethClient, tx)
 	require.NoError(t, err)
+
+	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, func() error {
+		if err := path.EndpointA.ChanOpenInit(); err != nil {
+			return err
+		}
+		return path.EndpointA.UpdateClient()
+	})
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.ChanOpenTry)
+	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.UpdateClient)
 }
 
-func RunTestIncChannelOpenTry(t *testing.T) {
+func RunTestIbcChannelOpenTry(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	require.NoError(t, path.EndpointB.ConnOpenConfirm())
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.ConnOpenConfirm)
 	path.SetChannelOrdered()
 	require.NoError(t, path.EndpointA.ChanOpenInit())
 	chainB.CreatePortCapability(chainB.GetSimApp().ScopedIBCMockKeeper, ibctesting.MockPort)
-	updateClient(t, path.EndpointB)
 
 	counterparty := channeltypes.NewCounterparty(path.EndpointB.ChannelConfig.PortID, ibctesting.FirstChannelID)
 	channel := channeltypes.NewChannel(channeltypes.INIT, channeltypes.ORDERED, counterparty, []string{path.EndpointB.ConnectionID}, path.EndpointA.ChannelConfig.Version)
@@ -411,16 +431,9 @@ func RunTestIncChannelOpenTry(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func RunTestIncChannelOpenAck(t *testing.T) {
+func RunTestIbcChannelOpenAck(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-
-	require.NoError(t, path.EndpointA.ChanOpenInit())
-	require.NoError(t, path.EndpointB.ChanOpenTry())
-
-	if path.EndpointA.ClientID != "" {
-		updateClient(t, path.EndpointA)
-	}
 
 	channelKey := host.ChannelKey(path.EndpointB.ChannelConfig.PortID, ibctesting.FirstChannelID)
 	proof, proofHeight := chainB.QueryProof(channelKey)
@@ -439,15 +452,18 @@ func RunTestIncChannelOpenAck(t *testing.T) {
 	require.NoError(t, err)
 	_, err = waitForReceiptAndGet(ctx, ethClient, tx)
 	require.NoError(t, err)
+
+	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.ChanOpenAck)
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.ChanOpenConfirm)
 }
 
-func RunTestIncChannelOpenConfirm(t *testing.T) {
+func RunTestIbcChannelOpenConfirm(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	require.NoError(t, path.EndpointB.ChanOpenTry())
-	require.NoError(t, path.EndpointA.ChanOpenAck())
-	updateClient(t, path.EndpointB)
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.ChanOpenTry)
+	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.ChanOpenAck)
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.UpdateClient)
 
 	channelKey := host.ChannelKey(path.EndpointA.ChannelConfig.PortID, ibctesting.FirstChannelID)
 	proof, proofHeight := chainA.QueryProof(channelKey)
@@ -467,6 +483,113 @@ func RunTestIncChannelOpenConfirm(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func RunTestIbcRecvPacket(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	mintFungibleTokenPacketData, err := json.Marshal(ics20.FungibleTokenPacketData{
+		Denom:    "USDT",
+		Amount:   "1000",
+		Sender:   common.Address{}.Hex(),
+		Receiver: auth.From.Hex(),
+		Memo:     "some memo",
+	})
+	require.NoError(t, err)
+
+	sequence, err := path.EndpointA.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, mintFungibleTokenPacketData)
+	require.NoError(t, err)
+	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.UpdateClient)
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, nil)
+
+	packetKey := host.PacketCommitmentKey(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
+	proof, proofHeight := path.EndpointA.QueryProof(packetKey)
+	spew.Dump(proof, proofHeight)
+
+	bindTx, err := ics20Transferer.BindPort(auth, ibc.ContractAddress, ibctesting.MockPort)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, bindTx)
+	require.NoError(t, err)
+
+	_, err = ibcContract.RecvPacket(auth, contractBind.IIBCMsgRecvPacket{
+		Packet: contractBind.Packet{
+			Sequence:           big.NewInt(int64(sequence)),
+			SourcePort:         path.EndpointA.ChannelConfig.PortID,
+			SourceChannel:      path.EndpointA.ChannelID,
+			DestinationPort:    path.EndpointB.ChannelConfig.PortID,
+			DestinationChannel: path.EndpointB.ChannelID,
+			Data:               mintFungibleTokenPacketData,
+			TimeoutHeight: contractBind.Height{
+				RevisionNumber: big.NewInt(int64(defaultTimeoutHeight.RevisionNumber)),
+				RevisionHeight: big.NewInt(int64(defaultTimeoutHeight.RevisionHeight)),
+			},
+			TimeoutTimestamp: big.NewInt(int64(disabledTimeoutTimestamp)),
+		},
+		ProofCommitment: proof,
+		ProofHeight: contractBind.Height{
+			RevisionNumber: new(big.Int).SetUint64(proofHeight.RevisionNumber),
+			RevisionHeight: new(big.Int).SetUint64(proofHeight.RevisionHeight),
+		},
+		Signer: "",
+	})
+	require.NoError(t, err)
+}
+
+func RunTestIbcAckPacket(t *testing.T) {
+	amount := big.NewInt(int64(rand.Uint64()))
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	connectionKey := host.ConnectionKey(path.EndpointB.ConnectionID)
+	proof, proofHeight := chainB.QueryProof(connectionKey)
+
+	randomAddr, err := getRandomAddr()
+	require.NoError(t, err)
+
+	jsonTransferFungibleTokenPacketData, err := json.Marshal(ics20.FungibleTokenPacketData{
+		Denom:    "transfer/channel-0/USDT",
+		Amount:   amount.String(),
+		Sender:   randomAddr.Hex(),
+		Receiver: auth.From.Hex(),
+		Memo:     "some memo",
+	})
+	require.NoError(t, err)
+
+	transferFungibleTokenPacketData, err := ics20.FungibleTokenPacketDataToABI(jsonTransferFungibleTokenPacketData)
+	require.NoError(t, err)
+
+	packetAckTx, err := ibcContract.Acknowledgement(
+		auth,
+		contractBind.Packet{
+			Sequence:           big.NewInt(1),
+			SourcePort:         "transfer",
+			SourceChannel:      "channel-0",
+			DestinationPort:    "transfer",
+			DestinationChannel: "channel-0",
+			Data:               transferFungibleTokenPacketData,
+			TimeoutHeight: contractBind.Height{
+				RevisionNumber: big.NewInt(1000),
+				RevisionHeight: big.NewInt(1000),
+			},
+			TimeoutTimestamp: big.NewInt(time.Now().Unix() + 10000),
+		},
+		common.FromHex("0x00"),
+		proof,
+		contractBind.Height{
+			RevisionNumber: big.NewInt(int64(proofHeight.RevisionNumber)),
+			RevisionHeight: big.NewInt(int64(proofHeight.RevisionHeight)),
+		},
+		"",
+	)
+	require.NoError(t, err)
+	packetAckRe, err := waitForReceiptAndGet(ctx, ethClient, packetAckTx)
+	require.NoError(t, err)
+	assert.True(t, len(packetAckRe.Logs) > 0, "must be `mint` log")
+	mintedBalance, err := ics20Bank.BalanceOf(nil, randomAddr, "transfer/channel-0/USDT")
+	require.NoError(t, err)
+	assert.Equal(t, amount, mintedBalance)
+}
+
 func QueryProofs(t *testing.T) {
 	clientId := clientIdA
 
@@ -483,25 +606,61 @@ func QueryProofs(t *testing.T) {
 	t.Logf("Client state storage data: %x\n", clientStateBz)
 }
 
-func updateClient(t *testing.T, endpoint *ibctesting.Endpoint) {
-	require.NoError(t, endpoint.UpdateClient())
-
-	trustedHeight, ok := chainA.GetClientState(endpoint.ClientID).GetLatestHeight().(clienttypes.Height)
-	require.True(t, ok)
-
-	header, err := endpoint.Chain.ConstructUpdateTMClientHeaderWithTrustedHeight(endpoint.Counterparty.Chain, endpoint.ClientID, trustedHeight)
+func createIbcClient(t *testing.T, ctx context.Context, enpoint *ibctesting.Endpoint, clientId string) {
+	clientState, ok1 := enpoint.GetClientState().(*ibctm.ClientState)
+	clientState.MaxClockDrift = 5 * time.Minute
+	require.True(t, ok1)
+	clientStateByte, err := clientState.Marshal()
 	require.NoError(t, err)
 
-	msg, err := header.Marshal()
+	consensusState, ok2 := enpoint.GetConsensusState(clientState.LatestHeight).(*ibctm.ConsensusState)
+	require.True(t, ok2)
+	consensusStateByte, err := consensusState.Marshal()
 	require.NoError(t, err)
 
-	tx, err := ibcContract.UpdateClient(auth, endpoint.ClientID, msg)
+	tx, err := ibcContract.CreateClient(auth, exported.Tendermint, clientStateByte, consensusStateByte)
+	require.NoError(t, err)
+
+	re, err := waitForReceiptAndGet(ctx, ethClient, tx)
+	require.NoError(t, err)
+	require.True(t, len(re.Logs) > 0)
+
+	event, err := ibcContractFilterer.ParseClientCreated(*re.Logs[0])
+	require.NoError(t, err)
+
+	assert.Equal(t, clientId, event.ClientId)
+}
+
+func queryClientStateFromContract(t *testing.T, cliendId string) *ibctm.ClientState {
+	clientStateByte, err := ibcContract.QueryClientState(nil, cliendId)
+	require.NoError(t, err)
+
+	var clientState ibctm.ClientState
+	require.NoError(t, clientState.Unmarshal(clientStateByte))
+
+	return &clientState
+}
+
+func updateIbcClientAfterFunc(t *testing.T, cliendId string, endpoint *ibctesting.Endpoint, fn func() error) {
+	if fn != nil {
+		require.NoError(t, fn())
+	}
+
+	clientState := queryClientStateFromContract(t, cliendId)
+
+	header, err := endpoint.Chain.ConstructUpdateTMClientHeaderWithTrustedHeight(endpoint.Counterparty.Chain, cliendId, clientState.LatestHeight)
+	require.NoError(t, err)
+
+	msg, err := clienttypes.MarshalClientMessage(marshaler, exported.ClientMessage(header))
+	require.NoError(t, err)
+
+	tx, err := ibcContract.UpdateClient(auth, cliendId, msg)
 	require.NoError(t, err)
 
 	re, err := waitForReceiptAndGet(context.Background(), ethClient, tx)
 	require.NoError(t, err)
 
-	t.Logf("'%s' updated: %#v", endpoint.ClientID, re.Logs)
+	t.Logf("'%s' updated: %#v", cliendId, re.Logs)
 }
 
 func waitForReceiptAndGet(ctx context.Context, client ethclient.Client, tx *types.Transaction) (*types.Receipt, error) {
@@ -522,4 +681,19 @@ func waitForReceiptAndGet(ctx context.Context, client ethclient.Client, tx *type
 		return nil, err
 	}
 	return receipt, nil
+}
+
+func getRandomAddr() (common.Address, error) {
+	privateKey, err := crypto.GenerateKey()
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		return common.Address{}, fmt.Errorf("cannot assert type: publicKey is not of type *ecdsa.PublicKey")
+	}
+
+	return crypto.PubkeyToAddress(*publicKeyECDSA), nil
 }

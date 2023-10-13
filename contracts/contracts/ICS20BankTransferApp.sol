@@ -3,9 +3,13 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import {IICS20Bank} from "./ICS20Bank.sol";
-import {BaseFungibleTokenApp} from "./BaseFungibleTokenApp.sol";
+import {IBCBaseFungibleTokenApp} from "./IBCBaseFungibleTokenApp.sol";
 
-contract ICS20BankTransferApp is Ownable, BaseFungibleTokenApp {
+interface PortBinder{
+  function bindPort(string memory portID) external;
+}
+
+contract ICS20BankTransferApp is Ownable, IBCBaseFungibleTokenApp {
   address ibcAddr;
   IICS20Bank bank;
 
@@ -28,18 +32,16 @@ contract ICS20BankTransferApp is Ownable, BaseFungibleTokenApp {
     string memory denom,
     uint256 amount
   ) internal override returns (bool) {
-    try bank.transferFrom(sender, receiver, denom, amount) {
-      return true;
-    } catch (bytes memory) {
-      return false;
-    }
+    bank.transferFrom(sender, receiver, denom, amount);
+    return true;
   }
 
   function _mint(address account, string memory denom, uint256 amount) internal override returns (bool) {
-    try bank.mint(account, denom, amount) {
-      return true;
-    } catch (bytes memory) {
-      return false;
-    }
+    bank.mint(account, denom, amount);
+    return true;
+  }
+
+  function bindPort(address someAddr, string memory portId) external {
+    PortBinder(someAddr).bindPort(portId);
   }
 }

@@ -2,19 +2,19 @@
 pragma solidity ^0.8.0;
 
 struct Packet {
-    uint sequence;
-    string sourcePort;
-    string sourceChannel;
-    string destinationPort;
-    string destinationChannel;
-    bytes data;
-    Height timeoutHeight;
-    uint timeoutTimestamp;
+  uint sequence;
+  string sourcePort;
+  string sourceChannel;
+  string destinationPort;
+  string destinationChannel;
+  bytes data;
+  Height timeoutHeight;
+  uint timeoutTimestamp;
 }
 
 struct Height {
-    uint revisionNumber;
-    uint revisionHeight;
+  uint revisionNumber;
+  uint revisionHeight;
 }
 
 interface IIBC {
@@ -101,12 +101,39 @@ interface IIBC {
     string ChannelOrdering
   );
 
-  function recvPacket(
-    Packet memory packet,
-    bytes memory proofCommitment,
-    Height memory proofHeight,
-    string memory signer
-  ) external;
+  struct MsgRecvPacket {
+    Packet packet;
+    bytes proofCommitment;
+    Height proofHeight;
+    string signer;
+  }
+
+  struct MsgAcknowledgement {
+    Packet packet;
+    bytes acknowledgement;
+    bytes proofAcked;
+    Height proofHeight;
+    string signer;
+  }
+
+  struct MsgTimeoutOnClose {
+    Packet packet;
+    bytes proofUnreceived;
+    bytes proofClose;
+    Height proofHeight;
+    uint64 nextSequenceRecv;
+    string signer;
+  }
+
+  struct MsgTimeout {
+    Packet packet;
+    bytes proofUnreceived;
+    Height proofHeight;
+    uint64 nextSequenceRecv;
+    string signer;
+  }
+
+  function recvPacket(MsgRecvPacket memory message) external;
 
   function sendPacket(
     uint channelCapability,
@@ -149,10 +176,7 @@ interface IIBC {
     bytes memory consensusState
   ) external returns (string memory clientID);
 
-  function updateClient(
-    string memory clientID, 
-    bytes memory clientMessage
-  ) external;
+  function updateClient(string memory clientID, bytes memory clientMessage) external;
 
   function upgradeClient(
     string memory clientID,
@@ -194,16 +218,9 @@ interface IIBC {
     bytes memory consensusHeight
   ) external;
 
-  function connOpenConfirm(
-    string memory connectionID, 
-    bytes memory proofAck, bytes 
-    memory proofHeight
-  ) external;
+  function connOpenConfirm(string memory connectionID, bytes memory proofAck, bytes memory proofHeight) external;
 
-  function chanOpenInit(
-    string memory portID, 
-    bytes memory channel
-  ) external;
+  function chanOpenInit(string memory portID, bytes memory channel) external;
 
   function chanOpenTry(
     string memory portID,
@@ -229,10 +246,7 @@ interface IIBC {
     bytes memory proofHeight
   ) external;
 
-  function channelCloseInit(
-    string memory portID, 
-    string memory channelID
-  ) external;
+  function channelCloseInit(string memory portID, string memory channelID) external;
 
   function channelCloseConfirm(
     string memory portID,
@@ -241,14 +255,9 @@ interface IIBC {
     bytes memory proofHeight
   ) external;
 
-  function bindPort(
-    string memory portID
-  ) external;
+  function bindPort(string memory portID) external;
 
-  function OnRecvPacket(
-	  Packet  memory packet,
-	  bytes memory Relayer
-  ) external;
+  function OnRecvPacket(Packet memory packet, bytes memory Relayer) external;
 
   function OnTimeout(
 	  Packet  memory packet,
@@ -260,22 +269,22 @@ interface IIBC {
 	  bytes memory Relayer
   ) external;
 
-  function OnAcknowledgement(
-    Packet calldata packet, 
-    bytes calldata acknowledgement, 
-    bytes calldata
+  function OnAcknowledgementPacket(
+    Packet memory packet, 
+    bytes memory ack, 
+    bytes memory
   ) external;
 
     // query methods
-  function queryClientState(string memory clientId) external returns (bytes memory);
+  function queryClientState(string memory clientId) external view returns (bytes memory);
 
-  function queryConsensusState(string memory clientId) external returns (bytes memory);
+  function queryConsensusState(string memory clientId) external view returns (bytes memory);
 
-  function queryConnection(string memory connectionID) external returns (bytes memory);
+  function queryConnection(string memory connectionID) external view returns (bytes memory);
 
-  function queryChannel(string memory portID, string memory channelID) external returns (bytes memory);
+  function queryChannel(string memory portID, string memory channelID) external view returns (bytes memory);
 
-  function queryPacketCommitment(string memory portID, string memory channelID, uint sequence) external returns (bytes memory);
+  function queryPacketCommitment(string memory portID, string memory channelID, uint sequence) external view returns (bytes memory);
 
-  function queryPacketAcknowledgement(string memory portID, string memory channelID, uint sequence) external returns (bytes memory);
+  function queryPacketAcknowledgement(string memory portID, string memory channelID, uint sequence) external view returns (bytes memory);
 }

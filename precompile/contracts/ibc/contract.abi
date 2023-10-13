@@ -547,7 +547,7 @@
       },
       {
         "internalType": "bytes",
-        "name": "acknowledgement",
+        "name": "ack",
         "type": "bytes"
       },
       {
@@ -556,7 +556,7 @@
         "type": "bytes"
       }
     ],
-    "name": "OnAcknowledgement",
+    "name": "OnAcknowledgementPacket",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1282,7 +1282,7 @@
         "type": "bytes"
       }
     ],
-    "stateMutability": "nonpayable",
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -1301,7 +1301,7 @@
         "type": "bytes"
       }
     ],
-    "stateMutability": "nonpayable",
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -1320,7 +1320,7 @@
         "type": "bytes"
       }
     ],
-    "stateMutability": "nonpayable",
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -1339,7 +1339,7 @@
         "type": "bytes"
       }
     ],
-    "stateMutability": "nonpayable",
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -1368,7 +1368,7 @@
         "type": "bytes"
       }
     ],
-    "stateMutability": "nonpayable",
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -1397,7 +1397,7 @@
         "type": "bytes"
       }
     ],
-    "stateMutability": "nonpayable",
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -1405,33 +1405,67 @@
       {
         "components": [
           {
-            "internalType": "uint256",
-            "name": "sequence",
-            "type": "uint256"
-          },
-          {
-            "internalType": "string",
-            "name": "sourcePort",
-            "type": "string"
-          },
-          {
-            "internalType": "string",
-            "name": "sourceChannel",
-            "type": "string"
-          },
-          {
-            "internalType": "string",
-            "name": "destinationPort",
-            "type": "string"
-          },
-          {
-            "internalType": "string",
-            "name": "destinationChannel",
-            "type": "string"
+            "components": [
+              {
+                "internalType": "uint256",
+                "name": "sequence",
+                "type": "uint256"
+              },
+              {
+                "internalType": "string",
+                "name": "sourcePort",
+                "type": "string"
+              },
+              {
+                "internalType": "string",
+                "name": "sourceChannel",
+                "type": "string"
+              },
+              {
+                "internalType": "string",
+                "name": "destinationPort",
+                "type": "string"
+              },
+              {
+                "internalType": "string",
+                "name": "destinationChannel",
+                "type": "string"
+              },
+              {
+                "internalType": "bytes",
+                "name": "data",
+                "type": "bytes"
+              },
+              {
+                "components": [
+                  {
+                    "internalType": "uint256",
+                    "name": "revisionNumber",
+                    "type": "uint256"
+                  },
+                  {
+                    "internalType": "uint256",
+                    "name": "revisionHeight",
+                    "type": "uint256"
+                  }
+                ],
+                "internalType": "struct Height",
+                "name": "timeoutHeight",
+                "type": "tuple"
+              },
+              {
+                "internalType": "uint256",
+                "name": "timeoutTimestamp",
+                "type": "uint256"
+              }
+            ],
+            "internalType": "struct Packet",
+            "name": "packet",
+            "type": "tuple"
           },
           {
             "internalType": "bytes",
-            "name": "data",
+            "name": "proofCommitment",
             "type": "bytes"
           },
           {
@@ -1448,45 +1482,18 @@
               }
             ],
             "internalType": "struct Height",
-            "name": "timeoutHeight",
+            "name": "proofHeight",
             "type": "tuple"
           },
           {
-            "internalType": "uint256",
-            "name": "timeoutTimestamp",
-            "type": "uint256"
+            "internalType": "string",
+            "name": "signer",
+            "type": "string"
           }
         ],
-        "internalType": "struct Packet",
-        "name": "packet",
+        "internalType": "struct IIBC.MsgRecvPacket",
+        "name": "message",
         "type": "tuple"
-      },
-      {
-        "internalType": "bytes",
-        "name": "proofCommitment",
-        "type": "bytes"
-      },
-      {
-        "components": [
-          {
-            "internalType": "uint256",
-            "name": "revisionNumber",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "revisionHeight",
-            "type": "uint256"
-          }
-        ],
-        "internalType": "struct Height",
-        "name": "proofHeight",
-        "type": "tuple"
-      },
-      {
-        "internalType": "string",
-        "name": "signer",
-        "type": "string"
       }
     ],
     "name": "recvPacket",

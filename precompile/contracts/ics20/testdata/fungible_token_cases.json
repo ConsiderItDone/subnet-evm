@@ -27,7 +27,7 @@
       "receiver": "0x0000000000000000000000000000000000000000",
       "memo": "some_memo"
     },
-    "error": "denom not found"
+    "error": "denom has bad json data"
   },
   {
     "name": "empty amount",
@@ -37,7 +37,7 @@
       "receiver": "0x0000000000000000000000000000000000000000",
       "memo": "some_memo"
     },
-    "error": "amount not found"
+    "error": "amount has bad value"
   },
   {
     "name": "bad amount",
@@ -48,7 +48,7 @@
       "receiver": "0x0000000000000000000000000000000000000000",
       "memo": "some_memo"
     },
-    "error": "amount has unknown format"
+    "error": "amount has bad value"
   },
   {
     "name": "empty sender",
@@ -58,7 +58,7 @@
       "receiver": "0x0000000000000000000000000000000000000000",
       "memo": "some_memo"
     },
-    "error": "sender not found"
+    "error": "sender has bad value"
   },
   {
     "name": "empty receiver",
@@ -68,6 +68,6 @@
       "sender": "0x0000000000000000000000000000000000000000",
       "memo": "some_memo"
     },
-    "error": "receiver not found"
+    "error": "receiver has bad value"
   }
 ]
