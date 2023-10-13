@@ -49,9 +49,13 @@ func _connOpenInit(opts *callOpts[ConnOpenInitInput]) (string, error) {
 	}
 
 	// check ClientState exists in database
-	_, err := GetClientState(statedb, opts.args.ClientID)
+	clientState, err := GetClientState(statedb, opts.args.ClientID)
 	if err != nil {
 		return "", err
+	}
+
+	if Status(opts.accessibleState, *clientState, opts.args.ClientID) != exported.Active {
+		return "", fmt.Errorf("client is not active")
 	}
 
 	connectionID := makeConnectionID(statedb)
@@ -118,11 +122,11 @@ func _connOpenTry(opts *callOpts[ConnOpenTryInput]) (string, error) {
 	// connection defines chain B's ConnectionEnd
 	connection := connectiontypes.NewConnectionEnd(connectiontypes.TRYOPEN, opts.args.ClientID, *counterparty, []*connectiontypes.Version{version}, uint64(opts.args.DelayPeriod))
 
-	if err = clientVerification(connection, clientState, *proofHeight, opts.accessibleState, marshaler, opts.args.ProofClient); err != nil {
+	if err = verifyClient(connection, clientState, *proofHeight, opts.accessibleState, marshaler, opts.args.ProofClient); err != nil {
 		return "", fmt.Errorf("error clientVerification: %w", err)
 	}
 
-	if err = connectionVerification(connection, expectedConnection, *proofHeight, opts.accessibleState, marshaler, connectionID, opts.args.ProofInit); err != nil {
+	if err = verifyConnection(connection, expectedConnection, *proofHeight, opts.accessibleState, marshaler, connectionID, opts.args.ProofInit); err != nil {
 		return "", fmt.Errorf("error connectionVerification: %w", err)
 	}
 
@@ -183,12 +187,12 @@ func _connOpenAck(opts *callOpts[ConnOpenAckInput]) error {
 	expectedCounterparty := connectiontypes.NewCounterparty(connection.ClientId, opts.args.ConnectionID, commitmenttypes.NewMerklePrefix([]byte("ibc")))
 	expectedConnection := connectiontypes.NewConnectionEnd(connectiontypes.TRYOPEN, connection.Counterparty.ClientId, expectedCounterparty, []*connectiontypes.Version{&version}, connection.DelayPeriod)
 
-	if err := connectionVerification(*connection, expectedConnection, *proofHeight, opts.accessibleState, marshaler, string(opts.args.CounterpartyConnectionID), opts.args.ProofTry); err != nil {
+	if err := verifyConnection(*connection, expectedConnection, *proofHeight, opts.accessibleState, marshaler, string(opts.args.CounterpartyConnectionID), opts.args.ProofTry); err != nil {
 		return fmt.Errorf("connection verification failed: %w", err)
 	}
 
 	// Check that ChainB stored the clientState provided in the msg
-	if err := clientVerification(*connection, clientState, *proofHeight, opts.accessibleState, marshaler, opts.args.ProofClient); err != nil {
+	if err := verifyClient(*connection, clientState, *proofHeight, opts.accessibleState, marshaler, opts.args.ProofClient); err != nil {
 		return fmt.Errorf("client verification failed: %w", err)
 	}
 
@@ -231,7 +235,7 @@ func _connOpenConfirm(opts *callOpts[ConnOpenConfirmInput]) error {
 	expectedCounterparty := connectiontypes.NewCounterparty(connection.ClientId, opts.args.ConnectionID, commitmenttypes.NewMerklePrefix([]byte("ibc")))
 	expectedConnection := connectiontypes.NewConnectionEnd(connectiontypes.OPEN, connection.Counterparty.ClientId, expectedCounterparty, connection.Versions, connection.DelayPeriod)
 
-	if err := connectionVerification(*connection, expectedConnection, *proofHeight, opts.accessibleState, marshaler, opts.args.ConnectionID, opts.args.ProofAck); err != nil {
+	if err := verifyConnection(*connection, expectedConnection, *proofHeight, opts.accessibleState, marshaler, opts.args.ConnectionID, opts.args.ProofAck); err != nil {
 		return err
 	}
 
@@ -273,99 +277,6 @@ func _connOpenConfirm(opts *callOpts[ConnOpenConfirmInput]) error {
 
 	if err := SetConnection(statedb, opts.args.ConnectionID, connection); err != nil {
 		return fmt.Errorf("can't save connection: %w", err)
-	}
-	return nil
-}
-
-func clientVerification(
-	connection connectiontypes.ConnectionEnd,
-	clientState exported.ClientState,
-	proofHeight exported.Height,
-	accessibleState contract.AccessibleState,
-	marshaler *codec.ProtoCodec,
-	proofClientbyte []byte,
-) error {
-	clientID := connection.GetClientID()
-
-	targetClientState, err := GetClientState(accessibleState.GetStateDB(), clientID)
-	if err != nil {
-		return fmt.Errorf("error loading client state, err: %w", err)
-	}
-
-	consensusState, err := GetConsensusState(accessibleState.GetStateDB(), clientID, targetClientState.GetLatestHeight())
-	if err != nil {
-		return fmt.Errorf("error loading consensus state, err: %w", err)
-	}
-
-	merklePath := commitmenttypes.NewMerklePath(hosttypes.FullClientStatePath(connection.GetCounterparty().GetClientID()))
-	merklePath, err = commitmenttypes.ApplyPrefix(connection.GetCounterparty().GetPrefix(), merklePath)
-	if err != nil {
-		return err
-	}
-
-	bz, err := marshaler.MarshalInterface(clientState)
-	if err != nil {
-		return err
-	}
-
-	if targetClientState.GetLatestHeight().LT(proofHeight) {
-		return fmt.Errorf("client state height < proof height (%d < %d), please ensure the client has been updated", targetClientState.GetLatestHeight(), proofHeight)
-	}
-
-	var merkleProof commitmenttypes.MerkleProof
-	if err := marshaler.Unmarshal(proofClientbyte, &merkleProof); err != nil {
-		return fmt.Errorf("failed to unmarshal proof into ICS 23 commitment merkle proof")
-	}
-	err = merkleProof.VerifyMembership(targetClientState.ProofSpecs, consensusState.GetRoot(), merklePath, bz)
-	if err != nil {
-		return err
-	}
-	return err
-}
-
-func connectionVerification(
-	connection connectiontypes.ConnectionEnd,
-	connectionEnd connectiontypes.ConnectionEnd,
-	height exported.Height,
-	accessibleState contract.AccessibleState,
-	marshaler *codec.ProtoCodec,
-	connectionID string,
-	proof []byte,
-) error {
-	clientID := connection.GetClientID()
-
-	clientState, err := GetClientState(accessibleState.GetStateDB(), clientID)
-	if err != nil {
-		return fmt.Errorf("error loading client state, err: %w", err)
-	}
-
-	consensusState, err := GetConsensusState(accessibleState.GetStateDB(), clientID, clientState.GetLatestHeight())
-	if err != nil {
-		return fmt.Errorf("error loading consensus state, err: %w", err)
-	}
-
-	merklePath := commitmenttypes.NewMerklePath(hosttypes.ConnectionPath(connectionID))
-	merklePath, err = commitmenttypes.ApplyPrefix(connection.GetCounterparty().GetPrefix(), merklePath)
-	if err != nil {
-		return fmt.Errorf("can't apply prefix %s: %w", connection.GetCounterparty().GetPrefix(), err)
-	}
-
-	bz, err := marshaler.Marshal(&connectionEnd)
-	if err != nil {
-		return err
-	}
-
-	if clientState.GetLatestHeight().LT(height) {
-		return fmt.Errorf("client state height < proof height (%d < %d), please ensure the client has been updated", clientState.GetLatestHeight(), height)
-	}
-
-	var merkleProof commitmenttypes.MerkleProof
-	if err := marshaler.Unmarshal(proof, &merkleProof); err != nil {
-		return fmt.Errorf("failed to unmarshal proof into ICS 23 commitment merkle proof")
-	}
-	err = merkleProof.VerifyMembership(clientState.ProofSpecs, consensusState.GetRoot(), merklePath, bz)
-	if err != nil {
-		return err
 	}
 	return nil
 }

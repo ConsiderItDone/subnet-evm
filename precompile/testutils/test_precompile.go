@@ -46,6 +46,8 @@ type PrecompileTest struct {
 	ExpectedErr string
 	// BlockNumber is the block number to use for the precompile's block context
 	BlockNumber int64
+	// Timestamp is the time to use for the precompile's block context
+	Timestamp uint64
 }
 
 type PrecompileRunparams struct {
@@ -84,7 +86,7 @@ func (test PrecompileTest) setup(t testing.TB, module modules.Module, state cont
 		test.BeforeHook(t, state)
 	}
 
-	blockContext := contract.NewMockBlockContext(big.NewInt(test.BlockNumber), 0)
+	blockContext := contract.NewMockBlockContext(big.NewInt(test.BlockNumber), test.Timestamp)
 	accesibleState := contract.NewMockAccessibleState(state, blockContext, snow.DefaultContextTest())
 	chainConfig := contract.NewMockChainState(commontype.ValidTestFeeConfig, false)
 

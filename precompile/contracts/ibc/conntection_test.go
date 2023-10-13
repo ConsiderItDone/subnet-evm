@@ -3,6 +3,7 @@ package ibc
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"testing"
 	"time"
 
@@ -91,7 +92,7 @@ func TestConnOpenInit(t *testing.T) {
 			coordinator = ibctesting.NewCoordinator(t, 2)
 			chainA = coordinator.GetChain(ibctesting.GetChainID(1))
 			chainB = coordinator.GetChain(ibctesting.GetChainID(2))
-
+			
 			statedb := state.NewTestStateDB(t)
 			statedb.Finalise(true)
 			emptyConnBID = false // must be explicitly changed
@@ -103,6 +104,7 @@ func TestConnOpenInit(t *testing.T) {
 			cs, _ := chainA.App.GetIBCKeeper().ClientKeeper.GetClientState(chainA.GetContext(), path.EndpointA.ClientID)
 			require.NoError(t, SetClientState(statedb, path.EndpointA.ClientID, cs.(*ibctm.ClientState)))
 
+			test.Config = NewConfig(big.NewInt(time.Now().UnixNano()))
 			test.Caller = common.Address{1}
 			test.SuppliedGas = ConnOpenInitGasCost
 			test.ReadOnly = false

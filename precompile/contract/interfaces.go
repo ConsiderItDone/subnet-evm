@@ -40,6 +40,9 @@ type StateDB interface {
 	GetBalance(common.Address) *big.Int
 	AddBalance(common.Address, *big.Int)
 
+	SetCode(addr common.Address, code []byte)
+	GetCode(addr common.Address) []byte
+	
 	CreateAccount(common.Address)
 	Exist(common.Address) bool
 
