@@ -496,13 +496,13 @@ func RunTestIbcRecvPacket(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	sequence, err := path.EndpointA.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, mintFungibleTokenPacketData)
+	sequence, err := path.EndpointB.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, mintFungibleTokenPacketData)
 	require.NoError(t, err)
 	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.UpdateClient)
 	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, nil)
 
 	packetKey := host.PacketCommitmentKey(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
-	proof, proofHeight := path.EndpointA.QueryProof(packetKey)
+	proof, proofHeight := path.EndpointB.QueryProof(packetKey)
 	spew.Dump(proof, proofHeight)
 
 	bindTx, err := ics20Transferer.BindPort(auth, ibc.ContractAddress, ibctesting.MockPort)
