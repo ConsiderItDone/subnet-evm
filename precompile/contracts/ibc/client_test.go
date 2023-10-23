@@ -268,7 +268,7 @@ func TestUpdateClient(t *testing.T) {
 				))
 				updateHeader = createFutureUpdateFn(clientState.GetLatestHeight().(clienttypes.Height))
 			},
-			ExpectedErr: "client is not active",
+			ExpectedErr: "can't get consensus state",
 		},
 		"client is not active": {
 			BeforeHook: func(t testing.TB, state contract.StateDB) {

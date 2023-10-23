@@ -92,7 +92,7 @@ func TestConnOpenInit(t *testing.T) {
 			coordinator = ibctesting.NewCoordinator(t, 2)
 			chainA = coordinator.GetChain(ibctesting.GetChainID(1))
 			chainB = coordinator.GetChain(ibctesting.GetChainID(2))
-			
+
 			statedb := state.NewTestStateDB(t)
 			statedb.Finalise(true)
 			emptyConnBID = false // must be explicitly changed
@@ -101,9 +101,11 @@ func TestConnOpenInit(t *testing.T) {
 			path = ibctesting.NewPath(chainA, chainB)
 			coordinator.SetupClients(path)
 
-			cs, _ := chainA.App.GetIBCKeeper().ClientKeeper.GetClientState(chainA.GetContext(), path.EndpointA.ClientID)
-			require.NoError(t, SetClientState(statedb, path.EndpointA.ClientID, cs.(*ibctm.ClientState)))
+			clientState := path.EndpointA.GetClientState()
+			require.NoError(t, SetClientState(statedb, path.EndpointA.ClientID, clientState.(*ibctm.ClientState)))
 
+			consensusState := path.EndpointA.GetConsensusState(clientState.GetLatestHeight())
+			require.NoError(t, SetConsensusState(statedb, path.EndpointA.ClientID, clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState)))
 			test.Config = NewConfig(big.NewInt(time.Now().UnixNano()))
 			test.Caller = common.Address{1}
 			test.SuppliedGas = ConnOpenInitGasCost
