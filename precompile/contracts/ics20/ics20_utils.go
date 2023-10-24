@@ -3,7 +3,6 @@ package ics20
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"math/big"
 
 	"github.com/ava-labs/subnet-evm/accounts/abi"
@@ -27,78 +26,96 @@ type (
 )
 
 var (
-	FungibleTokenAbiStruct   abi.Type
 	FungibleTokenAbiArgument abi.Arguments
 
-	ErrDenomNotFound    = errors.New("denom not found")
-	ErrAmountNotFound   = errors.New("amount not found")
-	ErrAmountCantParse  = errors.New("amount has unknown format")
-	ErrSenderNotFound   = errors.New("sender not found")
-	ErrReceiverNotFound = errors.New("receiver not found")
+	ErrBadDemonValue    = errors.New("denom has bad json data")
+	ErrBadJsonValue     = errors.New("isc20: has bad json data")
+	ErrBadAmountValue   = errors.New("amount has bad value")
+	ErrBadSenderValue   = errors.New("sender has bad value")
+	ErrBadReceiverValue = errors.New("receiver has bad value")
 )
 
 func init() {
-	fungibleTokenAbiStruct, err := abi.NewType("tuple", "struct thing", []abi.ArgumentMarshaling{
-		{Name: "denom", Type: "string", InternalType: "string"},
-		{Name: "amount", Type: "uint256", InternalType: "uint256"},
-		{Name: "sender", Type: "string", InternalType: "string"},
-		{Name: "receiver", Type: "address", InternalType: "address"},
-		{Name: "memo", Type: "string", InternalType: "string"},
-	})
-	if err != nil {
+	var fungibleTokenPacketDataArg abi.Argument
+	if err := json.Unmarshal([]byte(`
+		{
+			"components": [
+				{
+					"internalType": "string",
+					"name": "denom",
+					"type": "string"
+				},
+				{
+					"internalType": "uint256",
+					"name": "amount",
+					"type": "uint256"
+				},
+				{
+					"internalType": "bytes",
+					"name": "sender",
+					"type": "bytes"
+				},
+				{
+					"internalType": "bytes",
+					"name": "receiver",
+					"type": "bytes"
+				},
+				{
+					"internalType": "bytes",
+					"name": "memo",
+					"type": "bytes"
+				}
+			],
+			"internalType": "struct FungibleTokenPacketData",
+			"name": "data",
+			"type": "tuple"
+		}
+	`), &fungibleTokenPacketDataArg); err != nil {
 		panic(err)
 	}
-
-	FungibleTokenAbiStruct = fungibleTokenAbiStruct
-	FungibleTokenAbiArgument = abi.Arguments{{
-		Name: "rawdata",
-		Type: FungibleTokenAbiStruct,
-	}}
+	FungibleTokenAbiArgument = abi.Arguments{fungibleTokenPacketDataArg}
 }
 
 func FungibleTokenPacketDataToABI(rawdata []byte) ([]byte, error) {
 	var data FungibleTokenPacketData
 	if err := json.Unmarshal(rawdata, &data); err != nil {
-		return nil, fmt.Errorf("bad json data: %w", err)
+		return nil, ErrBadJsonValue
 	}
 
 	if len(data.Denom) == 0 {
-		return nil, ErrDenomNotFound
+		return nil, ErrBadDemonValue
 	}
 
 	if len(data.Amount) == 0 {
-		return nil, ErrAmountNotFound
-	}
-
-	if len(data.Sender) == 0 {
-		return nil, ErrSenderNotFound
-	}
-
-	if len(data.Receiver) == 0 {
-		return nil, ErrReceiverNotFound
+		return nil, ErrBadAmountValue
 	}
 
 	amount, ok := math.ParseBig256(data.Amount)
 	if !ok {
-		return nil, ErrAmountCantParse
+		return nil, ErrBadAmountValue
 	}
 
-	abidata, err := FungibleTokenAbiArgument.Pack(&struct {
+	sender, err := common.ParseHexOrString(data.Sender)
+	if err != nil {
+		return nil, ErrBadSenderValue
+	}
+
+	receiver, err := common.ParseHexOrString(data.Receiver)
+	if err != nil {
+		return nil, ErrBadReceiverValue
+	}
+
+	return FungibleTokenAbiArgument.Pack(&struct {
 		Denom    string
 		Amount   *big.Int
-		Sender   string
-		Receiver common.Address
-		Memo     string
+		Sender   []byte
+		Receiver []byte
+		Memo     []byte
 	}{
 		Denom:    data.Denom,
 		Amount:   amount,
-		Sender:   data.Sender,
-		Receiver: common.HexToAddress(data.Receiver),
-		Memo:     data.Memo,
+		Sender:   sender,
+		Receiver: receiver,
+		Memo:     []byte(data.Memo),
 	})
-	if err != nil {
-		return nil, fmt.Errorf("can't abi encode: %w", err)
-	}
-
-	return abidata, nil
 }

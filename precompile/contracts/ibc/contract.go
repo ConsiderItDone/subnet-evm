@@ -21,21 +21,33 @@ const (
 	UpdateClientGasCost  uint64 = 1
 	UpgradeClientGasCost uint64 = 1
 
-	ConnOpenAckGasCost     uint64 = 1 /* SET A GAS COST HERE */
-	ConnOpenConfirmGasCost uint64 = 1 /* SET A GAS COST HERE */
-	ConnOpenInitGasCost    uint64 = 1 /* SET A GAS COST HERE */
-	ConnOpenTryGasCost     uint64 = 1 /* SET A GAS COST HERE */
+	ConnOpenAckGasCost     uint64 = 1
+	ConnOpenConfirmGasCost uint64 = 1
+	ConnOpenInitGasCost    uint64 = 1
+	ConnOpenTryGasCost     uint64 = 1
 
-	ChanOpenInitGasCost        uint64 = 1 /* SET A GAS COST HERE */
-	ChanOpenTryGasCost         uint64 = 1 /* SET A GAS COST HERE */
-	ChannelCloseConfirmGasCost uint64 = 1 /* SET A GAS COST HERE */
-	ChannelCloseInitGasCost    uint64 = 1 /* SET A GAS COST HERE */
-	ChannelOpenAckGasCost      uint64 = 1 /* SET A GAS COST HERE */
-	ChannelOpenConfirmGasCost  uint64 = 1 /* SET A GAS COST HERE */
+	ChanOpenInitGasCost        uint64 = 1
+	ChanOpenTryGasCost         uint64 = 1
+	ChannelCloseConfirmGasCost uint64 = 1
+	ChannelCloseInitGasCost    uint64 = 1
+	ChannelOpenAckGasCost      uint64 = 1
+	ChannelOpenConfirmGasCost  uint64 = 1
 
-	BindPortGasCost uint64 = 1 /* SET A GAS COST HERE */
+	BindPortGasCost uint64 = 1
 
-	SendPacketGasCost uint64 = 1
+	RecvPacketGasCost      uint64 = 1
+	SendPacketGasCost      uint64 = 1
+	AcknowledgementGasCost uint64 = 1
+	TimeoutGasCost         uint64 = 1
+	TimeoutOnCloseGasCost  uint64 = 1
+
+	QueryClientStateGasCost    uint64 = 1
+	QueryConsensusStateGasCost uint64 = 1
+	QueryConnectionGasCost     uint64 = 1
+	QueryChannelGasCost        uint64 = 1
+
+	QueryPacketCommitmentGasCost      uint64 = 1
+	QueryPacketAcknowledgementGasCost uint64 = 1
 )
 
 // CUSTOM CODE STARTS HERE
@@ -53,10 +65,18 @@ var (
 	//go:embed contract.abi
 	IBCRawABI string
 
-	IBCABI                        = contract.ParseABI(IBCRawABI)
-	IBCPrecompile                 = createIBCPrecompile()
-	GeneratedClientIdentifier     = IBCABI.Events["ClientCreated"]
-	GeneratedConnectionIdentifier = IBCABI.Events["ConnectionCreated"]
+	IBCABI                                    = contract.ParseABI(IBCRawABI)
+	IBCPrecompile                             = createIBCPrecompile()
+	GeneratedClientIdentifier                 = IBCABI.Events["ClientCreated"]
+	GeneratedConnectionIdentifier             = IBCABI.Events["ConnectionCreated"]
+	GeneratedPacketSentIdentifier             = IBCABI.Events["PacketSent"]
+	GeneratedPacketReceivedIdentifier         = IBCABI.Events["PacketReceived"]
+	GeneratedTimeoutPacketIdentifier          = IBCABI.Events["TimeoutPacket"]
+	GeneratedAcknowledgePacketIdentifier      = IBCABI.Events["AcknowledgePacket"]
+	GeneratedAcknowledgementWrittenIdentifier = IBCABI.Events["AcknowledgementWritten"]
+	GeneratedAcknowledgementErrorIdentifier   = IBCABI.Events["AcknowledgementError"]
+	GeneratedTypeSubmitMisbehaviourIdentifier = IBCABI.Events["TypeSubmitMisbehaviour"]
+	GeneratedTypeChannelClosedIdentifier      = IBCABI.Events["TypeChannelClosed"]
 
 	ClientSequenceSlot     = common.BytesToHash([]byte("client-sequence"))
 	ConnectionSequenceSlot = common.BytesToHash([]byte("connection-sequence"))
@@ -84,6 +104,18 @@ func createIBCPrecompile() contract.StatefulPrecompiledContract {
 		"createClient":        createClient,
 		"updateClient":        updateClient,
 		"upgradeClient":       upgradeClient,
+		"recvPacket":          recvPacket,
+		"sendPacket":          sendPacket,
+		"timeout":             timeout,
+		"timeoutOnClose":      timeoutOnClose,
+		"acknowledgement":     acknowledgement,
+
+		"queryClientState":           queryClientState,
+		"queryConsensusState":        queryConsensusState,
+		"queryConnection":            queryConnection,
+		"queryChannel":               queryChannel,
+		"queryPacketCommitment":      queryPacketCommitment,
+		"queryPacketAcknowledgement": queryPacketAcknowledgement,
 	}
 
 	for name, function := range abiFunctionMap {

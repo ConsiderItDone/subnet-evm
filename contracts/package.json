@@ -1,11 +1,23 @@
 {
   "name": "@avalabs/subnet-evm-contracts",
   "devDependencies": {
-    "@types/chai": "^4.3.5",
+    "@nomiclabs/hardhat-ethers": "^2.0.2",
+    "@nomiclabs/hardhat-waffle": "^2.0.1",
+    "@openzeppelin/contracts": "^4.7.1",
+    "@types/chai": "^4.2.21",
     "@types/mocha": "^9.0.0",
-    "chai": "^4.3.7",
+    "@types/node": "^16.7.1",
+    "avalanche": "^3.8.5",
+    "chai": "^4.3.4",
+    "ethereum-waffle": "^3.4.0",
+    "ethereumjs-tx": "^2.1.2",
+    "ethers": "^5.4.5",
+    "hardhat": "2.6.1",
     "prettier": "^2.5.1",
-    "prettier-plugin-solidity": "^1.1.3"
+    "prettier-plugin-solidity": "^1.0.0-beta.19",
+    "solidity-stringutils": "github:ibc-solidity/solidity-stringutils#716294569dd2304ae8d81681951733542f999015",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.1.3"
   },
   "version": "1.0.0",
   "description": "",
@@ -19,7 +31,7 @@
   },
   "license": "BSD-3-Clause",
   "scripts": {
-    "build": "rm -rf dist/ && tsc -b && npx hardhat compile",
+    "build": "rm -rf dist/ && tsc -b",
     "compile": "npx hardhat compile",
     "console": "npx hardhat console",
     "test": "npx hardhat test",
@@ -28,19 +40,11 @@
     "release:prepare": "rm -rf ./dist ./node_modules && npm install && npm run build"
   },
   "dependencies": {
-    "@nomiclabs/hardhat-ethers": "^2.2.3",
-    "@nomiclabs/hardhat-waffle": "^2.0.6",
-    "@types/node": "^16.7.1",
-    "@avalabs/avalanchejs": "^3.17.0",
-    "ethers": "^5.4.5",
-    "hardhat": "2.17.1",
-    "ts-node": "^10.9.1",
-    "typescript": "^5.1.6",
-    "@openzeppelin/contracts": "^4.9.3",
-    "ds-test": "https://github.com/dapphub/ds-test.git"
+    "ds-test": "https://github.com/dapphub/ds-test.git",
+    "solidity-bytes-utils": "^0.8.0"
   },
   "engines": {
     "npm": ">6.0.0",
-    "node": ">=18.15.0"
+    "node": ">=18.16.0"
   }
 }

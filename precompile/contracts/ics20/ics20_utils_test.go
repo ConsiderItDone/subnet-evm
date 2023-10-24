@@ -50,12 +50,18 @@ func TestFungibleTokenPacketDataToABI(t *testing.T) {
 			amount, ok := math.ParseBig256(jsondata.Amount)
 			require.True(t, ok)
 
+			sender, err := common.ParseHexOrString(jsondata.Sender)
+			require.NoError(t, err)
+
+			receiver, err := common.ParseHexOrString(jsondata.Receiver)
+			require.NoError(t, err)
+
 			expected, err := cdc.Encode(nil, codec.FungibleTokenPacketData{
 				Denom:    jsondata.Denom,
 				Amount:   amount,
-				Sender:   jsondata.Sender,
-				Receiver: common.HexToAddress(jsondata.Receiver),
-				Memo:     jsondata.Memo,
+				Sender:   sender,
+				Receiver: receiver,
+				Memo:     []byte(jsondata.Memo),
 			})
 			require.NoError(t, err, "can't call test contract 'codec'")
 
