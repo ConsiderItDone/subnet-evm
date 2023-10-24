@@ -15,6 +15,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	cosmostypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/std"
+	transfertypes "github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
 	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
 	connectiontypes "github.com/cosmos/ibc-go/v7/modules/core/03-connection/types"
 	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
@@ -377,14 +378,20 @@ func RunTestIbcChannelOpenInit(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	path.SetChannelOrdered()
+	path.EndpointA.ChannelConfig.PortID = ibctesting.TransferPort
+	path.EndpointA.ChannelConfig.Order = channeltypes.UNORDERED
+	path.EndpointA.ChannelConfig.Version = transfertypes.Version
 
-	counterparty := channeltypes.NewCounterparty(ibctesting.MockPort, ibctesting.FirstChannelID)
-	channel := channeltypes.NewChannel(channeltypes.INIT, channeltypes.ORDERED, counterparty, []string{path.EndpointB.ConnectionID}, path.EndpointA.ChannelConfig.Version)
+	path.EndpointB.ChannelConfig.PortID = ibctesting.TransferPort
+	path.EndpointB.ChannelConfig.Order = channeltypes.UNORDERED
+	path.EndpointB.ChannelConfig.Version = transfertypes.Version
+
+	counterparty := channeltypes.NewCounterparty(ibctesting.TransferPort, ibctesting.FirstChannelID)
+	channel := channeltypes.NewChannel(channeltypes.INIT, channeltypes.UNORDERED, counterparty, []string{path.EndpointB.ConnectionID}, path.EndpointA.ChannelConfig.Version)
 	channelByte, err := marshaler.Marshal(&channel)
 	require.NoError(t, err)
 
-	tx, err := ibcContract.ChanOpenInit(auth, path.EndpointA.ChannelConfig.PortID, channelByte)
+	tx, err := ibcContract.ChanOpenInit(auth, ibctesting.TransferPort, channelByte)
 	require.NoError(t, err)
 	_, err = waitForReceiptAndGet(ctx, ethClient, tx)
 	require.NoError(t, err)
@@ -505,17 +512,22 @@ func RunTestIbcRecvPacket(t *testing.T) {
 	proof, proofHeight := path.EndpointB.QueryProof(packetKey)
 	spew.Dump(proof, proofHeight)
 
-	bindTx, err := ics20Transferer.BindPort(auth, ibc.ContractAddress, ibctesting.MockPort)
+	bindTx, err := ics20Transferer.BindPort(auth, ibc.ContractAddress, ibctesting.TransferPort)
 	require.NoError(t, err)
 	_, err = waitForReceiptAndGet(ctx, ethClient, bindTx)
 	require.NoError(t, err)
 
-	_, err = ibcContract.RecvPacket(auth, contractBind.IIBCMsgRecvPacket{
+	setEscrowAddrTx, err := ics20Transferer.SetChannelEscrowAddresses(auth, path.EndpointA.ChannelID, auth.From)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, setEscrowAddrTx)
+	require.NoError(t, err)
+
+	recvTx, err := ibcContract.RecvPacket(auth, contractBind.IIBCMsgRecvPacket{
 		Packet: contractBind.Packet{
 			Sequence:           big.NewInt(int64(sequence)),
 			SourcePort:         path.EndpointA.ChannelConfig.PortID,
 			SourceChannel:      path.EndpointA.ChannelID,
-			DestinationPort:    path.EndpointB.ChannelConfig.PortID,
+			DestinationPort:    ibctesting.TransferPort,
 			DestinationChannel: path.EndpointB.ChannelID,
 			Data:               mintFungibleTokenPacketData,
 			TimeoutHeight: contractBind.Height{
@@ -532,6 +544,17 @@ func RunTestIbcRecvPacket(t *testing.T) {
 		Signer: "",
 	})
 	require.NoError(t, err)
+
+	re, err := waitForReceiptAndGet(ctx, ethClient, recvTx)
+	require.NoError(t, err)
+	require.Equal(t, len(re.Logs), 2)
+
+	transferlog, err := ics20Bank.Ics20bankFilterer.ParseTransfer(*re.Logs[1])
+	require.NoError(t, err)
+	assert.Equal(t, common.Address{}, transferlog.From)
+	assert.Equal(t, auth.From, transferlog.To)
+	assert.Equal(t, "transfer/channel-0/USDT", transferlog.Path)
+	assert.Equal(t, big.NewInt(1000), transferlog.Value)
 }
 
 func RunTestIbcAckPacket(t *testing.T) {

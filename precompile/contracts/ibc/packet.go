@@ -228,7 +228,8 @@ func recvPacket(accessibleState contract.AccessibleState, caller common.Address,
 	}
 
 	ack := channeltypes.NewResultAcknowledgement([]byte{byte(1)})
-	_, remainingGas, err = accessibleState.CallFromPrecompile(ContractAddress, recvAddr, data, remainingGas, big.NewInt(0))
+	// ToDo: who mush gas do we need? now it is hardcoded as 100k
+	_, remainingGas, err = accessibleState.CallFromPrecompile(ContractAddress, recvAddr, data, 100000, big.NewInt(0))
 	if err != nil {
 		topics, data, err := IBCABI.PackEvent(GeneratedAcknowledgementErrorIdentifier.RawName,
 			inputStruct.Packet.Data,
