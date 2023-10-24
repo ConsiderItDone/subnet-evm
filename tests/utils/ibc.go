@@ -524,7 +524,6 @@ func RunTestIbcRecvPacket(t *testing.T) {
 	_, err = waitForReceiptAndGet(ctx, ethClient, setEscrowAddrTx)
 	require.NoError(t, err)
 
-	auth.GasLimit = 200000
 	recvTx, err := ibcContract.RecvPacket(auth, contractBind.IIBCMsgRecvPacket{
 		Packet: contractBind.Packet{
 			Sequence:           big.NewInt(int64(sequence)),
@@ -698,7 +697,6 @@ func RunTestIbcAckPacket(t *testing.T) {
 	}
 	require.Equal(t, denometrace.Path, "transfer/channel-0")
 	require.Equal(t, denometrace.BaseDenom, "USDT")
-	
 
 	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.UpdateClient)
 
