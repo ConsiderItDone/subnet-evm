@@ -524,6 +524,7 @@ func RunTestIbcRecvPacket(t *testing.T) {
 	_, err = waitForReceiptAndGet(ctx, ethClient, setEscrowAddrTx)
 	require.NoError(t, err)
 
+	auth.GasLimit = 200000
 	recvTx, err := ibcContract.RecvPacket(auth, contractBind.IIBCMsgRecvPacket{
 		Packet: contractBind.Packet{
 			Sequence:           big.NewInt(int64(sequence)),
