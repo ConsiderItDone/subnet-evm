@@ -510,7 +510,6 @@ func RunTestIbcRecvPacket(t *testing.T) {
 
 	packetKey := host.PacketCommitmentKey(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 	proof, proofHeight := path.EndpointB.QueryProof(packetKey)
-	spew.Dump(proof, proofHeight)
 
 	bindTx, err := ics20Transferer.BindPort(auth, ibc.ContractAddress, ibctesting.TransferPort)
 	require.NoError(t, err)
