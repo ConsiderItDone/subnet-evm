@@ -424,7 +424,7 @@ func PackAcknowledgement(inputStruct IIBCMsgAcknowledgement) ([]byte, error) {
 }
 
 func acknowledgement(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
-	if remainingGas, err = contract.DeductGas(suppliedGas, TimeoutOnCloseGasCost); err != nil {
+	if remainingGas, err = contract.DeductGas(suppliedGas, AcknowledgementGasCost); err != nil {
 		return nil, 0, err
 	}
 	if readOnly {
