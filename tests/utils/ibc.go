@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"math/rand"
 	"os"
 	"testing"
 	"time"
@@ -559,13 +558,13 @@ func RunTestIbcRecvPacket(t *testing.T) {
 }
 
 func RunTestIbcAckPacket(t *testing.T) {
-	amount := big.NewInt(int64(rand.Uint64()))
+	amount := big.NewInt(1000)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	connectionKey := host.ConnectionKey(path.EndpointB.ConnectionID)
-	proof, proofHeight := chainB.QueryProof(connectionKey)
+	packetKey := host.PacketAcknowledgementKey(path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, 1)
+	proof, proofHeight := path.EndpointB.QueryProof(packetKey)
 
 	randomAddr, err := getRandomAddr()
 	require.NoError(t, err)
@@ -573,7 +572,7 @@ func RunTestIbcAckPacket(t *testing.T) {
 	jsonTransferFungibleTokenPacketData, err := json.Marshal(ics20.FungibleTokenPacketData{
 		Denom:    "transfer/channel-0/USDT",
 		Amount:   amount.String(),
-		Sender:   randomAddr.Hex(),
+		Sender:   common.Address{}.Hex(),
 		Receiver: auth.From.Hex(),
 		Memo:     "some memo",
 	})
@@ -586,10 +585,10 @@ func RunTestIbcAckPacket(t *testing.T) {
 		auth,
 		contractBind.Packet{
 			Sequence:           big.NewInt(1),
-			SourcePort:         "transfer",
-			SourceChannel:      "channel-0",
-			DestinationPort:    "transfer",
-			DestinationChannel: "channel-0",
+			SourcePort:         path.EndpointA.ChannelConfig.PortID,
+			SourceChannel:      path.EndpointA.ChannelID,
+			DestinationPort:    ibctesting.TransferPort,
+			DestinationChannel: path.EndpointB.ChannelID,
 			Data:               transferFungibleTokenPacketData,
 			TimeoutHeight: contractBind.Height{
 				RevisionNumber: big.NewInt(1000),
@@ -597,7 +596,7 @@ func RunTestIbcAckPacket(t *testing.T) {
 			},
 			TimeoutTimestamp: big.NewInt(time.Now().Unix() + 10000),
 		},
-		common.FromHex("0x00"),
+		[]byte{0x00},
 		proof,
 		contractBind.Height{
 			RevisionNumber: big.NewInt(int64(proofHeight.RevisionNumber)),
