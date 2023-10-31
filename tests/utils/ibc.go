@@ -557,6 +557,55 @@ func RunTestIbcRecvPacket(t *testing.T) {
 	assert.Equal(t, big.NewInt(1000), transferlog.Value)
 }
 
+func RunTestIbcSendPacket(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	mintFungibleTokenPacketData, err := json.Marshal(ics20.FungibleTokenPacketData{
+		Denom:    "USDT",
+		Amount:   "1000",
+		Sender:   common.Address{}.Hex(),
+		Receiver: auth.From.Hex(),
+		Memo:     "some memo",
+	})
+	require.NoError(t, err)
+
+	_, err = path.EndpointA.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, mintFungibleTokenPacketData)
+	require.NoError(t, err)
+	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, nil)
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.UpdateClient)
+
+	bindTx, err := ics20Transferer.BindPort(auth, ibc.ContractAddress, ibctesting.TransferPort)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, bindTx)
+	require.NoError(t, err)
+
+	setEscrowAddrTx, err := ics20Transferer.SetChannelEscrowAddresses(auth, path.EndpointB.ChannelID, auth.From)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, setEscrowAddrTx)
+	require.NoError(t, err)
+
+	auth.GasLimit = 200000
+
+	recvTx, err := ibcContract.SendPacket(auth,
+		big.NewInt(int64(0)),
+		path.EndpointA.ChannelConfig.PortID,
+		path.EndpointA.ChannelID,
+		contractBind.Height{
+			RevisionNumber: new(big.Int).SetUint64(defaultTimeoutHeight.RevisionNumber),
+			RevisionHeight: new(big.Int).SetUint64(defaultTimeoutHeight.RevisionHeight),
+		},
+		big.NewInt(int64(disabledTimeoutTimestamp)),
+		mintFungibleTokenPacketData)
+
+	auth.GasLimit = 0
+	require.NoError(t, err)
+
+	re, err := waitForReceiptAndGet(ctx, ethClient, recvTx)
+	require.NoError(t, err)
+	require.Equal(t, len(re.Logs), 1)
+}
+
 func RunTestIbcAckPacket(t *testing.T) {
 	amount := big.NewInt(1000)
 
