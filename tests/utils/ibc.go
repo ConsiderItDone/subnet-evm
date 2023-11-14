@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"crypto/ecdsa"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -705,6 +706,47 @@ func RunTestIbcAckPacket(t *testing.T) {
 
 	packetKey := host.PacketAcknowledgementKey(testPort, path.EndpointB.ChannelID, sequence)
 	proof, proofHeight := path.EndpointB.QueryProof(packetKey)
+
+	auth.GasLimit = 200000
+	recvTx, err := ibcContract.SendPacket(auth,
+		big.NewInt(int64(0)),
+		ibctesting.TransferPort,
+		path.EndpointA.ChannelID,
+		contractBind.Height{
+			RevisionNumber: new(big.Int).SetUint64(defaultTimeoutHeight.RevisionNumber),
+			RevisionHeight: new(big.Int).SetUint64(defaultTimeoutHeight.RevisionHeight),
+		},
+		big.NewInt(int64(disabledTimeoutTimestamp)),
+		mintFungibleTokenPacketData)
+
+	auth.GasLimit = 0
+	require.NoError(t, err)
+	re, err := waitForReceiptAndGet(ctx, ethClient, recvTx)
+	require.NoError(t, err)
+	require.Equal(t, len(re.Logs), 1)
+
+	err = path.EndpointB.RecvPacket(channeltypes.Packet{
+		Sequence:           sequence,
+		SourcePort:         ibctesting.TransferPort,
+		SourceChannel:      path.EndpointA.ChannelID,
+		DestinationPort:    ibctesting.TransferPort,
+		DestinationChannel: path.EndpointB.ChannelID,
+		TimeoutHeight: clienttypes.Height{
+			RevisionNumber: defaultTimeoutHeight.RevisionNumber,
+			RevisionHeight: defaultTimeoutHeight.RevisionHeight,
+		},
+		TimeoutTimestamp: disabledTimeoutTimestamp,
+		Data:             mintFungibleTokenPacketData,
+	})
+	require.NoError(t, err)
+
+	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.UpdateClient)
+
+	packetKey := host.PacketAcknowledgementKey(ibctesting.TransferPort, path.EndpointB.ChannelID, sequence)
+	proof, proofHeight := path.EndpointB.QueryProof(packetKey)
+
+	acknowledgement := channeltypes.NewResultAcknowledgement([]byte{byte(1)})
+	ack := sha256.Sum256(acknowledgement.Acknowledgement())
 
 	packetAckTx, err := ibcContract.Acknowledgement(
 		auth,
