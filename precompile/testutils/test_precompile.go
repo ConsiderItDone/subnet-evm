@@ -9,13 +9,14 @@ import (
 	"time"
 
 	"github.com/ava-labs/avalanchego/snow"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+
 	"github.com/ava-labs/subnet-evm/commontype"
 	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/ava-labs/subnet-evm/precompile/modules"
 	"github.com/ava-labs/subnet-evm/precompile/precompileconfig"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 )
 
 // PrecompileTest is a test case for a precompile
@@ -125,7 +126,7 @@ func (test PrecompileTest) setup(t testing.TB, module modules.Module, state cont
 	}
 
 	return PrecompileRunparams{
-		AccessibleState: accesibleState,
+		AccessibleState: accessibleState,
 		Caller:          test.Caller,
 		ContractAddress: contractAddress,
 		Input:           input,
@@ -195,5 +196,15 @@ func (test PrecompileTest) Bench(b *testing.B, module modules.Module, state cont
 
 	if test.AfterHook != nil {
 		test.AfterHook(b, state)
+	}
+}
+
+func RunPrecompileTests(t *testing.T, module modules.Module, newStateDB func(t testing.TB) contract.StateDB, contractTests map[string]PrecompileTest) {
+	t.Helper()
+
+	for name, test := range contractTests {
+		t.Run(name, func(t *testing.T) {
+			test.Run(t, module, newStateDB(t))
+		})
 	}
 }
