@@ -41,12 +41,13 @@ import (
 )
 
 var bindTests = []struct {
-	name     string
-	contract string
-	abi      string
-	imports  string
-	tester   string
-	errMsg   string
+	name            string
+	contract        string
+	abi             string
+	imports         string
+	tester          string
+	errMsg          string
+	expectAllowlist bool
 }{
 	{
 		"AnonOutputChecker",
@@ -59,6 +60,7 @@ var bindTests = []struct {
 		"",
 		"",
 		"ABI outputs for anonOutput require a name to generate the precompile binding, re-generate the ABI from a Solidity source file with all named outputs",
+		false,
 	},
 	{
 		"AnonOutputsChecker",
@@ -71,6 +73,7 @@ var bindTests = []struct {
 		"",
 		"",
 		"ABI outputs for anonOutputs require a name to generate the precompile binding, re-generate the ABI from a Solidity source file with all named outputs",
+		false,
 	},
 	{
 		"MixedOutputsChecker",
@@ -83,6 +86,7 @@ var bindTests = []struct {
 		"",
 		"",
 		"ABI outputs for mixedOutputs require a name to generate the precompile binding, re-generate the ABI from a Solidity source file with all named outputs",
+		false,
 	},
 	// Test that module is generated correctly
 	{
@@ -92,6 +96,7 @@ var bindTests = []struct {
 		"",
 		"",
 		"no ABI methods found",
+		false,
 	},
 	// Test that named and anonymous inputs are handled correctly
 	{
@@ -129,6 +134,7 @@ var bindTests = []struct {
 		require.Equal(t, unpackedInputStruct, testInputStruct)
 		`,
 		"",
+		false,
 	},
 	// Test that named and anonymous outputs are handled correctly
 	{
@@ -162,6 +168,7 @@ var bindTests = []struct {
 			require.Equal(t, testNamedOutputs, unpackedNamedOutputs)
 			`,
 		"",
+		false,
 	},
 	{
 		`Tupler`,
@@ -184,6 +191,7 @@ var bindTests = []struct {
 			require.Equal(t, testOutput, unpackedOutput)
 		`,
 		"",
+		false,
 	},
 	{
 		`Slicer`,
@@ -259,6 +267,7 @@ var bindTests = []struct {
 			require.Equal(t, testArgs4, unpackedInput4)
 		`,
 		"",
+		false,
 	},
 	{
 		`Fallback`,
@@ -285,6 +294,7 @@ var bindTests = []struct {
 			require.Equal(t, big.NewInt(5), unpackedInput)
 			`,
 		"",
+		false,
 	},
 	{
 		`Structs`,
@@ -319,6 +329,7 @@ var bindTests = []struct {
 			require.Equal(t, testOutput, unpackedInput)
 			`,
 		"",
+		false,
 	},
 	{
 		`Underscorer`,
@@ -344,6 +355,7 @@ var bindTests = []struct {
 			require.Equal(t, testOutput, unpackedInput)
 		`,
 		"",
+		false,
 	},
 	{
 		`OutputCollision`,
@@ -355,6 +367,7 @@ var bindTests = []struct {
 		"",
 		"",
 		"normalized output name is duplicated",
+		false,
 	},
 
 	{
@@ -367,6 +380,7 @@ var bindTests = []struct {
 		`[{"inputs":[{"internalType":"int256","name":"_res","type":"int256"},{"internalType":"int256","name":"Res","type":"int256"}],"name":"LowerUpperCollision","outputs":[],"stateMutability":"nonpayable","type":"function"}]`, "",
 		"",
 		"normalized input name is duplicated",
+		false,
 	},
 	{
 		`DeeplyNestedArray`,
@@ -409,6 +423,7 @@ var bindTests = []struct {
 			require.Equal(t, testArr, unpackedOutput)
 		`,
 		"",
+		false,
 	},
 	{
 		"RangeKeyword",
@@ -421,6 +436,7 @@ var bindTests = []struct {
 		"",
 		"",
 		"input name func is a keyword",
+		false,
 	},
 	{
 		`HelloWorld`,
@@ -432,8 +448,13 @@ var bindTests = []struct {
 			function setGreeting(string calldata response) external;
 		}
 		`,
-		`[{"inputs":[{"internalType":"address","name":"addr","type":"address"}],"name":"readAllowList","outputs":[{"internalType":"uint256","name":"role","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"sayHello","outputs":[{"internalType":"string","name":"result","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"addr","type":"address"}],"name":"setAdmin","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"addr","type":"address"}],"name":"setEnabled","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"string","name":"response","type":"string"}],"name":"setGreeting","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"addr","type":"address"}],"name":"setNone","outputs":[],"stateMutability":"nonpayable","type":"function"}]`,
-		`"github.com/stretchr/testify/require"`,
+		`[{"inputs":[{"internalType":"address","name":"addr","type":"address"}],"name":"readAllowList","outputs":[{"internalType":"uint256","name":"role","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"sayHello","outputs":[{"internalType":"string","name":"result","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"addr","type":"address"}],"name":"setAdmin","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"addr","type":"address"}],"name":"setManager","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"addr","type":"address"}],"name":"setEnabled","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"string","name":"response","type":"string"}],"name":"setGreeting","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"addr","type":"address"}],"name":"setNone","outputs":[],"stateMutability":"nonpayable","type":"function"}]`,
+		`"github.com/stretchr/testify/require"
+		 "math/big"
+		 "github.com/ethereum/go-ethereum/common"
+		 "github.com/ava-labs/subnet-evm/core/state"
+		 "github.com/ava-labs/subnet-evm/precompile/allowlist"
+		`,
 		`
 			testGreeting := "test"
 			packedGreeting, err := PackSetGreeting(testGreeting)
@@ -443,8 +464,16 @@ var bindTests = []struct {
 			unpackedGreeting, err := UnpackSetGreetingInput(packedGreeting)
 			require.NoError(t, err)
 			require.Equal(t, testGreeting, unpackedGreeting)
+
+			// test that the allow list is generated correctly
+			stateDB := state.NewTestStateDB(t)
+			address := common.BigToAddress(big.NewInt(1))
+			SetHelloWorldAllowListStatus(stateDB, address, allowlist.EnabledRole)
+			role := GetHelloWorldAllowListStatus(stateDB, address)
+			require.Equal(t, role, allowlist.EnabledRole)
 		`,
 		"",
+		true,
 	},
 	{
 		`HelloWorldNoAL`,
@@ -456,7 +485,8 @@ var bindTests = []struct {
 			function setGreeting(string calldata response) external;
 		}
 		`,
-		`[{"inputs":[],"name":"sayHello","outputs":[{"internalType":"string","name":"result","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"string","name":"response","type":"string"}],"name":"setGreeting","outputs":[],"stateMutability":"nonpayable","type":"function"}]`,
+		// This ABI does not contain readAllowlist and setEnabled.
+		`[{"inputs":[],"name":"sayHello","outputs":[{"internalType":"string","name":"result","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"addr","type":"address"}],"name":"setAdmin","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"string","name":"response","type":"string"}],"name":"setGreeting","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"addr","type":"address"}],"name":"setNone","outputs":[],"stateMutability":"nonpayable","type":"function"}]`,
 		`"github.com/stretchr/testify/require"`,
 		`
 			testGreeting := "test"
@@ -469,6 +499,7 @@ var bindTests = []struct {
 			require.Equal(t, testGreeting, unpackedGreeting)
 		`,
 		"",
+		false,
 	},
 }
 
@@ -483,7 +514,7 @@ func TestPrecompileBind(t *testing.T) {
 	// Create a temporary workspace for the test suite
 	ws := t.TempDir()
 
-	pkg := filepath.Join(ws, "bindtest")
+	pkg := filepath.Join(ws, "precompilebindtest")
 	if err := os.MkdirAll(pkg, 0o700); err != nil {
 		t.Fatalf("failed to create package: %v", err)
 	}
@@ -501,6 +532,11 @@ func TestPrecompileBind(t *testing.T) {
 			if err != nil {
 				t.Fatalf("test %d: failed to generate binding: %v", i, err)
 			}
+			if tt.expectAllowlist {
+				require.Contains(t, bindedFiles.Contract, "allowlist.CreateAllowListFunctions(", "generated contract does not contain AllowListFunctions")
+			} else {
+				require.NotContains(t, bindedFiles.Contract, "allowlist.CreateAllowListFunctions(", "generated contract contains AllowListFunctions")
+			}
 			precompilePath := filepath.Join(pkg, tt.name)
 			if err := os.MkdirAll(precompilePath, 0o700); err != nil {
 				t.Fatalf("failed to create package: %v", err)
@@ -516,7 +552,7 @@ func TestPrecompileBind(t *testing.T) {
 			if err = os.WriteFile(filepath.Join(precompilePath, "contract.go"), []byte(bindedFiles.Contract), 0o600); err != nil {
 				t.Fatalf("test %d: failed to write binding: %v", i, err)
 			}
-			if err = os.WriteFile(filepath.Join(precompilePath, "contract_test.go"), []byte(bindedFiles.ConfigTest), 0o600); err != nil {
+			if err = os.WriteFile(filepath.Join(precompilePath, "config_test.go"), []byte(bindedFiles.ConfigTest), 0o600); err != nil {
 				t.Fatalf("test %d: failed to write binding: %v", i, err)
 			}
 			if err = os.WriteFile(filepath.Join(precompilePath, "contract_test.go"), []byte(bindedFiles.ContractTest), 0o600); err != nil {
@@ -545,7 +581,7 @@ func TestPrecompileBind(t *testing.T) {
 		})
 	}
 
-	moder := exec.Command(gocmd, "mod", "init", "bindtest")
+	moder := exec.Command(gocmd, "mod", "init", "precompilebindtest")
 	moder.Dir = pkg
 	if out, err := moder.CombinedOutput(); err != nil {
 		t.Fatalf("failed to convert binding test to modules: %v\n%s", err, out)
@@ -556,7 +592,7 @@ func TestPrecompileBind(t *testing.T) {
 	if out, err := replacer.CombinedOutput(); err != nil {
 		t.Fatalf("failed to replace binding test dependency to current source tree: %v\n%s", err, out)
 	}
-	tidier := exec.Command(gocmd, "mod", "tidy", "-compat=1.19")
+	tidier := exec.Command(gocmd, "mod", "tidy", "-compat=1.20")
 	tidier.Dir = pkg
 	if out, err := tidier.CombinedOutput(); err != nil {
 		t.Fatalf("failed to tidy Go module file: %v\n%s", err, out)

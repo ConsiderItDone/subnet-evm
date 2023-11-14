@@ -127,6 +127,7 @@ func checkBlockChainState(
 	if err != nil {
 		t.Fatalf("Failed to create new blockchain instance: %s", err)
 	}
+	defer newBlockChain.Stop()
 
 	for i := uint64(1); i <= lastAcceptedBlock.NumberU64(); i++ {
 		block := bc.GetBlockByNumber(i)
@@ -1472,8 +1473,8 @@ func TestStatefulPrecompiles(t *testing.T, create func(db ethdb.Database, gspec 
 	config := *params.TestChainConfig
 	// Set all of the required config parameters
 	config.GenesisPrecompiles = params.Precompiles{
-		deployerallowlist.ConfigKey: deployerallowlist.NewConfig(utils.NewUint64(0), []common.Address{addr1}, nil),
-		feemanager.ConfigKey:        feemanager.NewConfig(utils.NewUint64(0), []common.Address{addr1}, nil, nil),
+		deployerallowlist.ConfigKey: deployerallowlist.NewConfig(utils.NewUint64(0), []common.Address{addr1}, nil, nil),
+		feemanager.ConfigKey:        feemanager.NewConfig(utils.NewUint64(0), []common.Address{addr1}, nil, nil, nil),
 	}
 	gspec := &Genesis{
 		Config: &config,

@@ -32,7 +32,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ava-labs/subnet-evm/core/rawdb"
@@ -635,7 +634,7 @@ func diffToDisk(bottom *diffLayer) (*diskLayer, bool, error) {
 			// Ensure we don't delete too much data blindly (contract can be
 			// huge). It's ok to flush, the root will go missing in case of a
 			// crash and we'll detect and regenerate the snapshot.
-			if batch.ValueSize() > ethdb.IdealBatchSize {
+			if batch.ValueSize() > 64*1024*1024 {
 				if err := batch.Write(); err != nil {
 					log.Crit("Failed to write storage deletions", "err", err)
 				}
@@ -661,7 +660,7 @@ func diffToDisk(bottom *diffLayer) (*diskLayer, bool, error) {
 		// Ensure we don't write too much data blindly. It's ok to flush, the
 		// root will go missing in case of a crash and we'll detect and regen
 		// the snapshot.
-		if batch.ValueSize() > ethdb.IdealBatchSize {
+		if batch.ValueSize() > 64*1024*1024 {
 			if err := batch.Write(); err != nil {
 				log.Crit("Failed to write storage deletions", "err", err)
 			}
@@ -772,7 +771,7 @@ func (t *Tree) Rebuild(blockHash, root common.Hash) {
 		case *diffLayer:
 			// If the layer is a simple diff, simply mark as stale
 			layer.lock.Lock()
-			atomic.StoreUint32(&layer.stale, 1)
+			layer.stale.Store(true)
 			layer.lock.Unlock()
 
 		default:

@@ -4,6 +4,7 @@
 package evm
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -57,20 +58,26 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 		return fmt.Errorf("invalid mix digest: %v", ethHeader.MixDigest)
 	}
 
-	if rules.IsSubnetEVM {
-		expectedExtraDataSize := params.ExtraDataSize
-		if headerExtraDataSize := len(ethHeader.Extra); headerExtraDataSize != expectedExtraDataSize {
+	switch {
+	case rules.IsDUpgrade:
+		if len(ethHeader.Extra) < params.DynamicFeeExtraDataSize {
 			return fmt.Errorf(
-				"expected header ExtraData to be %d but got %d",
-				expectedExtraDataSize, headerExtraDataSize,
+				"expected header ExtraData to be len >= %d but got %d",
+				params.DynamicFeeExtraDataSize, len(ethHeader.Extra),
 			)
 		}
-	} else {
-		headerExtraDataSize := uint64(len(ethHeader.Extra))
-		if headerExtraDataSize > params.MaximumExtraDataSize {
+	case rules.IsSubnetEVM:
+		if len(ethHeader.Extra) != params.DynamicFeeExtraDataSize {
+			return fmt.Errorf(
+				"expected header ExtraData to be len %d but got %d",
+				params.DynamicFeeExtraDataSize, len(ethHeader.Extra),
+			)
+		}
+	default:
+		if len(ethHeader.Extra) > int(params.MaximumExtraDataSize) {
 			return fmt.Errorf(
 				"expected header ExtraData to be <= %d but got %d",
-				params.MaximumExtraDataSize, headerExtraDataSize,
+				params.MaximumExtraDataSize, len(ethHeader.Extra),
 			)
 		}
 	}
@@ -85,7 +92,7 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 	}
 
 	// Check that the tx hash in the header matches the body
-	txsHash := types.DeriveSha(b.ethBlock.Transactions(), new(trie.Trie))
+	txsHash := types.DeriveSha(b.ethBlock.Transactions(), trie.NewStackTrie(nil))
 	if txsHash != ethHeader.TxHash {
 		return fmt.Errorf("invalid txs hash %v does not match calculated txs hash %v", ethHeader.TxHash, txsHash)
 	}
@@ -130,5 +137,14 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 			return fmt.Errorf("too large blockGasCost: %d", ethHeader.BlockGasCost)
 		}
 	}
+
+	// Verify the existence / non-existence of excessDataGas
+	if rules.IsCancun && ethHeader.ExcessDataGas == nil {
+		return errors.New("missing excessDataGas")
+	}
+	if !rules.IsCancun && ethHeader.ExcessDataGas != nil {
+		return fmt.Errorf("invalid excessDataGas: have %d, expected nil", ethHeader.ExcessDataGas)
+	}
+
 	return nil
 }

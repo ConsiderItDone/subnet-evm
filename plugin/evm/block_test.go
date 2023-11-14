@@ -14,8 +14,8 @@ import (
 	"github.com/ava-labs/subnet-evm/precompile/precompileconfig"
 	"github.com/ava-labs/subnet-evm/trie"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 )
 
 func TestHandlePrecompileAccept(t *testing.T) {
@@ -69,6 +69,8 @@ func TestHandlePrecompileAccept(t *testing.T) {
 	gomock.InOrder(
 		mockAccepter.EXPECT().Accept(
 			gomock.Not(gomock.Nil()),                // acceptCtx
+			ethBlock.Hash(),                         // blockHash
+			ethBlock.NumberU64(),                    // blockNumber
 			ethBlock.Transactions()[txIndex].Hash(), // txHash
 			0,                                       // logIndex
 			receipt.Logs[0].Topics,                  // topics
@@ -76,6 +78,8 @@ func TestHandlePrecompileAccept(t *testing.T) {
 		),
 		mockAccepter.EXPECT().Accept(
 			gomock.Not(gomock.Nil()),                // acceptCtx
+			ethBlock.Hash(),                         // blockHash
+			ethBlock.NumberU64(),                    // blockNumber
 			ethBlock.Transactions()[txIndex].Hash(), // txHash
 			2,                                       // logIndex
 			receipt.Logs[2].Topics,                  // topics

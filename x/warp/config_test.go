@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/subnet-evm/precompile/precompileconfig"
 	"github.com/ava-labs/subnet-evm/precompile/testutils"
 	"github.com/ava-labs/subnet-evm/utils"
+	"go.uber.org/mock/gomock"
 )
 
 func TestVerify(t *testing.T) {
@@ -32,6 +33,15 @@ func TestVerify(t *testing.T) {
 		"valid quorum numerator 1 more than minimum": {
 			Config: NewConfig(utils.NewUint64(3), params.WarpQuorumNumeratorMinimum+1),
 		},
+		"invalid cannot activated before DUpgrade activation": {
+			Config: NewConfig(utils.NewUint64(3), 0),
+			ChainConfig: func() precompileconfig.ChainConfig {
+				config := precompileconfig.NewMockChainConfig(gomock.NewController(t))
+				config.EXPECT().IsDUpgrade(gomock.Any()).Return(false)
+				return config
+			}(),
+			ExpectedError: errWarpCannotBeActivated.Error(),
+		},
 	}
 	testutils.RunVerifyTests(t, tests)
 }
@@ -46,7 +56,7 @@ func TestEqualWarpConfig(t *testing.T) {
 
 		"different type": {
 			Config:   NewDefaultConfig(utils.NewUint64(3)),
-			Other:    precompileconfig.NewNoopStatefulPrecompileConfig(),
+			Other:    precompileconfig.NewMockConfig(gomock.NewController(t)),
 			Expected: false,
 		},
 

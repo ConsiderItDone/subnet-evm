@@ -41,6 +41,8 @@ import (
 	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/ava-labs/subnet-evm/precompile/contracts/deployerallowlist"
 	"github.com/ava-labs/subnet-evm/precompile/modules"
+	"github.com/ava-labs/subnet-evm/precompile/precompileconfig"
+	"github.com/ava-labs/subnet-evm/predicate"
 	"github.com/ava-labs/subnet-evm/vmerrs"
 )
 
@@ -111,6 +113,9 @@ type BlockContext struct {
 	Transfer TransferFunc
 	// GetHash returns the hash corresponding to n
 	GetHash GetHashFunc
+	// PredicateResults are the results of predicate verification available throughout the EVM's execution.
+	// PredicateResults may be nil if it is not encoded in the block's header.
+	PredicateResults *predicate.Results
 
 	// Block information
 	Coinbase    common.Address // Provides information for COINBASE
@@ -127,6 +132,13 @@ func (b *BlockContext) Number() *big.Int {
 
 func (b *BlockContext) Timestamp() uint64 {
 	return b.Time
+}
+
+func (b *BlockContext) GetPredicateResults(txHash common.Hash, address common.Address) []byte {
+	if b.PredicateResults == nil {
+		return nil
+	}
+	return b.PredicateResults.GetResults(txHash, address)
 }
 
 // TxContext provides the EVM with information about a transaction.
@@ -166,8 +178,7 @@ type EVM struct {
 	// used throughout the execution of the tx.
 	interpreter *EVMInterpreter
 	// abort is used to abort the EVM calling operations
-	// NOTE: must be set atomically
-	abort int32
+	abort atomic.Bool
 	// callGasTemp holds the gas available for the current call. This is needed because the
 	// available gas is calculated in gasCall* according to the 63/64 rule and later
 	// applied in opCall*.
@@ -199,12 +210,12 @@ func (evm *EVM) Reset(txCtx TxContext, statedb StateDB) {
 // Cancel cancels any running EVM operation. This may be called concurrently and
 // it's safe to be called multiple times.
 func (evm *EVM) Cancel() {
-	atomic.StoreInt32(&evm.abort, 1)
+	evm.abort.Store(true)
 }
 
 // Cancelled returns true if Cancel has been called
 func (evm *EVM) Cancelled() bool {
-	return atomic.LoadInt32(&evm.abort) == 1
+	return evm.abort.Load()
 }
 
 // GetSnowContext returns the evm's snow.Context.
@@ -252,11 +263,12 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile := evm.precompile(addr)
+	debug := evm.Config.Tracer != nil
 
 	if !evm.StateDB.Exist(addr) {
 		if !isPrecompile && evm.chainRules.IsEIP158 && value.Sign() == 0 {
 			// Calling a non existing account, don't do anything, but ping the tracer
-			if evm.Config.Debug {
+			if debug {
 				if evm.depth == 0 {
 					evm.Config.Tracer.CaptureStart(evm, caller.Address(), addr, false, input, gas, value)
 					evm.Config.Tracer.CaptureEnd(ret, 0, nil)
@@ -272,7 +284,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	evm.Context.Transfer(evm.StateDB, caller.Address(), addr, value)
 
 	// Capture the tracer start/end events in debug mode
-	if evm.Config.Debug {
+	if debug {
 		if evm.depth == 0 {
 			evm.Config.Tracer.CaptureStart(evm, caller.Address(), addr, false, input, gas, value)
 			defer func(startGas uint64) { // Lazy evaluation of the parameters
@@ -347,10 +359,10 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, gas, vmerrs.ErrInsufficientBalance
 	}
-	var snapshot = evm.StateDB.Snapshot()
+	snapshot := evm.StateDB.Snapshot()
 
 	// Invoke tracer hooks that signal entering/exiting a call frame
-	if evm.Config.Debug {
+	if evm.Config.Tracer != nil {
 		evm.Config.Tracer.CaptureEnter(CALLCODE, caller.Address(), addr, input, gas, value)
 		defer func(startGas uint64) {
 			evm.Config.Tracer.CaptureExit(ret, startGas-gas, err)
@@ -388,10 +400,10 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, vmerrs.ErrDepth
 	}
-	var snapshot = evm.StateDB.Snapshot()
+	snapshot := evm.StateDB.Snapshot()
 
 	// Invoke tracer hooks that signal entering/exiting a call frame
-	if evm.Config.Debug {
+	if evm.Config.Tracer != nil {
 		// NOTE: caller must, at all times be a contract. It should never happen
 		// that caller is something other than a Contract.
 		parent := caller.(*Contract)
@@ -436,7 +448,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	// after all empty accounts were deleted, so this is not required. However, if we omit this,
 	// then certain tests start failing; stRevertTest/RevertPrecompiledTouchExactOOG.json.
 	// We could change this, but for now it's left for legacy reasons
-	var snapshot = evm.StateDB.Snapshot()
+	snapshot := evm.StateDB.Snapshot()
 
 	// We do an AddBalance of zero here, just in order to trigger a touch.
 	// This doesn't matter on Mainnet, where all empties are gone at the time of Byzantium,
@@ -445,7 +457,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	evm.StateDB.AddBalance(addr, big0)
 
 	// Invoke tracer hooks that signal entering/exiting a call frame
-	if evm.Config.Debug {
+	if evm.Config.Tracer != nil {
 		evm.Config.Tracer.CaptureEnter(STATICCALL, caller.Address(), addr, input, gas, nil)
 		defer func(startGas uint64) {
 			evm.Config.Tracer.CaptureExit(ret, startGas-gas, err)
@@ -544,7 +556,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	contract := NewContract(caller, AccountRef(address), value, gas)
 	contract.SetCodeOptionalHash(&address, codeAndHash)
 
-	if evm.Config.Debug {
+	if evm.Config.Tracer != nil {
 		if evm.depth == 0 {
 			evm.Config.Tracer.CaptureStart(evm, caller.Address(), address, true, codeAndHash.code, gas, value)
 		} else {
@@ -587,7 +599,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		}
 	}
 
-	if evm.Config.Debug {
+	if evm.Config.Tracer != nil {
 		if evm.depth == 0 {
 			evm.Config.Tracer.CaptureEnd(ret, gas-contract.Gas, err)
 		} else {
@@ -615,3 +627,6 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 
 // ChainConfig returns the environment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
+
+// GetChainConfig implements AccessibleState
+func (evm *EVM) GetChainConfig() precompileconfig.ChainConfig { return evm.chainConfig }

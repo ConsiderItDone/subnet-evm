@@ -4,7 +4,9 @@
 package evm
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -16,6 +18,7 @@ import (
 	"github.com/ava-labs/subnet-evm/core/types"
 	"github.com/ava-labs/subnet-evm/params"
 	"github.com/ava-labs/subnet-evm/precompile/precompileconfig"
+	"github.com/ava-labs/subnet-evm/predicate"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/choices"
@@ -101,7 +104,7 @@ func (b *Block) handlePrecompileAccept(rules *params.Rules, sharedMemoryWriter *
 	}
 
 	// Read receipts from disk
-	receipts := rawdb.ReadReceipts(b.vm.chaindb, b.ethBlock.Hash(), b.ethBlock.NumberU64(), b.vm.chainConfig)
+	receipts := rawdb.ReadReceipts(b.vm.chaindb, b.ethBlock.Hash(), b.ethBlock.NumberU64(), b.ethBlock.Time(), b.vm.chainConfig)
 	// If there are no receipts, ReadReceipts may be nil, so we check the length and confirm the ReceiptHash
 	// is empty to ensure that missing receipts results in an error on accept.
 	if len(receipts) == 0 && b.ethBlock.ReceiptHash() != types.EmptyRootHash {
@@ -118,7 +121,7 @@ func (b *Block) handlePrecompileAccept(rules *params.Rules, sharedMemoryWriter *
 			if !ok {
 				continue
 			}
-			if err := accepter.Accept(acceptCtx, log.TxHash, logIdx, log.Topics, log.Data); err != nil {
+			if err := accepter.Accept(acceptCtx, log.BlockHash, log.BlockNumber, log.TxHash, logIdx, log.Topics, log.Data); err != nil {
 				return err
 			}
 		}
@@ -171,19 +174,17 @@ func (b *Block) syntacticVerify() error {
 
 // Verify implements the snowman.Block interface
 func (b *Block) Verify(context.Context) error {
-	return b.verify(&precompileconfig.ProposerPredicateContext{
-		PrecompilePredicateContext: precompileconfig.PrecompilePredicateContext{
-			SnowCtx: b.vm.ctx,
-		},
+	return b.verify(&precompileconfig.PredicateContext{
+		SnowCtx:            b.vm.ctx,
 		ProposerVMBlockCtx: nil,
 	}, true)
 }
 
 // ShouldVerifyWithContext implements the block.WithVerifyContext interface
 func (b *Block) ShouldVerifyWithContext(context.Context) (bool, error) {
-	proposerPredicates := b.vm.chainConfig.AvalancheRules(b.ethBlock.Number(), b.ethBlock.Timestamp()).ProposerPredicates
-	// Short circuit early if there are no proposer predicates to verify
-	if len(proposerPredicates) == 0 {
+	predicates := b.vm.chainConfig.AvalancheRules(b.ethBlock.Number(), b.ethBlock.Timestamp()).Predicaters
+	// Short circuit early if there are no predicates to verify
+	if len(predicates) == 0 {
 		return false, nil
 	}
 
@@ -191,7 +192,7 @@ func (b *Block) ShouldVerifyWithContext(context.Context) (bool, error) {
 	// the ProposerVMBlockCtx.
 	for _, tx := range b.ethBlock.Transactions() {
 		for _, accessTuple := range tx.AccessList() {
-			if _, ok := proposerPredicates[accessTuple.Address]; ok {
+			if _, ok := predicates[accessTuple.Address]; ok {
 				log.Debug("Block verification requires proposerVM context", "block", b.ID(), "height", b.Height())
 				return true, nil
 			}
@@ -204,10 +205,8 @@ func (b *Block) ShouldVerifyWithContext(context.Context) (bool, error) {
 
 // VerifyWithContext implements the block.WithVerifyContext interface
 func (b *Block) VerifyWithContext(ctx context.Context, proposerVMBlockCtx *block.Context) error {
-	return b.verify(&precompileconfig.ProposerPredicateContext{
-		PrecompilePredicateContext: precompileconfig.PrecompilePredicateContext{
-			SnowCtx: b.vm.ctx,
-		},
+	return b.verify(&precompileconfig.PredicateContext{
+		SnowCtx:            b.vm.ctx,
 		ProposerVMBlockCtx: proposerVMBlockCtx,
 	}, true)
 }
@@ -215,7 +214,7 @@ func (b *Block) VerifyWithContext(ctx context.Context, proposerVMBlockCtx *block
 // Verify the block is valid.
 // Enforces that the predicates are valid within [predicateContext].
 // Writes the block details to disk and the state to the trie manager iff writes=true.
-func (b *Block) verify(predicateContext *precompileconfig.ProposerPredicateContext, writes bool) error {
+func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writes bool) error {
 	if predicateContext.ProposerVMBlockCtx != nil {
 		log.Debug("Verifying block with context", "block", b.ID(), "height", b.Height())
 	} else {
@@ -248,13 +247,36 @@ func (b *Block) verify(predicateContext *precompileconfig.ProposerPredicateConte
 }
 
 // verifyPredicates verifies the predicates in the block are valid according to predicateContext.
-func (b *Block) verifyPredicates(predicateContext *precompileconfig.ProposerPredicateContext) error {
+func (b *Block) verifyPredicates(predicateContext *precompileconfig.PredicateContext) error {
 	rules := b.vm.chainConfig.AvalancheRules(b.ethBlock.Number(), b.ethBlock.Timestamp())
 
+	switch {
+	case !rules.IsDUpgrade && rules.PredicatersExist():
+		return errors.New("cannot enable predicates before DUpgrade activation")
+	case !rules.IsDUpgrade:
+		return nil
+	}
+
+	predicateResults := predicate.NewResults()
 	for _, tx := range b.ethBlock.Transactions() {
-		if err := core.CheckPredicates(rules, predicateContext, tx); err != nil {
+		results, err := core.CheckPredicates(rules, predicateContext, tx)
+		if err != nil {
 			return err
 		}
+		predicateResults.SetTxResults(tx.Hash(), results)
+	}
+	// TODO: document required gas constraints to ensure marshalling predicate results does not error
+	predicateResultsBytes, err := predicateResults.Bytes()
+	if err != nil {
+		return fmt.Errorf("failed to marshal predicate results: %w", err)
+	}
+	extraData := b.ethBlock.Extra()
+	headerPredicateResultsBytes, ok := predicate.GetPredicateResultBytes(extraData)
+	if !ok {
+		return fmt.Errorf("failed to find predicate results in extra data: %x", extraData)
+	}
+	if !bytes.Equal(headerPredicateResultsBytes, predicateResultsBytes) {
+		return fmt.Errorf("%w (remote: %x local: %x)", errInvalidHeaderPredicateResults, headerPredicateResultsBytes, predicateResultsBytes)
 	}
 	return nil
 }

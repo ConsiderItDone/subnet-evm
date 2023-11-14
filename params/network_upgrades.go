@@ -4,7 +4,6 @@
 package params
 
 import (
-	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/subnet-evm/utils"
 )
 
@@ -23,6 +22,11 @@ var (
 		SubnetEVMTimestamp: utils.NewUint64(0),
 		// DUpgradeTimestamp: utils.NewUint64(0), // TODO: Uncomment and set this to the correct value
 	}
+
+	UnitTestNetworkUpgrades = MandatoryNetworkUpgrades{
+		SubnetEVMTimestamp: utils.NewUint64(0),
+		DUpgradeTimestamp:  utils.NewUint64(0),
+	}
 )
 
 // MandatoryNetworkUpgrades contains timestamps that enable mandatory network upgrades.
@@ -32,8 +36,12 @@ var (
 type MandatoryNetworkUpgrades struct {
 	// SubnetEVMTimestamp is a placeholder that activates Avalanche Upgrades prior to ApricotPhase6 (nil = no fork, 0 = already activated)
 	SubnetEVMTimestamp *uint64 `json:"subnetEVMTimestamp,omitempty"`
-	// DUpgrade activates the Shanghai upgrade from Ethereum. (nil = no fork, 0 = already activated)
+	// DUpgrade activates the Shanghai Execution Spec Upgrade from Ethereum (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/shanghai.md#included-eips)
+	// and Avalanche Warp Messaging. (nil = no fork, 0 = already activated)
+	// Note: EIP-4895 is excluded since withdrawals are not relevant to the Avalanche C-Chain or Subnets running the EVM.
 	DUpgradeTimestamp *uint64 `json:"dUpgradeTimestamp,omitempty"`
+	// Cancun activates the Cancun upgrade from Ethereum. (nil = no fork, 0 = already activated)
+	CancunTime *uint64 `json:"cancunTime,omitempty"`
 }
 
 func (m *MandatoryNetworkUpgrades) CheckMandatoryCompatible(newcfg *MandatoryNetworkUpgrades, time uint64) *ConfigCompatError {
@@ -43,6 +51,9 @@ func (m *MandatoryNetworkUpgrades) CheckMandatoryCompatible(newcfg *MandatoryNet
 	if isForkTimestampIncompatible(m.DUpgradeTimestamp, newcfg.DUpgradeTimestamp, time) {
 		return newTimestampCompatError("DUpgrade fork block timestamp", m.DUpgradeTimestamp, newcfg.DUpgradeTimestamp)
 	}
+	if isForkTimestampIncompatible(m.CancunTime, newcfg.CancunTime, time) {
+		return newTimestampCompatError("Cancun fork block timestamp", m.CancunTime, m.CancunTime)
+	}
 	return nil
 }
 
@@ -50,17 +61,6 @@ func (m *MandatoryNetworkUpgrades) mandatoryForkOrder() []fork {
 	return []fork{
 		{name: "subnetEVMTimestamp", timestamp: m.SubnetEVMTimestamp},
 		{name: "dUpgradeTimestamp", timestamp: m.DUpgradeTimestamp},
-	}
-}
-
-func GetMandatoryNetworkUpgrades(networkID uint32) MandatoryNetworkUpgrades {
-	switch networkID {
-	case constants.FujiID:
-		return FujiNetworkUpgrades
-	case constants.MainnetID:
-		return MainnetNetworkUpgrades
-	default:
-		return LocalNetworkUpgrades
 	}
 }
 

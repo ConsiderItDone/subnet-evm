@@ -156,7 +156,7 @@ func (self *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, heade
 	if err != nil {
 		return fmt.Errorf("failed to calculate base fee: %w", err)
 	}
-	if !bytes.Equal(expectedRollupWindowBytes, header.Extra) {
+	if len(header.Extra) < len(expectedRollupWindowBytes) || !bytes.Equal(expectedRollupWindowBytes, header.Extra[:len(expectedRollupWindowBytes)]) {
 		return fmt.Errorf("expected rollup window bytes: %x, found %x", expectedRollupWindowBytes, header.Extra)
 	}
 	if header.BaseFee == nil {
@@ -192,22 +192,23 @@ func (self *DummyEngine) verifyHeaderGasFields(config *params.ChainConfig, heade
 
 // modified from consensus.go
 func (self *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Header, uncle bool) error {
-	var (
-		config = chain.Config()
-	)
+	config := chain.Config()
 	// Ensure that we do not verify an uncle
 	if uncle {
 		return errUnclesUnsupported
 	}
-	// Ensure that the header's extra-data section is of a reasonable size
-	if !config.IsSubnetEVM(header.Time) {
+	switch {
+	case config.IsDUpgrade(header.Time):
+		if len(header.Extra) < params.DynamicFeeExtraDataSize {
+			return fmt.Errorf("expected extra-data field length >= %d, found %d", params.DynamicFeeExtraDataSize, len(header.Extra))
+		}
+	case config.IsSubnetEVM(header.Time):
+		if len(header.Extra) != params.DynamicFeeExtraDataSize {
+			return fmt.Errorf("expected extra-data field to be: %d, but found %d", params.DynamicFeeExtraDataSize, len(header.Extra))
+		}
+	default:
 		if uint64(len(header.Extra)) > params.MaximumExtraDataSize {
 			return fmt.Errorf("extra-data too long: %d > %d", len(header.Extra), params.MaximumExtraDataSize)
-		}
-	} else {
-		expectedExtraDataSize := params.ExtraDataSize
-		if len(header.Extra) != expectedExtraDataSize {
-			return fmt.Errorf("expected extra-data field to be: %d, but found %d", expectedExtraDataSize, len(header.Extra))
 		}
 	}
 	// Ensure gas-related header fields are correct
@@ -231,6 +232,14 @@ func (self *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header 
 	// Verify that the block number is parent's +1
 	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
 		return consensus.ErrInvalidNumber
+	}
+	// Verify the existence / non-existence of excessDataGas
+	cancun := chain.Config().IsCancun(header.Time)
+	if cancun && header.ExcessDataGas == nil {
+		return errors.New("missing excessDataGas")
+	}
+	if !cancun && header.ExcessDataGas != nil {
+		return fmt.Errorf("invalid excessDataGas: have %d, expected nil", header.ExcessDataGas)
 	}
 	return nil
 }
@@ -399,7 +408,7 @@ func (self *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, 
 
 	// Header seems complete, assemble into a block and return
 	return types.NewBlock(
-		header, txs, uncles, receipts, new(trie.Trie),
+		header, txs, uncles, receipts, trie.NewStackTrie(nil),
 	), nil
 }
 

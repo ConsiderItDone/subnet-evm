@@ -47,10 +47,9 @@ func (*configurator) MakeConfig() precompileconfig.Config {
 }
 
 // Configure is a no-op for warp since it does not need to store any information in the state
-func (*configurator) Configure(chainConfig precompileconfig.ChainConfig, cfg precompileconfig.Config, state contract.StateDB, _ contract.BlockContext) error {
-	config, ok := cfg.(*Config)
-	if !ok {
-		return fmt.Errorf("incorrect config %T: %v", config, config)
+func (*configurator) Configure(chainConfig precompileconfig.ChainConfig, cfg precompileconfig.Config, state contract.StateDB, _ contract.ConfigurationBlockContext) error {
+	if _, ok := cfg.(*Config); !ok {
+		return fmt.Errorf("expected config type %T, got %T: %v", &Config{}, cfg, cfg)
 	}
 	return nil
 }
