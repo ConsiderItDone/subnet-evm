@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/cometbft/cometbft/light"
 	tmtypes "github.com/cometbft/cometbft/types"
 	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
@@ -17,6 +16,8 @@ import (
 	ibctm "github.com/cosmos/ibc-go/v7/modules/light-clients/07-tendermint"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+
+	"github.com/ava-labs/subnet-evm/precompile/contract"
 )
 
 var (
@@ -271,8 +272,8 @@ func verifyHeader(
 	header *ibctm.Header,
 	clientID string,
 ) error {
-	timeInt := accessibleState.GetBlockContext().Timestamp().Int64()
-	currentTimestamp := time.Unix(timeInt, 0)
+	timeInt := accessibleState.GetBlockContext().Timestamp()
+	currentTimestamp := time.Unix(int64(timeInt), 0)
 
 	consState, err := GetConsensusState(accessibleState.GetStateDB(), clientID, header.TrustedHeight)
 	if err != nil {
@@ -363,7 +364,7 @@ func verifyMisbehaviour(
 	// NOTE: header height and commitment root assertions are checked in
 	// misbehaviour.ValidateBasic by the client keeper and msg.ValidateBasic
 	// by the base application.
-	time := time.Unix(accessibleState.GetBlockContext().Timestamp().Int64(), 0)
+	time := time.Unix(int64(accessibleState.GetBlockContext().Timestamp()), 0)
 
 	if err := checkMisbehaviourHeader(
 		cs, tmConsensusState1, misbehaviour.Header1, time,
@@ -457,7 +458,7 @@ func Status(
 		return exported.Expired
 	}
 
-	now := time.Unix(accessibleState.GetBlockContext().Timestamp().Int64(), 0)
+	now := time.Unix(int64(accessibleState.GetBlockContext().Timestamp()), 0)
 	if cs.IsExpired(consState.Timestamp, now) {
 		return exported.Expired
 	}

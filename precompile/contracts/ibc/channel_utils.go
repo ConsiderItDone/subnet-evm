@@ -209,7 +209,7 @@ func setConsensusMetadata(
 	processedHeight uint64,
 	processedTime uint64,
 ) {
-	SetProcessedTime(accessibleState.GetStateDB(), height, accessibleState.GetBlockContext().Timestamp().Uint64())
+	SetProcessedTime(accessibleState.GetStateDB(), height, accessibleState.GetBlockContext().Timestamp())
 	SetProcessedHeight(accessibleState.GetStateDB(), height, accessibleState.GetBlockContext().Number().Uint64())
 }
 

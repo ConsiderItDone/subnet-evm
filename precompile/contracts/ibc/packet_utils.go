@@ -175,8 +175,8 @@ func _recvPacket(opts *callOpts[IIBCMsgRecvPacket]) error {
 	}
 
 	// check if packet timeouted by comparing it with the latest timestamp of the chain
-	if opts.args.Packet.TimeoutTimestamp.Uint64() != 0 && opts.accessibleState.GetBlockContext().Timestamp().Uint64() >= opts.args.Packet.TimeoutTimestamp.Uint64() {
-		return fmt.Errorf("block timestamp >= packet timeout timestamp (%d >= %d)", opts.accessibleState.GetBlockContext().Timestamp().Uint64(), time.Unix(0, int64(opts.args.Packet.TimeoutTimestamp.Uint64())).Unix())
+	if opts.args.Packet.TimeoutTimestamp.Uint64() != 0 && opts.accessibleState.GetBlockContext().Timestamp() >= opts.args.Packet.TimeoutTimestamp.Uint64() {
+		return fmt.Errorf("block timestamp >= packet timeout timestamp (%d >= %d)", opts.accessibleState.GetBlockContext().Timestamp(), time.Unix(0, int64(opts.args.Packet.TimeoutTimestamp.Uint64())).Unix())
 	}
 
 	packet := channeltypes.NewPacket(

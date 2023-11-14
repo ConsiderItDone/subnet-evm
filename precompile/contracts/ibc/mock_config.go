@@ -7,8 +7,9 @@ package ibc
 import (
 	"math/big"
 
-	"github.com/ava-labs/subnet-evm/precompile/precompileconfig"
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/ava-labs/subnet-evm/precompile/precompileconfig"
 )
 
 var _ precompileconfig.Config = &noopStatefulPrecompileConfig{}
@@ -29,8 +30,10 @@ func (n *noopStatefulPrecompileConfig) Address() common.Address {
 	return common.Address{}
 }
 
-func (n *noopStatefulPrecompileConfig) Timestamp() *big.Int {
-	return n.timestamp
+func (n *noopStatefulPrecompileConfig) Timestamp() *uint64 {
+	t := n.timestamp.Uint64()
+
+	return &t
 }
 
 func (n *noopStatefulPrecompileConfig) IsDisabled() bool {
@@ -41,6 +44,6 @@ func (n *noopStatefulPrecompileConfig) Equal(precompileconfig.Config) bool {
 	return false
 }
 
-func (n *noopStatefulPrecompileConfig) Verify() error {
+func (n *noopStatefulPrecompileConfig) Verify(chainConfig precompileconfig.ChainConfig) error {
 	return nil
 }

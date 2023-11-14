@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
@@ -14,6 +13,8 @@ import (
 	hosttypes "github.com/cosmos/ibc-go/v7/modules/core/24-host"
 	exported "github.com/cosmos/ibc-go/v7/modules/core/exported"
 	ibctm "github.com/cosmos/ibc-go/v7/modules/light-clients/07-tendermint"
+
+	"github.com/ava-labs/subnet-evm/precompile/contract"
 )
 
 func VerifyPacketCommitment(
@@ -322,7 +323,7 @@ func verifyDelayPeriodPassed(
 			return fmt.Errorf("%w, processed time not found for height: %s", err, proofHeight)
 		}
 
-		currentTimestamp := accessibleState.GetBlockContext().Timestamp().Uint64()
+		currentTimestamp := accessibleState.GetBlockContext().Timestamp()
 		validTime := processedTime + delayTimePeriod
 
 		// NOTE: delay time period is inclusive, so if currentTimestamp is validTime, then we return no error

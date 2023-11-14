@@ -32,15 +32,16 @@ import (
 	"sync/atomic"
 
 	"github.com/ava-labs/avalanchego/snow"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/holiman/uint256"
+
 	"github.com/ava-labs/subnet-evm/constants"
 	"github.com/ava-labs/subnet-evm/params"
 	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/ava-labs/subnet-evm/precompile/contracts/deployerallowlist"
 	"github.com/ava-labs/subnet-evm/precompile/modules"
 	"github.com/ava-labs/subnet-evm/vmerrs"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/holiman/uint256"
 )
 
 var (
@@ -317,6 +318,11 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		//	evm.StateDB.DiscardSnapshot(snapshot)
 	}
 	return ret, gas, err
+}
+
+// CallFromPrecompile invokes Call to execute the contract with the given input parameters.
+func (evm *EVM) CallFromPrecompile(caller common.Address, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+	return evm.Call(AccountRef(caller), addr, input, gas, value)
 }
 
 // CallCode executes the contract associated with the addr with the given input
