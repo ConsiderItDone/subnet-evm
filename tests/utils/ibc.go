@@ -3,7 +3,6 @@ package utils
 import (
 	"context"
 	"crypto/ecdsa"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -708,9 +707,9 @@ func RunTestIbcAckPacket(t *testing.T) {
 	proof, proofHeight := path.EndpointB.QueryProof(packetKey)
 
 	auth.GasLimit = 200000
-	recvTx, err := ibcContract.SendPacket(auth,
+	sendTx, err := ibcContract.SendPacket(auth,
 		big.NewInt(int64(0)),
-		ibctesting.TransferPort,
+		testPort,
 		path.EndpointA.ChannelID,
 		contractBind.Height{
 			RevisionNumber: new(big.Int).SetUint64(defaultTimeoutHeight.RevisionNumber),
@@ -721,15 +720,18 @@ func RunTestIbcAckPacket(t *testing.T) {
 
 	auth.GasLimit = 0
 	require.NoError(t, err)
-	re, err := waitForReceiptAndGet(ctx, ethClient, recvTx)
+	re, err := waitForReceiptAndGet(ctx, ethClient, sendTx)
 	require.NoError(t, err)
 	require.Equal(t, len(re.Logs), 1)
 
+	sequence, err := path.EndpointA.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, mintFungibleTokenPacketData)
+	require.NoError(t, err)
+
 	err = path.EndpointB.RecvPacket(channeltypes.Packet{
 		Sequence:           sequence,
-		SourcePort:         ibctesting.TransferPort,
+		SourcePort:         testPort,
 		SourceChannel:      path.EndpointA.ChannelID,
-		DestinationPort:    ibctesting.TransferPort,
+		DestinationPort:    testPort,
 		DestinationChannel: path.EndpointB.ChannelID,
 		TimeoutHeight: clienttypes.Height{
 			RevisionNumber: defaultTimeoutHeight.RevisionNumber,
@@ -740,13 +742,25 @@ func RunTestIbcAckPacket(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	// resp, err := path.EndpointB.Chain.GetSimApp().BankKeeper.Balance(path.EndpointB.Chain.GetContext(), &banktypes.QueryBalanceRequest{
+	// 	Address: addr,
+	// 	Denom:   prefix + "USDT",
+	// })
+	// require.NoError(t, err)
+	//require.Equal(t, resp.Balance.Amount.Int64(), int64(amount))
+
+	respAll, err := path.EndpointB.Chain.GetSimApp().BankKeeper.AllBalances(path.EndpointB.Chain.GetContext(), &banktypes.QueryAllBalancesRequest{
+		Address: addr,
+	})
+	require.NoError(t, err)
+	require.Equal(t, respAll.Balances, int64(amount))
+
 	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.UpdateClient)
 
-	packetKey := host.PacketAcknowledgementKey(ibctesting.TransferPort, path.EndpointB.ChannelID, sequence)
-	proof, proofHeight := path.EndpointB.QueryProof(packetKey)
-
 	acknowledgement := channeltypes.NewResultAcknowledgement([]byte{byte(1)})
-	ack := sha256.Sum256(acknowledgement.Acknowledgement())
+
+	packetKey := host.PacketAcknowledgementKey(testPort, path.EndpointB.ChannelID, sequence)
+	proof, proofHeight := path.EndpointB.QueryProof(packetKey)
 
 	packetAckTx, err := ibcContract.Acknowledgement(
 		auth,
