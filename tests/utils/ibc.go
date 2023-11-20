@@ -617,7 +617,9 @@ func RunTestIbcAckPacket(t *testing.T) {
 	require.NoError(t, err)
 	amount := 1000
 
-	prefix := fmt.Sprintf("%s/%s/", path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID)
+	//prefix := fmt.Sprintf("%s/%s/", path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID)
+	//prefix := "ibc"
+	prefix := ""
 	mintFungibleTokenPacket := transfertypes.FungibleTokenPacketData{
 		Denom:    prefix + "USDT",
 		Amount:   strconv.Itoa(amount),
@@ -675,18 +677,29 @@ func RunTestIbcAckPacket(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// resp, err := path.EndpointB.Chain.GetSimApp().BankKeeper.Balance(path.EndpointB.Chain.GetContext(), &banktypes.QueryBalanceRequest{
+	// resp, err := path.EndpointB.Chain.GetSimApp().BankKeeper.AllBalances(path.EndpointB.Chain.GetContext(), &banktypes.QueryAllBalancesRequest{
 	// 	Address: addr,
-	// 	Denom:   prefix + "USDT",
 	// })
 	// require.NoError(t, err)
-	//require.Equal(t, resp.Balance.Amount.Int64(), int64(amount))
-
-	respAll, err := path.EndpointB.Chain.GetSimApp().BankKeeper.AllBalances(path.EndpointB.Chain.GetContext(), &banktypes.QueryAllBalancesRequest{
+	// require.Equal(t, resp.Balances, int64(amount))
+	denom := "ibc/36E63B2AB1BD3FFD0A02678BAB37A14B8F14D9E6DD1142BE29FF48EBC544C728"
+	resp, err := path.EndpointB.Chain.GetSimApp().BankKeeper.Balance(path.EndpointB.Chain.GetContext(), &banktypes.QueryBalanceRequest{
 		Address: addr,
+		Denom:   denom,
 	})
 	require.NoError(t, err)
-	require.Equal(t, respAll.Balances, int64(amount))
+	require.Equal(t, resp.Balance.Amount.Int64(), int64(amount))
+
+	hexHash := denom[len(transfertypes.DenomPrefix+"/"):]
+	hash, err := transfertypes.ParseHexHash(hexHash)
+	require.NoError(t, err)
+	denometrace, found := path.EndpointB.Chain.GetSimApp().TransferKeeper.GetDenomTrace(path.EndpointB.Chain.GetContext(), hash)
+	if !found {
+		require.NoError(t, transfertypes.ErrTraceNotFound)
+	}
+	require.Equal(t, denometrace.Path, "transfer/channel-0")
+	require.Equal(t, denometrace.BaseDenom, "USDT")
+	
 
 	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.UpdateClient)
 
