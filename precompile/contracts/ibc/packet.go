@@ -252,8 +252,10 @@ func recvPacket(accessibleState contract.AccessibleState, caller common.Address,
 		ack = channeltypes.NewErrorAcknowledgement(err)
 	}
 
-	writeAcknowledgement(inputStruct.Packet, accessibleState, ack)
-
+	err = writeAcknowledgement(inputStruct.Packet, accessibleState, ack)
+	if err != nil {
+		return nil, remainingGas, err
+	}
 	// this function does not return an output, leave this one as is
 	packedOutput := []byte{}
 

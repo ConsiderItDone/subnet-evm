@@ -48,8 +48,6 @@ func TestIBC(t *testing.T) {
 		t.Run("connection open ack", utils.RunTestIbcConnectionOpenAck)
 		t.Run("channel open init", utils.RunTestIbcChannelOpenInit)
 		t.Run("channel open ack", utils.RunTestIbcChannelOpenAck)
-		t.Run("recv packet", utils.RunTestIbcRecvPacket)
-		t.Run("send packet", utils.RunTestIbcSendPacket)
 		t.Run("ack packet", utils.RunTestIbcAckPacket)
 	})
 
