@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"math/rand"
 	"os"
 	"testing"
 	"time"
@@ -15,6 +14,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	cosmostypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/std"
+	transfertypes "github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
 	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
 	connectiontypes "github.com/cosmos/ibc-go/v7/modules/core/03-connection/types"
 	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
@@ -377,14 +377,20 @@ func RunTestIbcChannelOpenInit(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	path.SetChannelOrdered()
+	path.EndpointA.ChannelConfig.PortID = ibctesting.TransferPort
+	path.EndpointA.ChannelConfig.Order = channeltypes.UNORDERED
+	path.EndpointA.ChannelConfig.Version = transfertypes.Version
 
-	counterparty := channeltypes.NewCounterparty(ibctesting.MockPort, ibctesting.FirstChannelID)
-	channel := channeltypes.NewChannel(channeltypes.INIT, channeltypes.ORDERED, counterparty, []string{path.EndpointB.ConnectionID}, path.EndpointA.ChannelConfig.Version)
+	path.EndpointB.ChannelConfig.PortID = ibctesting.TransferPort
+	path.EndpointB.ChannelConfig.Order = channeltypes.UNORDERED
+	path.EndpointB.ChannelConfig.Version = transfertypes.Version
+
+	counterparty := channeltypes.NewCounterparty(ibctesting.TransferPort, ibctesting.FirstChannelID)
+	channel := channeltypes.NewChannel(channeltypes.INIT, channeltypes.UNORDERED, counterparty, []string{path.EndpointB.ConnectionID}, path.EndpointA.ChannelConfig.Version)
 	channelByte, err := marshaler.Marshal(&channel)
 	require.NoError(t, err)
 
-	tx, err := ibcContract.ChanOpenInit(auth, path.EndpointA.ChannelConfig.PortID, channelByte)
+	tx, err := ibcContract.ChanOpenInit(auth, ibctesting.TransferPort, channelByte)
 	require.NoError(t, err)
 	_, err = waitForReceiptAndGet(ctx, ethClient, tx)
 	require.NoError(t, err)
@@ -496,26 +502,31 @@ func RunTestIbcRecvPacket(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	sequence, err := path.EndpointA.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, mintFungibleTokenPacketData)
+	sequence, err := path.EndpointB.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, mintFungibleTokenPacketData)
 	require.NoError(t, err)
 	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.UpdateClient)
 	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, nil)
 
 	packetKey := host.PacketCommitmentKey(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
-	proof, proofHeight := path.EndpointA.QueryProof(packetKey)
-	spew.Dump(proof, proofHeight)
+	proof, proofHeight := path.EndpointB.QueryProof(packetKey)
 
-	bindTx, err := ics20Transferer.BindPort(auth, ibc.ContractAddress, ibctesting.MockPort)
+	bindTx, err := ics20Transferer.BindPort(auth, ibc.ContractAddress, ibctesting.TransferPort)
 	require.NoError(t, err)
 	_, err = waitForReceiptAndGet(ctx, ethClient, bindTx)
 	require.NoError(t, err)
 
-	_, err = ibcContract.RecvPacket(auth, contractBind.IIBCMsgRecvPacket{
+	setEscrowAddrTx, err := ics20Transferer.SetChannelEscrowAddresses(auth, path.EndpointA.ChannelID, auth.From)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, setEscrowAddrTx)
+	require.NoError(t, err)
+
+	auth.GasLimit = 200000
+	recvTx, err := ibcContract.RecvPacket(auth, contractBind.IIBCMsgRecvPacket{
 		Packet: contractBind.Packet{
 			Sequence:           big.NewInt(int64(sequence)),
 			SourcePort:         path.EndpointA.ChannelConfig.PortID,
 			SourceChannel:      path.EndpointA.ChannelID,
-			DestinationPort:    path.EndpointB.ChannelConfig.PortID,
+			DestinationPort:    ibctesting.TransferPort,
 			DestinationChannel: path.EndpointB.ChannelID,
 			Data:               mintFungibleTokenPacketData,
 			TimeoutHeight: contractBind.Height{
@@ -531,17 +542,29 @@ func RunTestIbcRecvPacket(t *testing.T) {
 		},
 		Signer: "",
 	})
+	auth.GasLimit = 0
 	require.NoError(t, err)
+
+	re, err := waitForReceiptAndGet(ctx, ethClient, recvTx)
+	require.NoError(t, err)
+	require.Equal(t, len(re.Logs), 2)
+
+	transferlog, err := ics20Bank.Ics20bankFilterer.ParseTransfer(*re.Logs[1])
+	require.NoError(t, err)
+	assert.Equal(t, common.Address{}, transferlog.From)
+	assert.Equal(t, auth.From, transferlog.To)
+	assert.Equal(t, "transfer/channel-0/USDT", transferlog.Path)
+	assert.Equal(t, big.NewInt(1000), transferlog.Value)
 }
 
 func RunTestIbcAckPacket(t *testing.T) {
-	amount := big.NewInt(int64(rand.Uint64()))
+	amount := big.NewInt(1000)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	connectionKey := host.ConnectionKey(path.EndpointB.ConnectionID)
-	proof, proofHeight := chainB.QueryProof(connectionKey)
+	packetKey := host.PacketAcknowledgementKey(path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, 1)
+	proof, proofHeight := path.EndpointB.QueryProof(packetKey)
 
 	randomAddr, err := getRandomAddr()
 	require.NoError(t, err)
@@ -549,7 +572,7 @@ func RunTestIbcAckPacket(t *testing.T) {
 	jsonTransferFungibleTokenPacketData, err := json.Marshal(ics20.FungibleTokenPacketData{
 		Denom:    "transfer/channel-0/USDT",
 		Amount:   amount.String(),
-		Sender:   randomAddr.Hex(),
+		Sender:   common.Address{}.Hex(),
 		Receiver: auth.From.Hex(),
 		Memo:     "some memo",
 	})
@@ -562,10 +585,10 @@ func RunTestIbcAckPacket(t *testing.T) {
 		auth,
 		contractBind.Packet{
 			Sequence:           big.NewInt(1),
-			SourcePort:         "transfer",
-			SourceChannel:      "channel-0",
-			DestinationPort:    "transfer",
-			DestinationChannel: "channel-0",
+			SourcePort:         path.EndpointA.ChannelConfig.PortID,
+			SourceChannel:      path.EndpointA.ChannelID,
+			DestinationPort:    ibctesting.TransferPort,
+			DestinationChannel: path.EndpointB.ChannelID,
 			Data:               transferFungibleTokenPacketData,
 			TimeoutHeight: contractBind.Height{
 				RevisionNumber: big.NewInt(1000),
@@ -573,7 +596,7 @@ func RunTestIbcAckPacket(t *testing.T) {
 			},
 			TimeoutTimestamp: big.NewInt(time.Now().Unix() + 10000),
 		},
-		common.FromHex("0x00"),
+		[]byte{0x00},
 		proof,
 		contractBind.Height{
 			RevisionNumber: big.NewInt(int64(proofHeight.RevisionNumber)),

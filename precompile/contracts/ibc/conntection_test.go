@@ -102,9 +102,11 @@ func TestConnOpenInit(t *testing.T) {
 			path = ibctesting.NewPath(chainA, chainB)
 			coordinator.SetupClients(path)
 
-			cs, _ := chainA.App.GetIBCKeeper().ClientKeeper.GetClientState(chainA.GetContext(), path.EndpointA.ClientID)
-			require.NoError(t, SetClientState(statedb, path.EndpointA.ClientID, cs.(*ibctm.ClientState)))
+			clientState := path.EndpointA.GetClientState()
+			require.NoError(t, SetClientState(statedb, path.EndpointA.ClientID, clientState.(*ibctm.ClientState)))
 
+			consensusState := path.EndpointA.GetConsensusState(clientState.GetLatestHeight())
+			require.NoError(t, SetConsensusState(statedb, path.EndpointA.ClientID, clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState)))
 			test.Config = NewConfig(utils.NewUint64(0))
 			test.Caller = common.Address{1}
 			test.SuppliedGas = ConnOpenInitGasCost

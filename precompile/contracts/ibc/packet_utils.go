@@ -539,7 +539,7 @@ func _acknowledgement(opts *callOpts[IIBCMsgAcknowledgement]) error {
 		opts.args.Packet.SourceChannel,
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("channel not found: %w", err)
 	}
 
 	if channel.State != channeltypes.OPEN {
@@ -577,7 +577,7 @@ func _acknowledgement(opts *callOpts[IIBCMsgAcknowledgement]) error {
 
 	connectionEnd, err := GetConnection(opts.accessibleState.GetStateDB(), channel.ConnectionHops[0])
 	if err != nil {
-		return err
+		return fmt.Errorf("connection not found: %w", err)
 	}
 
 	if connectionEnd.GetState() != int32(connectiontypes.OPEN) {
@@ -586,7 +586,7 @@ func _acknowledgement(opts *callOpts[IIBCMsgAcknowledgement]) error {
 
 	commitment, err := getPacketCommitment(opts.accessibleState.GetStateDB(), packet.GetSourcePort(), packet.GetSourceChannel(), packet.GetSequence())
 	if err != nil {
-		return err
+		return fmt.Errorf("commitment not found: %w", err)
 	}
 
 	if len(commitment) == 0 {
@@ -637,15 +637,14 @@ func _acknowledgement(opts *callOpts[IIBCMsgAcknowledgement]) error {
 		opts.args.Acknowledgement,
 		opts.accessibleState,
 	); err != nil {
-		return err
+		return fmt.Errorf("acknowledgement verification failed: %w", err)
 	}
 
 	// assert packets acknowledged in order
 	if channel.Ordering == channeltypes.ORDERED {
-
 		nextSequenceAck, err := getNextSequenceAck(opts.accessibleState.GetStateDB(), opts.args.Packet.SourcePort, opts.args.Packet.SourceChannel)
 		if err != nil {
-			return err
+			return fmt.Errorf("can't read next sequence ack: %w", err)
 		}
 
 		if opts.args.Packet.Sequence.Uint64() != nextSequenceAck {
