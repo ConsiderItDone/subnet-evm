@@ -5,11 +5,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ava-labs/subnet-evm/core/state"
 	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/ava-labs/subnet-evm/precompile/testutils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/stretchr/testify/require"
 
 	tmtypes "github.com/cometbft/cometbft/types"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -323,7 +324,6 @@ func TestUpdateClient(t *testing.T) {
 				test.BeforeHook = nil
 			}
 
-			test.Timestamp = uint64(time.Now().Unix())
 			test.Caller = common.Address{1}
 			test.SuppliedGas = UpgradeClientGasCost
 			test.ReadOnly = false

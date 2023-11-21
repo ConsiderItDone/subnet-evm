@@ -5,26 +5,22 @@
 package ibc
 
 import (
-	"math/big"
 	"testing"
+
+	"go.uber.org/mock/gomock"
 
 	"github.com/ava-labs/subnet-evm/precompile/precompileconfig"
 	"github.com/ava-labs/subnet-evm/precompile/testutils"
+	"github.com/ava-labs/subnet-evm/utils"
 )
 
 // TestVerify tests the verification of Config.
 func TestVerify(t *testing.T) {
 	tests := map[string]testutils.ConfigVerifyTest{
 		"valid config": {
-			Config:        NewConfig(big.NewInt(3)),
+			Config:        NewConfig(utils.NewUint64(0)),
 			ExpectedError: "",
 		},
-		// CUSTOM CODE STARTS HERE
-		// Add your own Verify tests here, e.g.:
-		// "your custom test name": {
-		// 	Config: NewConfig(big.NewInt(3),),
-		// 	ExpectedError: ErrYourCustomError.Error(),
-		// },
 	}
 	// Run verify tests.
 	testutils.RunVerifyTests(t, tests)
@@ -34,23 +30,23 @@ func TestVerify(t *testing.T) {
 func TestEqual(t *testing.T) {
 	tests := map[string]testutils.ConfigEqualTest{
 		"non-nil config and nil other": {
-			Config:   NewConfig(big.NewInt(3)),
+			Config:   NewConfig(utils.NewUint64(3)),
 			Other:    nil,
 			Expected: false,
 		},
 		"different type": {
-			Config:   NewConfig(big.NewInt(3)),
-			Other:    precompileconfig.NewNoopStatefulPrecompileConfig(),
+			Config:   NewConfig(utils.NewUint64(3)),
+			Other:    precompileconfig.NewMockConfig(gomock.NewController(t)),
 			Expected: false,
 		},
 		"different timestamp": {
-			Config:   NewConfig(big.NewInt(3)),
-			Other:    NewConfig(big.NewInt(4)),
+			Config:   NewConfig(utils.NewUint64(3)),
+			Other:    NewConfig(utils.NewUint64(4)),
 			Expected: false,
 		},
 		"same config": {
-			Config:   NewConfig(big.NewInt(3)),
-			Other:    NewConfig(big.NewInt(3)),
+			Config:   NewConfig(utils.NewUint64(3)),
+			Other:    NewConfig(utils.NewUint64(3)),
 			Expected: true,
 		},
 		// CUSTOM CODE STARTS HERE
