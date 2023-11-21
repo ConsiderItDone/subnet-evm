@@ -677,12 +677,11 @@ func RunTestIbcAckPacket(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// resp, err := path.EndpointB.Chain.GetSimApp().BankKeeper.AllBalances(path.EndpointB.Chain.GetContext(), &banktypes.QueryAllBalancesRequest{
-	// 	Address: addr,
-	// })
-	// require.NoError(t, err)
-	// require.Equal(t, resp.Balances, int64(amount))
-	denom := "ibc/36E63B2AB1BD3FFD0A02678BAB37A14B8F14D9E6DD1142BE29FF48EBC544C728"
+	respAllBalances, err := path.EndpointB.Chain.GetSimApp().BankKeeper.AllBalances(path.EndpointB.Chain.GetContext(), &banktypes.QueryAllBalancesRequest{
+		Address: addr,
+	})
+	require.NoError(t, err)
+	denom := respAllBalances.Balances[0].Denom
 	resp, err := path.EndpointB.Chain.GetSimApp().BankKeeper.Balance(path.EndpointB.Chain.GetContext(), &banktypes.QueryBalanceRequest{
 		Address: addr,
 		Denom:   denom,
