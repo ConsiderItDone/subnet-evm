@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 
 	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/genesis"
@@ -734,6 +735,56 @@ func RunTestIbcAckPacket(t *testing.T) {
 	_, err = waitForReceiptAndGet(ctx, ethClient, packetAckTx)
 	require.NoError(t, err)
 
+	// ibcContract.Timeout(auth, contractBind.Packet{
+	// 	Sequence:           big.NewInt(int64(sequence)),
+	// 	SourcePort:         testPort,
+	// 	SourceChannel:      path.EndpointA.ChannelID,
+	// 	DestinationPort:    testPort,
+	// 	DestinationChannel: path.EndpointB.ChannelID,
+	// 	Data:               mintFungibleTokenPacketData,
+	// 	TimeoutHeight: contractBind.Height{
+	// 		RevisionNumber: new(big.Int).SetUint64(defaultTimeoutHeight.RevisionNumber),
+	// 		RevisionHeight: new(big.Int).SetUint64(defaultTimeoutHeight.RevisionHeight),
+	// 	},
+	// 	TimeoutTimestamp: big.NewInt(int64(disabledTimeoutTimestamp)),
+	// },
+	// proofUnreceived,
+	// contractBind.Height{
+	// 	RevisionNumber: big.NewInt(int64(proofHeight.RevisionNumber)),
+	// 	RevisionHeight: big.NewInt(int64(proofHeight.RevisionHeight)),
+	// },
+	// sequence,
+	// "",
+	// )
+
+
+
+
+
+	
+
+
+	// ibcContract.OnTimeoutOnClose(auth, contractBind.Packet{
+	// 	Sequence:           big.NewInt(int64(sequence)),
+	// 	SourcePort:         testPort,
+	// 	SourceChannel:      path.EndpointA.ChannelID,
+	// 	DestinationPort:    testPort,
+	// 	DestinationChannel: path.EndpointB.ChannelID,
+	// 	Data:               mintFungibleTokenPacketData,
+	// 	TimeoutHeight: contractBind.Height{
+	// 		RevisionNumber: new(big.Int).SetUint64(defaultTimeoutHeight.RevisionNumber),
+	// 		RevisionHeight: new(big.Int).SetUint64(defaultTimeoutHeight.RevisionHeight),
+	// 	},
+	// 	TimeoutTimestamp: big.NewInt(int64(disabledTimeoutTimestamp)),
+	// },
+	// proofUnreceived,
+	// contractBind.Height{
+	// 	RevisionNumber: big.NewInt(int64(proofHeight.RevisionNumber)),
+	// 	RevisionHeight: big.NewInt(int64(proofHeight.RevisionHeight)),
+	// },
+	// sequence,
+	// "",
+	// )
 	// 	require.NoError(t, err)
 	// 	mintFungibleTokenPacket = transfertypes.FungibleTokenPacketData{
 	// 		Denom:    prefix + "USDT",
