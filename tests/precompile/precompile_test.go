@@ -50,6 +50,8 @@ func TestIBC(t *testing.T) {
 		t.Run("channel open ack", utils.RunTestIbcChannelOpenAck)
 		t.Run("send packet", utils.RunTestIbcSendPacket)
 		t.Run("recv packet", utils.RunTestIbcRecvPacket)
+		t.Run("timeout packet", utils.RunTestIbcTimeoutPacket)
+		t.Run("timeout on close packet", utils.RunTestIbcTimeoutOnClosePacket)
 	})
 	t.Run("part b", func(t *testing.T) {
 		t.Run("create chain", utils.RunTestIbcInit)
