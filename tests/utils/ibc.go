@@ -33,6 +33,8 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	wallet "github.com/ava-labs/avalanchego/wallet/subnet/primary"
+	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
+
 	"github.com/ava-labs/subnet-evm/accounts/abi/bind"
 	"github.com/ava-labs/subnet-evm/core"
 	"github.com/ava-labs/subnet-evm/core/types"
@@ -45,7 +47,6 @@ import (
 	contractBind "github.com/ava-labs/subnet-evm/tests/precompile/contract"
 	"github.com/ava-labs/subnet-evm/tests/precompile/contract/ics20/ics20bank"
 	"github.com/ava-labs/subnet-evm/tests/precompile/contract/ics20/ics20transferer"
-	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
 )
 
 const (
@@ -105,7 +106,11 @@ func RunTestIbcInit(t *testing.T) {
 
 	// NewWalletFromURI fetches the available UTXOs owned by [kc] on the network
 	// that [LocalAPIURI] is hosting.
-	wallet, err := wallet.NewWalletFromURI(ctx, DefaultLocalNodeURI, kc)
+	wallet, err := wallet.MakeWallet(ctx, &wallet.WalletConfig{
+		URI:          DefaultLocalNodeURI,
+		AVAXKeychain: kc,
+		EthKeychain:  kc,
+	})
 	require.NoError(t, err)
 
 	pWallet := wallet.P()
@@ -127,8 +132,8 @@ func RunTestIbcInit(t *testing.T) {
 	genesis := new(core.Genesis)
 	require.NoError(t, genesis.UnmarshalJSON(genesisBytes))
 
-	createChainTxID, err := pWallet.IssueCreateChainTx(
-		createSubnetTxID,
+	createChainTx, err := pWallet.IssueCreateChainTx(
+		createSubnetTxID.ID(),
 		genesisBytes,
 		evm.ID,
 		nil,
@@ -136,6 +141,7 @@ func RunTestIbcInit(t *testing.T) {
 	)
 	require.NoError(t, err)
 	t.Logf("new chain id: %s", createSubnetTxID)
+	createChainTxID := createChainTx.ID()
 
 	// Confirm the new blockchain is ready by waiting for the readiness endpoint
 	infoClient := info.NewClient(DefaultLocalNodeURI)
