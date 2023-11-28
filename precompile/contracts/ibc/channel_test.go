@@ -785,6 +785,8 @@ func TestChanCloseConfirm(t *testing.T) {
 			})
 			require.NoError(t, err)
 
+			SetCapability(statedb, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID)
+
 			channel, _ := chainB.App.GetIBCKeeper().ChannelKeeper.GetChannel(chainB.GetContext(), path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID)
 			SetChannel(statedb, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, &channel)
 

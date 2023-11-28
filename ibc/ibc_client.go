@@ -13,7 +13,7 @@ import (
 var _ IbcClient = (*ibcClient)(nil)
 
 type IbcClient interface {
-	GetProof(ctx context.Context, key ids.ID) ([]byte, error)
+	GetBLSProof(ctx context.Context, key ids.ID) ([]byte, error)
 }
 
 // ibcClient implementation for interacting with EVM [chain]
@@ -31,7 +31,7 @@ func NewIbcClient(uri, chain string) (IbcClient, error) {
 	}, nil
 }
 
-func (c *ibcClient) GetProof(ctx context.Context, key ids.ID) ([]byte, error) {
+func (c *ibcClient) GetBLSProof(ctx context.Context, key ids.ID) ([]byte, error) {
 	var res hexutil.Bytes
 	err := c.client.CallContext(ctx, &res, "ibc_getProof", key)
 	if err != nil {

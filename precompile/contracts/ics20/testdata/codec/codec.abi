@@ -1,0 +1,94 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "bytes",
+        "name": "rawdata",
+        "type": "bytes"
+      }
+    ],
+    "name": "decode",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "string",
+            "name": "denom",
+            "type": "string"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bytes",
+            "name": "sender",
+            "type": "bytes"
+          },
+          {
+            "internalType": "bytes",
+            "name": "receiver",
+            "type": "bytes"
+          },
+          {
+            "internalType": "bytes",
+            "name": "memo",
+            "type": "bytes"
+          }
+        ],
+        "internalType": "struct FungibleTokenPacketData",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "string",
+            "name": "denom",
+            "type": "string"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bytes",
+            "name": "sender",
+            "type": "bytes"
+          },
+          {
+            "internalType": "bytes",
+            "name": "receiver",
+            "type": "bytes"
+          },
+          {
+            "internalType": "bytes",
+            "name": "memo",
+            "type": "bytes"
+          }
+        ],
+        "internalType": "struct FungibleTokenPacketData",
+        "name": "data",
+        "type": "tuple"
+      }
+    ],
+    "name": "encode",
+    "outputs": [
+      {
+        "internalType": "bytes",
+        "name": "",
+        "type": "bytes"
+      }
+    ],
+    "stateMutability": "pure",
+    "type": "function"
+  }
+]

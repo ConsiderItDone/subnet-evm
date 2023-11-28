@@ -20,7 +20,6 @@ type UpdateClientInput struct {
 
 type UpgradeClientInput struct {
 	ClientID              string
-	UpgradePath           []byte
 	UpgradedClien         []byte
 	UpgradedConsState     []byte
 	ProofUpgradeClient    []byte
@@ -143,7 +142,7 @@ func UnpackUpgradeClientInput(input []byte) (UpgradeClientInput, error) {
 
 // PackUpgradeClient packs [inputStruct] of type UpgradeClientInput into the appropriate arguments for upgradeClient.
 func PackUpgradeClient(inputStruct UpgradeClientInput) ([]byte, error) {
-	return IBCABI.Pack("upgradeClient", inputStruct.ClientID, inputStruct.UpgradePath, inputStruct.UpgradedClien, inputStruct.UpgradedConsState, inputStruct.ProofUpgradeClient, inputStruct.ProofUpgradeConsState)
+	return IBCABI.Pack("upgradeClient", inputStruct.ClientID, inputStruct.UpgradedClien, inputStruct.UpgradedConsState, inputStruct.ProofUpgradeClient, inputStruct.ProofUpgradeConsState)
 }
 
 func upgradeClient(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {

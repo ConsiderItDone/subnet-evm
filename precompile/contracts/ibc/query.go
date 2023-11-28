@@ -2,6 +2,7 @@ package ibc
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/ava-labs/subnet-evm/vmerrs"
@@ -23,6 +24,18 @@ type QueryConnectionInput struct {
 type QueryChannelInput struct {
 	PortID    string
 	ChannelID string
+}
+
+type QueryPacketCommitmentInput struct {
+	PortID    string
+	ChannelID string
+	Sequence  *big.Int
+}
+
+type QueryPacketAcknowledgementInput struct {
+	PortID    string
+	ChannelID string
+	Sequence  *big.Int
 }
 
 // PackQueryClientStateInput packs [inputStruct] of type QueryClientStateInput into the appropriate arguments for queryClientState.
@@ -242,6 +255,106 @@ func queryChannel(accessibleState contract.AccessibleState, caller common.Addres
 	}
 
 	packedOutput, err := PackQueryChannelOutput(out)
+	if err != nil {
+		return nil, remainingGas, err
+	}
+
+	// Return the packed output and the remaining gas
+	return packedOutput, remainingGas, nil
+}
+
+// PackQueryPacketCommitmentInput packs [inputStruct] of type QueryPacketCommitmentInput into the appropriate arguments for queryPacketCommitment.
+func PackQueryPacketCommitmentInput(inputStruct QueryPacketCommitmentInput) ([]byte, error) {
+	return IBCABI.Pack("queryPacketCommitment", inputStruct.PortID, inputStruct.ChannelID, inputStruct.Sequence)
+}
+
+// UnpackQueryPacketCommitmentInput attempts to unpack [input] as QueryPacketCommitmentInput
+// assumes that [input] does not include selector (omits first 4 func signature bytes)
+func UnpackQueryPacketCommitmentInput(input []byte) (QueryPacketCommitmentInput, error) {
+	inputStruct := QueryPacketCommitmentInput{}
+	err := IBCABI.UnpackInputIntoInterface(&inputStruct, "queryPacketCommitment", input)
+
+	return inputStruct, err
+}
+
+// PackQueryPacketCommitmentOutput attempts to pack given commitment of type []byte
+// to conform the ABI outputs.
+func PackQueryPacketCommitmentOutput(commitment []byte) ([]byte, error) {
+	return IBCABI.PackOutput("queryPacketCommitment", commitment)
+}
+
+func queryPacketCommitment(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+	if remainingGas, err = contract.DeductGas(suppliedGas, QueryPacketCommitmentGasCost); err != nil {
+		return nil, 0, err
+	}
+	if readOnly {
+		return nil, remainingGas, vmerrs.ErrWriteProtection
+	}
+	// attempts to unpack [input] into the arguments to the QueryPacketCommitment.
+	// Assumes that [input] does not include selector
+	// You can use unpacked [inputStruct] variable in your code
+	inputStruct, err := UnpackQueryPacketCommitmentInput(input)
+	if err != nil {
+		return nil, remainingGas, err
+	}
+
+	// CUSTOM CODE STARTS HERE
+	commitment, err := getPacketCommitment(accessibleState.GetStateDB(), inputStruct.PortID, inputStruct.ChannelID, inputStruct.Sequence.Uint64())
+	if err != nil {
+		return nil, remainingGas, fmt.Errorf("error loading PacketCommitment, err: %w", err)
+	}
+
+	packedOutput, err := PackQueryPacketCommitmentOutput(commitment)
+	if err != nil {
+		return nil, remainingGas, err
+	}
+
+	// Return the packed output and the remaining gas
+	return packedOutput, remainingGas, nil
+}
+
+// PackQueryPacketAcknowledgementInput packs [inputStruct] of type QueryPacketAcknowledgementInput into the appropriate arguments for queryPacketAcknowledgement.
+func PackQueryPacketAcknowledgementInput(inputStruct QueryPacketAcknowledgementInput) ([]byte, error) {
+	return IBCABI.Pack("queryPacketAcknowledgement", inputStruct.PortID, inputStruct.ChannelID, inputStruct.Sequence)
+}
+
+// UnpackQueryPacketAcknowledgementInput attempts to unpack [input] as QueryPacketAcknowledgementInput
+// assumes that [input] does not include selector (omits first 4 func signature bytes)
+func UnpackQueryPacketAcknowledgementInput(input []byte) (QueryPacketAcknowledgementInput, error) {
+	inputStruct := QueryPacketAcknowledgementInput{}
+	err := IBCABI.UnpackInputIntoInterface(&inputStruct, "queryPacketAcknowledgement", input)
+
+	return inputStruct, err
+}
+
+// PackqueryPacketAcknowledgementOutput attempts to pack given commitment of type []byte
+// to conform the ABI outputs.
+func PackqueryPacketAcknowledgementOutput(ack []byte) ([]byte, error) {
+	return IBCABI.PackOutput("queryPacketAcknowledgement", ack)
+}
+
+func queryPacketAcknowledgement(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+	if remainingGas, err = contract.DeductGas(suppliedGas, QueryPacketAcknowledgementGasCost); err != nil {
+		return nil, 0, err
+	}
+	if readOnly {
+		return nil, remainingGas, vmerrs.ErrWriteProtection
+	}
+	// attempts to unpack [input] into the arguments to the queryPacketAcknowledgement.
+	// Assumes that [input] does not include selector
+	// You can use unpacked [inputStruct] variable in your code
+	inputStruct, err := UnpackQueryPacketAcknowledgementInput(input)
+	if err != nil {
+		return nil, remainingGas, err
+	}
+
+	// CUSTOM CODE STARTS HERE
+	ack, err := getPacketAcknowledgement(accessibleState.GetStateDB(), inputStruct.PortID, inputStruct.ChannelID, inputStruct.Sequence.Uint64())
+	if err != nil {
+		return nil, remainingGas, fmt.Errorf("error loading PacketAcknowledgement, err: %w", err)
+	}
+
+	packedOutput, err := PackqueryPacketAcknowledgementOutput(ack)
 	if err != nil {
 		return nil, remainingGas, err
 	}

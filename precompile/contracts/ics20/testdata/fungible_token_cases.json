@@ -1,0 +1,73 @@
+[
+  {
+    "name": "success",
+    "input": {
+      "denom": "some_denom",
+      "amount": "10000000000000000000000000000000",
+      "sender": "some_sender",
+      "receiver": "0x0000000000000000000000000000000000000000",
+      "memo": "some_memo"
+    }
+  },
+  {
+    "name": "success hex amount",
+    "input": {
+      "denom": "some_denom",
+      "amount": "0xaaaa",
+      "sender": "some_sender",
+      "receiver": "0x0000000000000000000000000000000000000000",
+      "memo": "some_memo"
+    }
+  },
+  {
+    "name": "empty denom",
+    "input": {
+      "amount": "10000000000000000000000000000000",
+      "sender": "some_sender",
+      "receiver": "0x0000000000000000000000000000000000000000",
+      "memo": "some_memo"
+    },
+    "error": "denom has bad json data"
+  },
+  {
+    "name": "empty amount",
+    "input": {
+      "denom": "some_denom",
+      "sender": "some_sender",
+      "receiver": "0x0000000000000000000000000000000000000000",
+      "memo": "some_memo"
+    },
+    "error": "amount has bad value"
+  },
+  {
+    "name": "bad amount",
+    "input": {
+      "denom": "some_denom",
+      "amount": "alksdlkalskdjalkdj",
+      "sender": "some_sender",
+      "receiver": "0x0000000000000000000000000000000000000000",
+      "memo": "some_memo"
+    },
+    "error": "amount has bad value"
+  },
+  {
+    "name": "empty sender",
+    "input": {
+      "denom": "some_denom",
+      "amount": "10000000000000000000000000000000",
+      "receiver": "0x0000000000000000000000000000000000000000",
+      "memo": "some_memo"
+    },
+    "error": "sender has bad value"
+  },
+  {
+    "name": "empty receiver",
+    "input": {
+      "denom": "some_denom",
+      "amount": "10000000000000000000000000000000",
+      "sender": "0x0000000000000000000000000000000000000000",
+      "memo": "some_memo"
+    },
+    "error": "receiver has bad value"
+  }
+]

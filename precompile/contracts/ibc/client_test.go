@@ -5,11 +5,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ava-labs/subnet-evm/core/state"
 	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/ava-labs/subnet-evm/precompile/testutils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/stretchr/testify/require"
 
 	tmtypes "github.com/cometbft/cometbft/types"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -106,9 +107,18 @@ func TestCreateClient(t *testing.T) {
 }
 
 func TestUpdateClient(t *testing.T) {
+	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
+	std.RegisterInterfaces(interfaceRegistry)
+	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+
 	coordinator := ibctesting.NewCoordinator(t, 2)
+	coordinator.CurrentTime = time.Now().Add(-time.Hour * 4)
 	chainA := coordinator.GetChain(ibctesting.GetChainID(1))
+	coordinator.UpdateTimeForChain(chainA)
 	chainB := coordinator.GetChain(ibctesting.GetChainID(2))
+	coordinator.UpdateTimeForChain(chainB)
+
 	//now := time.Date(2020, 1, 2, 0, 0, 0, 0, time.UTC)
 	past := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
 
@@ -131,7 +141,9 @@ func TestUpdateClient(t *testing.T) {
 			chainB.Vals, chainB.Vals, chainB.Vals, chainB.Signers)
 	}
 	inputFn := func(t testing.TB) []byte {
-		clientMessage, err := updateHeader.Marshal()
+		var msg exported.ClientMessage
+		msg = updateHeader
+		clientMessage, err := clienttypes.MarshalClientMessage(marshaler, msg)
 		require.NoError(t, err)
 		input, err := PackUpdateClient(UpdateClientInput{
 			ClientID:      path.EndpointA.ClientID,
@@ -180,6 +192,17 @@ func TestUpdateClient(t *testing.T) {
 				// updateHeader will fill in consensus state between prevConsState and suite.consState
 				// clientState should not be updated
 				updateHeader = createPastUpdateFn(fillHeight, trustedHeight)
+				consState, ok := chainA.App.GetIBCKeeper().ClientKeeper.GetClientConsensusState(chainA.GetContext(), path.EndpointA.ClientID, updateHeader.TrustedHeight)
+				if !ok {
+					t.Error("GetClientConsensusState is failed")
+				}
+
+				require.NoError(t, SetConsensusState(
+					state,
+					path.EndpointA.ClientID,
+					updateHeader.TrustedHeight,
+					consState.(*ibctm.ConsensusState),
+				))
 			},
 			ExpectedRes: make([]byte, 0),
 		},
@@ -211,6 +234,17 @@ func TestUpdateClient(t *testing.T) {
 				conflictConsState := updateHeader.ConsensusState()
 				conflictConsState.Root = commitmenttypes.NewMerkleRoot([]byte("conflicting apphash"))
 				chainA.App.GetIBCKeeper().ClientKeeper.SetClientConsensusState(chainA.GetContext(), clientID, updateHeader.GetHeight(), conflictConsState)
+				consState, ok := chainA.App.GetIBCKeeper().ClientKeeper.GetClientConsensusState(chainA.GetContext(), path.EndpointA.ClientID, updateHeader.TrustedHeight)
+				if !ok {
+					t.Error("GetClientConsensusState is failed")
+				}
+
+				require.NoError(t, SetConsensusState(
+					state,
+					path.EndpointA.ClientID,
+					updateHeader.TrustedHeight,
+					consState.(*ibctm.ConsensusState),
+				))
 			},
 			ExpectedErr: "can't get client state",
 		},
@@ -247,8 +281,19 @@ func TestUpdateClient(t *testing.T) {
 					clientState,
 				))
 				updateHeader = createFutureUpdateFn(clientState.GetLatestHeight().(clienttypes.Height))
+				consState, ok := chainA.App.GetIBCKeeper().ClientKeeper.GetClientConsensusState(chainA.GetContext(), path.EndpointA.ClientID, updateHeader.TrustedHeight)
+				if !ok {
+					t.Error("GetClientConsensusState is failed")
+				}
+
+				require.NoError(t, SetConsensusState(
+					state,
+					path.EndpointA.ClientID,
+					updateHeader.TrustedHeight,
+					consState.(*ibctm.ConsensusState),
+				))
 			},
-			ExpectedErr: "can't get consensus state",
+			ExpectedErr: "client is not active",
 		},
 		"invalid header": {
 			BeforeHook: func(t testing.TB, state contract.StateDB) {
@@ -316,7 +361,6 @@ func TestUpgradeClient(t *testing.T) {
 
 			output, err := PackUpgradeClient(UpgradeClientInput{
 				ClientID:              clientId,
-				UpgradePath:           []byte("path"),
 				UpgradedClien:         upgradedClientByte,
 				UpgradedConsState:     upgradedConsStateByte,
 				ProofUpgradeClient:    proofUpgradedClient,

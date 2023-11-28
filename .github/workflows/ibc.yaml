@@ -1,0 +1,23 @@
+name: Test IBC
+
+on:
+  pull_request:
+
+jobs:
+  precompile_test:
+    name: Precompile Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
+        with:
+          go-version: "1.19"
+      - name: Install AvalancheGo Release
+        shell: bash
+        run: BASEDIR=/tmp/e2e-test AVALANCHEGO_BUILD_PATH=/tmp/e2e-test/avalanchego ./scripts/install_avalanchego_release.sh
+      - name: Build Subnet-EVM Plugin Binary
+        shell: bash
+        run: ./scripts/build.sh /tmp/e2e-test/avalanchego/plugins/srEXiWaHuhNyGwPUi444Tu47ZEDwxTWrbQiuD7FmgSAQ6X7Dy
+#      - name: Run Integration Tests
+#        shell: bash
+#        run: AVALANCHEGO_BUILD_PATH=/tmp/e2e-test/avalanchego DATA_DIR=/tmp/e2e-test/data ./scripts/run_ginkgo.sh

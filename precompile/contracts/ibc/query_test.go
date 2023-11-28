@@ -1,6 +1,7 @@
 package ibc
 
 import (
+	"math/big"
 	"testing"
 	"time"
 
@@ -336,3 +337,142 @@ func TestQueryChannel(t *testing.T) {
 		})
 	}
 }
+
+
+func TestQueryPacketCommitment(t *testing.T) {
+	commitmentHash := []byte("test data")
+	packedOutput, err := PackQueryPacketCommitmentOutput(commitmentHash)
+	if err != nil {
+		t.Error(err)
+	}
+
+	tests := map[string]testutils.PrecompileTest{
+		"invalid input": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// set test input to a value here
+				channelID := ""
+				portID := ""
+				sequence := big.NewInt(0)
+				input, err := PackQueryPacketCommitmentInput(QueryPacketCommitmentInput{PortID: portID, ChannelID: channelID, Sequence: sequence})
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: QueryPacketCommitmentGasCost,
+			ReadOnly:    false,
+			ExpectedErr: "error loading PacketCommitment, err: empty precompile state",
+		},
+		"commitmentHash not found": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// set test input to a value here
+				channelID := "channelID"
+				portID := "portID"
+				sequence := big.NewInt(99)
+				input, err := PackQueryPacketCommitmentInput(QueryPacketCommitmentInput{PortID: portID, ChannelID: channelID, Sequence: sequence})
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: QueryPacketCommitmentGasCost,
+			ReadOnly:    false,
+			ExpectedErr: "error loading PacketCommitment, err: empty precompile state",
+		},
+		"success": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// set test input to a value here
+				channelID := "channelID"
+				portID := "portID"
+				sequence := big.NewInt(99)
+				input, err := PackQueryPacketCommitmentInput(QueryPacketCommitmentInput{PortID: portID, ChannelID: channelID, Sequence: sequence})
+				require.NoError(t, err)
+				return input
+			},
+			BeforeHook: func(t testing.TB, state contract.StateDB) {
+				setPacketCommitment(state, "portID", "channelID", 99, commitmentHash)
+			},
+			SuppliedGas: QueryPacketCommitmentGasCost,
+			ReadOnly:    false,
+			ExpectedRes: packedOutput,
+		},
+	}
+	// Run tests.
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			test.Run(t, Module, state.NewTestStateDB(t))
+		})
+	}
+}
+
+
+func TestQueryPacketAcknowledgement(t *testing.T) {
+	ack := []byte("test data")
+	packedOutput, err := PackqueryPacketAcknowledgementOutput(ack)
+	if err != nil {
+		t.Error(err)
+	}
+
+	tests := map[string]testutils.PrecompileTest{
+		"invalid input": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// set test input to a value here
+				channelID := ""
+				portID := ""
+				sequence := big.NewInt(0)
+				input, err := PackQueryPacketAcknowledgementInput(QueryPacketAcknowledgementInput{PortID: portID, ChannelID: channelID, Sequence: sequence})
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: QueryPacketAcknowledgementGasCost,
+			ReadOnly:    false,
+			ExpectedErr: "error loading PacketAcknowledgement, err: empty precompile state",
+		},
+		"ack not found": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// set test input to a value here
+				channelID := "channelID"
+				portID := "portID"
+				sequence := big.NewInt(99)
+				input, err := PackQueryPacketAcknowledgementInput(QueryPacketAcknowledgementInput{PortID: portID, ChannelID: channelID, Sequence: sequence})
+				require.NoError(t, err)
+				return input
+			},
+			SuppliedGas: QueryPacketAcknowledgementGasCost,
+			ReadOnly:    false,
+			ExpectedErr: "error loading PacketAcknowledgement, err: empty precompile state",
+		},
+		"success": {
+			Caller: common.Address{1},
+			InputFn: func(t testing.TB) []byte {
+				// CUSTOM CODE STARTS HERE
+				// set test input to a value here
+				channelID := "channelID"
+				portID := "portID"
+				sequence := big.NewInt(99)
+				input, err := PackQueryPacketAcknowledgementInput(QueryPacketAcknowledgementInput{PortID: portID, ChannelID: channelID, Sequence: sequence})
+				require.NoError(t, err)
+				return input
+			},
+			BeforeHook: func(t testing.TB, state contract.StateDB) {
+				setPacketAcknowledgement(state, "portID", "channelID", 99, ack)
+			},
+			SuppliedGas: QueryPacketAcknowledgementGasCost,
+			ReadOnly:    false,
+			ExpectedRes: packedOutput,
+		},
+	}
+	// Run tests.
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			test.Run(t, Module, state.NewTestStateDB(t))
+		})
+	}
+}
+

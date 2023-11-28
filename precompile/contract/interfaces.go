@@ -8,25 +8,15 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/subnet-evm/commontype"
-	"github.com/ava-labs/subnet-evm/precompile/precompileconfig"
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/ava-labs/subnet-evm/precompile/precompileconfig"
 )
 
 // StatefulPrecompiledContract is the interface for executing a precompiled contract
 type StatefulPrecompiledContract interface {
 	// Run executes the precompiled contract.
 	Run(accessibleState AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error)
-}
-
-// ChainContext defines an interface that provides information to a stateful precompile
-// about the chain configuration. The precompile can access this information to initialize
-// its state.
-type ChainConfig interface {
-	// GetFeeConfig returns the original FeeConfig that was set in the genesis.
-	GetFeeConfig() commontype.FeeConfig
-	// AllowedFeeRecipients returns true if fee recipients are allowed in the genesis.
-	AllowedFeeRecipients() bool
 }
 
 // StateDB is the interface for accessing EVM state
@@ -40,11 +30,18 @@ type StateDB interface {
 	GetBalance(common.Address) *big.Int
 	AddBalance(common.Address, *big.Int)
 
+	SetCode(addr common.Address, code []byte)
+	GetCode(addr common.Address) []byte
+
 	CreateAccount(common.Address)
 	Exist(common.Address) bool
 
 	AddLog(addr common.Address, topics []common.Hash, data []byte, blockNumber uint64)
-	GetPredicateStorageSlots(address common.Address) ([]byte, bool)
+	GetLogData() [][]byte
+	GetPredicateStorageSlots(address common.Address, index int) ([]byte, bool)
+	SetPredicateStorageSlots(address common.Address, predicates [][]byte)
+
+	GetTxHash() common.Hash
 
 	Suicide(common.Address) bool
 	Finalise(deleteEmptyObjects bool)
@@ -58,23 +55,29 @@ type AccessibleState interface {
 	GetStateDB() StateDB
 	GetBlockContext() BlockContext
 	GetSnowContext() *snow.Context
+	GetChainConfig() precompileconfig.ChainConfig
 	CallFromPrecompile(caller common.Address, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error)
 }
 
-// BlockContext defines an interface that provides information to a stateful precompile
-// about the block that activates the upgrade. The precompile can access this information
-// to initialize its state.
-type BlockContext interface {
+// ConfigurationBlockContext defines the interface required to configure a precompile.
+type ConfigurationBlockContext interface {
 	Number() *big.Int
-	Timestamp() *big.Int
+	Timestamp() uint64
+}
+
+type BlockContext interface {
+	ConfigurationBlockContext
+	// GetResults returns an arbitrary byte array result of verifying the predicates
+	// of the given transaction, precompile address pair.
+	GetPredicateResults(txHash common.Hash, precompileAddress common.Address) []byte
 }
 
 type Configurator interface {
 	MakeConfig() precompileconfig.Config
 	Configure(
-		chainConfig ChainConfig,
+		chainConfig precompileconfig.ChainConfig,
 		precompileconfig precompileconfig.Config,
 		state StateDB,
-		blockContext BlockContext,
+		blockContext ConfigurationBlockContext,
 	) error
 }
