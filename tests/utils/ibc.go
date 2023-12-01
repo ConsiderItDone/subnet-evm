@@ -24,12 +24,14 @@ import (
 	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
 	"github.com/cosmos/ibc-go/v7/modules/core/exported"
 	ibctm "github.com/cosmos/ibc-go/v7/modules/light-clients/07-tendermint"
+	ibcava "github.com/cosmos/ibc-go/v7/modules/light-clients/14-avalanche"
 	ibctesting "github.com/cosmos/ibc-go/v7/testing"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 
 	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/genesis"
@@ -49,6 +51,10 @@ import (
 	"github.com/ava-labs/subnet-evm/tests/precompile/contract/ics20/ics20bank"
 	"github.com/ava-labs/subnet-evm/tests/precompile/contract/ics20/ics20transferer"
 	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
+
+	"github.com/ava-labs/avalanchego/utils"
+	"github.com/ava-labs/avalanchego/utils/crypto/bls"
+	"github.com/ava-labs/avalanchego/utils/math"
 )
 
 const (
@@ -739,34 +745,42 @@ func RunTestIbcAckPacket(t *testing.T) {
 func RunTestIbcAnotherAckPacket(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	addr, err := cosmostypes.Bech32ifyAddressBytes("cosmos", auth.From.Bytes())
-	require.NoError(t, err)
 
-	amount := 1000
-	mintFungibleTokenPacket := transfertypes.FungibleTokenPacketData{
+	mintFungibleTokenPacketData, err := json.Marshal(ics20.FungibleTokenPacketData{
 		Denom:    "USDT",
-		Amount:   strconv.Itoa(amount),
-		Sender:   addr,
+		Amount:   "1000",
+		Sender:   common.Address{}.Hex(),
 		Receiver: auth.From.Hex(),
 		Memo:     "some memo",
-	}
-	mintFungibleTokenPacketData, err := transfertypes.ModuleCdc.MarshalJSON(&mintFungibleTokenPacket)
+	})
 	require.NoError(t, err)
 
 	sequence, err := path.EndpointB.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, mintFungibleTokenPacketData)
 	require.NoError(t, err)
+	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.UpdateClient)
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, nil)
 
 	packetKey := host.PacketCommitmentKey(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 	proof, proofHeight := path.EndpointB.QueryProof(packetKey)
+
+	bindTx, err := ics20Transferer.BindPort(auth, ibc.ContractAddress, testPort)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, bindTx)
+	require.NoError(t, err)
+
+	setEscrowAddrTx, err := ics20Transferer.SetChannelEscrowAddresses(auth, path.EndpointA.ChannelID, auth.From)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, setEscrowAddrTx)
+	require.NoError(t, err)
 
 	auth.GasLimit = 200000
 	recvTx, err := ibcContract.RecvPacket(auth, contractBind.IIBCMsgRecvPacket{
 		Packet: contractBind.Packet{
 			Sequence:           big.NewInt(int64(sequence)),
-			SourcePort:         testPort,
-			SourceChannel:      path.EndpointB.ChannelID,
+			SourcePort:         path.EndpointA.ChannelConfig.PortID,
+			SourceChannel:      path.EndpointA.ChannelID,
 			DestinationPort:    testPort,
-			DestinationChannel: path.EndpointA.ChannelID,
+			DestinationChannel: path.EndpointB.ChannelID,
 			Data:               mintFungibleTokenPacketData,
 			TimeoutHeight: contractBind.Height{
 				RevisionNumber: big.NewInt(int64(defaultTimeoutHeight.RevisionNumber)),
@@ -797,21 +811,93 @@ func RunTestIbcAnotherAckPacket(t *testing.T) {
 
 	acknowledgement := channeltypes.NewResultAcknowledgement([]byte{byte(1)})
 
-	path.EndpointB.AcknowledgePacket(channeltypes.Packet{
-		Sequence:           sequence,
-		SourcePort:         testPort,
-		SourceChannel:      path.EndpointB.ChannelID,
-		DestinationPort:    testPort,
-		DestinationChannel: path.EndpointA.ChannelID,
-		TimeoutHeight: clienttypes.Height{
-			RevisionNumber: defaultTimeoutHeight.RevisionNumber,
-			RevisionHeight: defaultTimeoutHeight.RevisionHeight,
-		},
-		TimeoutTimestamp: disabledTimeoutTimestamp,
-		Data:             mintFungibleTokenPacketData,
-	},
-		acknowledgement.Acknowledgement())
 
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointA.UpdateClient)
+
+	cs := queryAvaClientStateFromContract(t, path.EndpointB.ClientID)
+	consensusState := queryConsensusStateFromContract(t, path.EndpointB.ClientID)
+
+	chainID, err := strconv.Atoi(cs.ChainId)
+	require.NoError(t, err)
+
+	unsignedMsg, _ := warp.NewUnsignedMessage(
+		uint32(chainID),
+		ids.Empty,
+		consensusState.ValidatorSet,
+	)
+
+
+	vdrs, totalWeigth, err := ValidateValidatorSet(t, consensusState.Vdrs)
+	require.NoError(t, err)
+
+
+	// check ValidatorSet by SignedValidatorSet signature, and check signers and vdrs ratio by cs.TrustLevel ratio
+	err = ibcava.VerifyBls(consensusState.SignersInput, ibcava.SetSignature(consensusState.SignedValidatorSet), unsignedMsg.Bytes(), vdrs, totalWeigth, cs.TrustLevel.Numerator, cs.TrustLevel.Denominator)
+	require.NoError(t, err)
+
+	unsignedMsg, _ = warp.NewUnsignedMessage(
+		uint32(chainID),
+		ids.Empty,
+		consensusState.StorageRoot,
+	)
+
+	// check StorageRoot by SignedStorageRoot signature, and check signers and vdrs ratio by cs.TrustLevel ratio
+	err = ibcava.VerifyBls(consensusState.SignersInput, ibcava.SetSignature(consensusState.SignedStorageRoot), unsignedMsg.Bytes(), vdrs, totalWeigth, cs.TrustLevel.Numerator, cs.TrustLevel.Denominator)
+	require.NoError(t, err)
+
+	connection:= queryConnectionFromContract(t, connectionId0)
+
+	merklePath := commitmenttypes.NewMerklePath(host.PacketAcknowledgementPath(testPort, path.EndpointB.ChannelID, sequence))
+	merklePath, err = commitmenttypes.ApplyPrefix(connection.GetCounterparty().GetPrefix(), merklePath)
+	require.NoError(t, err)
+
+	key := MakePath(merklePath).(*ibcava.MerkleKey)
+
+
+	ibcava.VerifyMembership(cs.Proof, consensusState.StorageRoot, channeltypes.CommitAcknowledgement(acknowledgement.Acknowledgement()), key)
+}
+
+func MakePath(merklePath commitmenttypes.MerklePath) exported.Path{
+	return merklePath
+}
+
+
+func ValidateValidatorSet(
+	t *testing.T,
+	vdrSet []*ibcava.Validator,
+) ([]*warp.Validator, uint64, error) {
+	var (
+		vdrs        = make([]*warp.Validator, len(vdrSet))
+		totalWeight uint64
+		err         error
+	)
+	for i, vdr := range vdrSet {
+
+		totalWeight, err = math.Add64(totalWeight, vdr.Weight)
+		if err != nil {
+			return nil, 0, fmt.Errorf("%w: %v", warp.ErrWeightOverflow, err)
+		}
+
+		if vdr.PublicKeyByte == nil {
+			continue
+		}
+
+		publicKey, err := bls.PublicKeyFromBytes(vdr.PublicKeyByte)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		warpVdr := &warp.Validator{
+			PublicKey:      publicKey,
+			PublicKeyBytes: vdr.PublicKeyByte,
+			Weight:         vdr.Weight,
+			NodeIDs:        ibcava.SetNodeIDs(vdr.NodeIDs),
+		}
+		vdrs[i] = warpVdr
+	}
+
+	utils.Sort(vdrs)
+	return vdrs, totalWeight, nil
 }
 
 func RunTestIbcTimeoutPacket(t *testing.T) {
@@ -1025,6 +1111,36 @@ func createIbcClient(t *testing.T, ctx context.Context, enpoint *ibctesting.Endp
 	require.NoError(t, err)
 
 	assert.Equal(t, clientId, event.ClientId)
+}
+
+func queryConsensusStateFromContract(t *testing.T, cliendId string) *ibcava.ConsensusState {
+	consensusStateByte, err := ibcContract.QueryConsensusState(nil, cliendId)
+	require.NoError(t, err)
+
+	var consensusState ibcava.ConsensusState
+
+	require.NoError(t, consensusState.Unmarshal(consensusStateByte))
+
+	return &consensusState
+}
+
+func queryAvaClientStateFromContract(t *testing.T, cliendId string) *ibcava.ClientState {
+	clientStateByte, err := ibcContract.QueryClientState(nil, cliendId)
+	require.NoError(t, err)
+
+	var clientState ibcava.ClientState
+	require.NoError(t, clientState.Unmarshal(clientStateByte))
+
+	return &clientState
+}
+
+func queryConnectionFromContract(t *testing.T, connectionID string) *connectiontypes.ConnectionEnd {
+	connectionByte, err := ibcContract.QueryConnection(nil, connectionID)
+	require.NoError(t, err)
+
+	var connection connectiontypes.ConnectionEnd
+	require.NoError(t, connection.Unmarshal(connectionByte))
+	return &connection
 }
 
 func queryClientStateFromContract(t *testing.T, cliendId string) *ibctm.ClientState {
