@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/avast/retry-go"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
@@ -31,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 
 	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/genesis"
@@ -670,6 +670,10 @@ func RunTestIbcAckPacket(t *testing.T) {
 	sequence, err := path.EndpointA.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, mintFungibleTokenPacketData)
 	require.NoError(t, err)
 
+	event, err := ibcContract.ContractFilterer.ParsePacketSent(*re.Logs[0])
+	require.NoError(t, err)
+	require.Equal(t, sequence, event.Sequence.Uint64())
+
 	err = path.EndpointB.RecvPacket(channeltypes.Packet{
 		Sequence:           sequence,
 		SourcePort:         testPort,
@@ -811,7 +815,6 @@ func RunTestIbcAnotherAckPacket(t *testing.T) {
 
 	acknowledgement := channeltypes.NewResultAcknowledgement([]byte{byte(1)})
 
-
 	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointA.UpdateClient)
 
 	cs := queryAvaClientStateFromContract(t, path.EndpointB.ClientID)
@@ -826,10 +829,8 @@ func RunTestIbcAnotherAckPacket(t *testing.T) {
 		consensusState.ValidatorSet,
 	)
 
-
 	vdrs, totalWeigth, err := ValidateValidatorSet(t, consensusState.Vdrs)
 	require.NoError(t, err)
-
 
 	// check ValidatorSet by SignedValidatorSet signature, and check signers and vdrs ratio by cs.TrustLevel ratio
 	err = ibcava.VerifyBls(consensusState.SignersInput, ibcava.SetSignature(consensusState.SignedValidatorSet), unsignedMsg.Bytes(), vdrs, totalWeigth, cs.TrustLevel.Numerator, cs.TrustLevel.Denominator)
@@ -845,7 +846,7 @@ func RunTestIbcAnotherAckPacket(t *testing.T) {
 	err = ibcava.VerifyBls(consensusState.SignersInput, ibcava.SetSignature(consensusState.SignedStorageRoot), unsignedMsg.Bytes(), vdrs, totalWeigth, cs.TrustLevel.Numerator, cs.TrustLevel.Denominator)
 	require.NoError(t, err)
 
-	connection:= queryConnectionFromContract(t, connectionId0)
+	connection := queryConnectionFromContract(t, connectionId0)
 
 	merklePath := commitmenttypes.NewMerklePath(host.PacketAcknowledgementPath(testPort, path.EndpointB.ChannelID, sequence))
 	merklePath, err = commitmenttypes.ApplyPrefix(connection.GetCounterparty().GetPrefix(), merklePath)
@@ -853,14 +854,12 @@ func RunTestIbcAnotherAckPacket(t *testing.T) {
 
 	key := MakePath(merklePath).(*ibcava.MerkleKey)
 
-
 	ibcava.VerifyMembership(cs.Proof, consensusState.StorageRoot, channeltypes.CommitAcknowledgement(acknowledgement.Acknowledgement()), key)
 }
 
-func MakePath(merklePath commitmenttypes.MerklePath) exported.Path{
+func MakePath(merklePath commitmenttypes.MerklePath) exported.Path {
 	return merklePath
 }
-
 
 func ValidateValidatorSet(
 	t *testing.T,
@@ -953,8 +952,9 @@ func RunTestIbcTimeoutPacket(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(re.Logs), 1)
 
-	// re.
-	// ibcContract.ContractFilterer.ParsePacketSent(*re.Logs[])
+	event, err := ibcContract.ContractFilterer.ParsePacketSent(*re.Logs[0])
+	require.NoError(t, err)
+	require.Equal(t, sequence, event.Sequence.Uint64())
 
 	packetKey := host.PacketAcknowledgementKey(testPort, path.EndpointB.ChannelID, sequence)
 	proofUnreceived, proofHeight := path.EndpointB.QueryProof(packetKey)
@@ -1040,8 +1040,9 @@ func RunTestIbcTimeoutOnClosePacket(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(re.Logs), 1)
 
-	// re.
-	// ibcContract.ContractFilterer.ParsePacketSent(*re.Logs[])
+	event, err := ibcContract.ContractFilterer.ParsePacketSent(*re.Logs[0])
+	require.NoError(t, err)
+	require.Equal(t, sequence, event.Sequence.Uint64())
 
 	channelKey := host.ChannelKey(testPort, path.EndpointB.ChannelID)
 	orderedPacketKey := host.NextSequenceRecvKey(testPort, path.EndpointB.ChannelID)

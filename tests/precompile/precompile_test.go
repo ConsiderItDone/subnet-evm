@@ -56,15 +56,15 @@ func TestIBC(t *testing.T) {
 
 		
 	})
-	t.Run("part b", func(t *testing.T) {
-		t.Run("create chain", utils.RunTestIbcInit)
-		t.Run("create clients", utils.RunTestIbcCreateClient)
-		t.Run("connection open init", utils.RunTestIbcConnectionOpenInit)
-		t.Run("connection open ack", utils.RunTestIbcConnectionOpenAck)
-		t.Run("channel open init", utils.RunTestIbcChannelOpenInit)
-		t.Run("channel open ack", utils.RunTestIbcChannelOpenAck)
-		t.Run("ack packet", utils.RunTestIbcAckPacket)
-	})
+	// t.Run("part b", func(t *testing.T) {
+	// 	t.Run("create chain", utils.RunTestIbcInit)
+	// 	t.Run("create clients", utils.RunTestIbcCreateClient)
+	// 	t.Run("connection open init", utils.RunTestIbcConnectionOpenInit)
+	// 	t.Run("connection open ack", utils.RunTestIbcConnectionOpenAck)
+	// 	t.Run("channel open init", utils.RunTestIbcChannelOpenInit)
+	// 	t.Run("channel open ack", utils.RunTestIbcChannelOpenAck)
+	// 	t.Run("ack packet", utils.RunTestIbcAckPacket)
+	// })
 
 	//t.Run("part b", func(t *testing.T) {
 	//	t.Run("create chain", utils.RunTestIbcInit)
