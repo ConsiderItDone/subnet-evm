@@ -34,13 +34,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ava-labs/subnet-evm/precompile/contracts/ibc"
 	"github.com/ava-labs/subnet-evm/precompile/contracts/nativeminter"
 	"github.com/ava-labs/subnet-evm/precompile/contracts/rewardmanager"
 	"github.com/ava-labs/subnet-evm/precompile/contracts/txallowlist"
 	"github.com/ava-labs/subnet-evm/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/stretchr/testify/require"
 )
 
 func TestCheckCompatible(t *testing.T) {
@@ -191,7 +192,7 @@ func TestConfigUnmarshalJSON(t *testing.T) {
 		nil,
 	)
 	testIbcConfig := ibc.NewConfig(
-		big.NewInt(0),
+		utils.NewUint64(0),
 	)
 
 	config := []byte(`
@@ -255,7 +256,7 @@ func TestActivePrecompiles(t *testing.T) {
 					nativeminter.NewConfig(utils.NewUint64(0), nil, nil, nil, nil), // enable at genesis
 				},
 				{
-					ibc.NewConfig(common.Big0), // enable at genesis
+					ibc.NewConfig(utils.NewUint64(0)), // enable at genesis
 				},
 				{
 					nativeminter.NewDisableConfig(utils.NewUint64(1)), // disable at timestamp 1

@@ -484,7 +484,7 @@ func (vm *VM) Initialize(
 	}
 
 	// initialize ibc backend
-	vm.ibcBackend = ibc.NewIbcBackend(vm.ctx, vm.ibcDB, ibcProofCacheSize)
+	vm.ibcBackend = ibc.NewBackend(vm.ctx.NetworkID, vm.ctx.ChainID, vm.ctx.WarpSigner, vm.ibcDB, ibcProofCacheSize)
 
 	if err := vm.initializeChain(lastAcceptedHash, vm.ethConfig); err != nil {
 		return err
