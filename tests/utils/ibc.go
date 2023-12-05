@@ -52,7 +52,6 @@ import (
 	contractBind "github.com/ava-labs/subnet-evm/tests/precompile/contract"
 	"github.com/ava-labs/subnet-evm/tests/precompile/contract/ics20/ics20bank"
 	"github.com/ava-labs/subnet-evm/tests/precompile/contract/ics20/ics20transferer"
-	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
 
 	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
