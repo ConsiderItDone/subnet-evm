@@ -485,8 +485,11 @@ func TestUpgradeClient(t *testing.T) {
 					SetClientState(statedb, clientState.ChainId, clientState)
 
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
+
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
-					SetConsensusState(statedb, clientState.ChainId, clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(statedb, clientState.ChainId, clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 			}
 			test.Caller = common.Address{1}

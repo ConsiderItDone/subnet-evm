@@ -4,8 +4,8 @@
 package precompile
 
 import (
-	"os"
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -13,9 +13,10 @@ import (
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/avalanchego/api/health"
+
 	// Import the solidity package, so that ginkgo maps out the tests declared within the package
 	"github.com/ava-labs/subnet-evm/tests/precompile/solidity"
-	"github.com/ava-labs/avalanchego/api/health"
 	"github.com/ava-labs/subnet-evm/tests/utils"
 )
 
@@ -48,8 +49,20 @@ func TestIBC(t *testing.T) {
 		t.Run("connection open ack", utils.RunTestIbcConnectionOpenAck)
 		t.Run("channel open init", utils.RunTestIbcChannelOpenInit)
 		t.Run("channel open ack", utils.RunTestIbcChannelOpenAck)
+		t.Run("send packet", utils.RunTestIbcSendPacket)
 		t.Run("recv packet", utils.RunTestIbcRecvPacket)
-		//t.Run("ack packet", utils.RunTestIbcAckPacket)
+		t.Run("timeout packet", utils.RunTestIbcTimeoutPacket)
+		t.Run("timeout on close packet", utils.RunTestIbcTimeoutOnClosePacket)
+
+	})
+	t.Run("part a. packet ack", func(t *testing.T) {
+		t.Run("create chain", utils.RunTestIbcInit)
+		t.Run("create clients", utils.RunTestIbcCreateClient)
+		t.Run("connection open init", utils.RunTestIbcConnectionOpenInit)
+		t.Run("connection open ack", utils.RunTestIbcConnectionOpenAck)
+		t.Run("channel open init", utils.RunTestIbcChannelOpenInit)
+		t.Run("channel open ack", utils.RunTestIbcChannelOpenAck)
+		t.Run("ack packet", utils.RunTestIbcAckPacket)
 	})
 
 	//t.Run("part b", func(t *testing.T) {

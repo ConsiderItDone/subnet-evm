@@ -1,6 +1,8 @@
 package ibc
 
 import (
+	"fmt"
+
 	"github.com/ava-labs/subnet-evm/accounts/abi"
 	"github.com/ava-labs/subnet-evm/precompile/contract"
 	"github.com/ava-labs/subnet-evm/vmerrs"
@@ -45,9 +47,9 @@ func bindPort(accessibleState contract.AccessibleState, caller common.Address, a
 	portID := inputStruct
 
 	// TODO: can't bind transfer
-	// if _, err := GetPort(accessibleState.GetStateDB(), portID); err == nil {
-	//   return nil, remainingGas, fmt.Errorf("port with portID: %s already bound", portID)
-	// }
+	if _, err := GetPort(accessibleState.GetStateDB(), portID); err == nil {
+		return nil, remainingGas, fmt.Errorf("port with portID: %s already bound", portID)
+	}
 
 	if err = SetPort(accessibleState.GetStateDB(), portID, caller); err != nil {
 		return nil, remainingGas, err

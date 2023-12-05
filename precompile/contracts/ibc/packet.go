@@ -214,15 +214,16 @@ func recvPacket(accessibleState contract.AccessibleState, caller common.Address,
 		return nil, remainingGas, fmt.Errorf("%w, port with portID: %s already bound", err, inputStruct.Packet.DestinationPort)
 	}
 
+	contractPacket := inputStruct.Packet
 	if inputStruct.Packet.DestinationPort == "transfer" {
-		packetData, err := ics20.FungibleTokenPacketDataToABI(inputStruct.Packet.Data)
+		packetData, err := ics20.FungibleTokenPacketDataToABI(contractPacket.Data)
 		if err != nil {
 			return nil, remainingGas, err
 		}
-		inputStruct.Packet.Data = packetData
+		contractPacket.Data = packetData
 	}
 
-	data, err := PackOnRecvPacket(OnRecvPacketInput{Packet: inputStruct.Packet, Relayer: []byte(inputStruct.Signer)})
+	data, err := PackOnRecvPacket(OnRecvPacketInput{Packet: contractPacket, Relayer: []byte(inputStruct.Signer)})
 	if err != nil {
 		return nil, remainingGas, err
 	}
@@ -252,8 +253,10 @@ func recvPacket(accessibleState contract.AccessibleState, caller common.Address,
 		ack = channeltypes.NewErrorAcknowledgement(err)
 	}
 
-	writeAcknowledgement(inputStruct.Packet, accessibleState, ack)
-
+	err = writeAcknowledgement(inputStruct.Packet, accessibleState, ack)
+	if err != nil {
+		return nil, remainingGas, err
+	}
 	// this function does not return an output, leave this one as is
 	packedOutput := []byte{}
 

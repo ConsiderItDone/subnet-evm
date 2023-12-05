@@ -7,13 +7,17 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/avast/retry-go"
 	"github.com/cosmos/cosmos-sdk/codec"
-	cosmostypes "github.com/cosmos/cosmos-sdk/codec/types"
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/std"
+	cosmostypes "github.com/cosmos/cosmos-sdk/types"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	transfertypes "github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
 	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
 	connectiontypes "github.com/cosmos/ibc-go/v7/modules/core/03-connection/types"
@@ -21,6 +25,7 @@ import (
 	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
 	"github.com/cosmos/ibc-go/v7/modules/core/exported"
 	ibctm "github.com/cosmos/ibc-go/v7/modules/light-clients/07-tendermint"
+	ibcava "github.com/cosmos/ibc-go/v7/modules/light-clients/14-avalanche"
 	ibctesting "github.com/cosmos/ibc-go/v7/testing"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
@@ -47,10 +52,15 @@ import (
 	contractBind "github.com/ava-labs/subnet-evm/tests/precompile/contract"
 	"github.com/ava-labs/subnet-evm/tests/precompile/contract/ics20/ics20bank"
 	"github.com/ava-labs/subnet-evm/tests/precompile/contract/ics20/ics20transferer"
+
+	"github.com/ava-labs/avalanchego/utils"
+	"github.com/ava-labs/avalanchego/utils/crypto/bls"
+	"github.com/ava-labs/avalanchego/utils/math"
 )
 
 const (
 	testChainID = "gaiahub-0"
+	testPort    = ibctesting.TransferPort
 
 	trustingPeriod time.Duration = time.Hour * 24 * 7 * 2
 	ubdPeriod      time.Duration = time.Hour * 24 * 7 * 3
@@ -89,7 +99,7 @@ var (
 )
 
 func init() {
-	interfaceRegistry := cosmostypes.NewInterfaceRegistry()
+	interfaceRegistry := codectypes.NewInterfaceRegistry()
 	std.RegisterInterfaces(interfaceRegistry)
 	connectiontypes.RegisterInterfaces(interfaceRegistry)
 	ibctm.AppModuleBasic{}.RegisterInterfaces(interfaceRegistry)
@@ -383,20 +393,20 @@ func RunTestIbcChannelOpenInit(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	path.EndpointA.ChannelConfig.PortID = ibctesting.TransferPort
+	path.EndpointA.ChannelConfig.PortID = testPort
 	path.EndpointA.ChannelConfig.Order = channeltypes.UNORDERED
 	path.EndpointA.ChannelConfig.Version = transfertypes.Version
 
-	path.EndpointB.ChannelConfig.PortID = ibctesting.TransferPort
+	path.EndpointB.ChannelConfig.PortID = testPort
 	path.EndpointB.ChannelConfig.Order = channeltypes.UNORDERED
 	path.EndpointB.ChannelConfig.Version = transfertypes.Version
 
-	counterparty := channeltypes.NewCounterparty(ibctesting.TransferPort, ibctesting.FirstChannelID)
+	counterparty := channeltypes.NewCounterparty(testPort, ibctesting.FirstChannelID)
 	channel := channeltypes.NewChannel(channeltypes.INIT, channeltypes.UNORDERED, counterparty, []string{path.EndpointB.ConnectionID}, path.EndpointA.ChannelConfig.Version)
 	channelByte, err := marshaler.Marshal(&channel)
 	require.NoError(t, err)
 
-	tx, err := ibcContract.ChanOpenInit(auth, ibctesting.TransferPort, channelByte)
+	tx, err := ibcContract.ChanOpenInit(auth, testPort, channelByte)
 	require.NoError(t, err)
 	_, err = waitForReceiptAndGet(ctx, ethClient, tx)
 	require.NoError(t, err)
@@ -516,7 +526,7 @@ func RunTestIbcRecvPacket(t *testing.T) {
 	packetKey := host.PacketCommitmentKey(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 	proof, proofHeight := path.EndpointB.QueryProof(packetKey)
 
-	bindTx, err := ics20Transferer.BindPort(auth, ibc.ContractAddress, ibctesting.TransferPort)
+	bindTx, err := ics20Transferer.BindPort(auth, ibc.ContractAddress, testPort)
 	require.NoError(t, err)
 	_, err = waitForReceiptAndGet(ctx, ethClient, bindTx)
 	require.NoError(t, err)
@@ -532,7 +542,7 @@ func RunTestIbcRecvPacket(t *testing.T) {
 			Sequence:           big.NewInt(int64(sequence)),
 			SourcePort:         path.EndpointA.ChannelConfig.PortID,
 			SourceChannel:      path.EndpointA.ChannelID,
-			DestinationPort:    ibctesting.TransferPort,
+			DestinationPort:    testPort,
 			DestinationChannel: path.EndpointB.ChannelID,
 			Data:               mintFungibleTokenPacketData,
 			TimeoutHeight: contractBind.Height{
@@ -563,46 +573,168 @@ func RunTestIbcRecvPacket(t *testing.T) {
 	assert.Equal(t, big.NewInt(1000), transferlog.Value)
 }
 
-func RunTestIbcAckPacket(t *testing.T) {
-	amount := big.NewInt(1000)
-
+func RunTestIbcSendPacket(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	packetKey := host.PacketAcknowledgementKey(path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, 1)
-	proof, proofHeight := path.EndpointB.QueryProof(packetKey)
-
-	randomAddr, err := getRandomAddr()
-	require.NoError(t, err)
-
-	jsonTransferFungibleTokenPacketData, err := json.Marshal(ics20.FungibleTokenPacketData{
-		Denom:    "transfer/channel-0/USDT",
-		Amount:   amount.String(),
+	mintFungibleTokenPacketData, err := json.Marshal(ics20.FungibleTokenPacketData{
+		Denom:    "USDT",
+		Amount:   "1000",
 		Sender:   common.Address{}.Hex(),
 		Receiver: auth.From.Hex(),
 		Memo:     "some memo",
 	})
 	require.NoError(t, err)
 
-	transferFungibleTokenPacketData, err := ics20.FungibleTokenPacketDataToABI(jsonTransferFungibleTokenPacketData)
+	_, err = path.EndpointA.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, mintFungibleTokenPacketData)
 	require.NoError(t, err)
+	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, nil)
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.UpdateClient)
+
+	bindTx, err := ics20Transferer.BindPort(auth, ibc.ContractAddress, testPort)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, bindTx)
+	require.NoError(t, err)
+
+	setEscrowAddrTx, err := ics20Transferer.SetChannelEscrowAddresses(auth, path.EndpointB.ChannelID, auth.From)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, setEscrowAddrTx)
+	require.NoError(t, err)
+
+	auth.GasLimit = 200000
+
+	recvTx, err := ibcContract.SendPacket(auth,
+		big.NewInt(int64(0)),
+		path.EndpointA.ChannelConfig.PortID,
+		path.EndpointA.ChannelID,
+		contractBind.Height{
+			RevisionNumber: new(big.Int).SetUint64(defaultTimeoutHeight.RevisionNumber),
+			RevisionHeight: new(big.Int).SetUint64(defaultTimeoutHeight.RevisionHeight),
+		},
+		big.NewInt(int64(disabledTimeoutTimestamp)),
+		mintFungibleTokenPacketData)
+
+	auth.GasLimit = 0
+	require.NoError(t, err)
+
+	re, err := waitForReceiptAndGet(ctx, ethClient, recvTx)
+	require.NoError(t, err)
+	require.Equal(t, len(re.Logs), 1)
+}
+
+func RunTestIbcAckPacket(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	addr, err := cosmostypes.Bech32ifyAddressBytes("cosmos", auth.From.Bytes())
+	require.NoError(t, err)
+	amount := 1000
+
+	mintFungibleTokenPacket := transfertypes.FungibleTokenPacketData{
+		Denom:    "USDT",
+		Amount:   strconv.Itoa(amount),
+		Sender:   auth.From.Hex(),
+		Receiver: addr,
+		Memo:     "some memo",
+	}
+
+	mintFungibleTokenPacketData, err := transfertypes.ModuleCdc.MarshalJSON(&mintFungibleTokenPacket)
+	require.NoError(t, err)
+
+	bindTx, err := ics20Transferer.BindPort(auth, ibc.ContractAddress, testPort)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, bindTx)
+	require.NoError(t, err)
+
+	setEscrowAddrTx, err := ics20Transferer.SetChannelEscrowAddresses(auth, path.EndpointB.ChannelID, auth.From)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, setEscrowAddrTx)
+	require.NoError(t, err)
+
+	auth.GasLimit = 200000
+	sendTx, err := ibcContract.SendPacket(auth,
+		big.NewInt(int64(0)),
+		testPort,
+		path.EndpointA.ChannelID,
+		contractBind.Height{
+			RevisionNumber: new(big.Int).SetUint64(defaultTimeoutHeight.RevisionNumber),
+			RevisionHeight: new(big.Int).SetUint64(defaultTimeoutHeight.RevisionHeight),
+		},
+		big.NewInt(int64(disabledTimeoutTimestamp)),
+		mintFungibleTokenPacketData)
+
+	auth.GasLimit = 0
+	require.NoError(t, err)
+	re, err := waitForReceiptAndGet(ctx, ethClient, sendTx)
+	require.NoError(t, err)
+	require.Equal(t, len(re.Logs), 1)
+
+	sequence, err := path.EndpointA.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, mintFungibleTokenPacketData)
+	require.NoError(t, err)
+
+	event, err := ibcContract.ContractFilterer.ParsePacketSent(*re.Logs[0])
+	require.NoError(t, err)
+	require.Equal(t, sequence, event.Sequence.Uint64())
+
+	err = path.EndpointB.RecvPacket(channeltypes.Packet{
+		Sequence:           sequence,
+		SourcePort:         testPort,
+		SourceChannel:      path.EndpointA.ChannelID,
+		DestinationPort:    testPort,
+		DestinationChannel: path.EndpointB.ChannelID,
+		TimeoutHeight: clienttypes.Height{
+			RevisionNumber: defaultTimeoutHeight.RevisionNumber,
+			RevisionHeight: defaultTimeoutHeight.RevisionHeight,
+		},
+		TimeoutTimestamp: disabledTimeoutTimestamp,
+		Data:             mintFungibleTokenPacketData,
+	})
+	require.NoError(t, err)
+
+	respAllBalances, err := path.EndpointB.Chain.GetSimApp().BankKeeper.AllBalances(path.EndpointB.Chain.GetContext(), &banktypes.QueryAllBalancesRequest{
+		Address: addr,
+	})
+	require.NoError(t, err)
+	denom := respAllBalances.Balances[0].Denom
+	resp, err := path.EndpointB.Chain.GetSimApp().BankKeeper.Balance(path.EndpointB.Chain.GetContext(), &banktypes.QueryBalanceRequest{
+		Address: addr,
+		Denom:   denom,
+	})
+	require.NoError(t, err)
+	require.Equal(t, resp.Balance.Amount.Int64(), int64(amount))
+
+	hexHash := denom[len(transfertypes.DenomPrefix+"/"):]
+	hash, err := transfertypes.ParseHexHash(hexHash)
+	require.NoError(t, err)
+	denometrace, found := path.EndpointB.Chain.GetSimApp().TransferKeeper.GetDenomTrace(path.EndpointB.Chain.GetContext(), hash)
+	if !found {
+		require.NoError(t, transfertypes.ErrTraceNotFound)
+	}
+	require.Equal(t, denometrace.Path, "transfer/channel-0")
+	require.Equal(t, denometrace.BaseDenom, "USDT")
+
+	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.UpdateClient)
+
+	acknowledgement := channeltypes.NewResultAcknowledgement([]byte{byte(1)})
+
+	packetKey := host.PacketAcknowledgementKey(testPort, path.EndpointB.ChannelID, sequence)
+	proof, proofHeight := path.EndpointB.QueryProof(packetKey)
 
 	packetAckTx, err := ibcContract.Acknowledgement(
 		auth,
 		contractBind.Packet{
-			Sequence:           big.NewInt(1),
-			SourcePort:         path.EndpointA.ChannelConfig.PortID,
+			Sequence:           big.NewInt(int64(sequence)),
+			SourcePort:         testPort,
 			SourceChannel:      path.EndpointA.ChannelID,
-			DestinationPort:    ibctesting.TransferPort,
+			DestinationPort:    testPort,
 			DestinationChannel: path.EndpointB.ChannelID,
-			Data:               transferFungibleTokenPacketData,
+			Data:               mintFungibleTokenPacketData,
 			TimeoutHeight: contractBind.Height{
-				RevisionNumber: big.NewInt(1000),
-				RevisionHeight: big.NewInt(1000),
+				RevisionNumber: new(big.Int).SetUint64(defaultTimeoutHeight.RevisionNumber),
+				RevisionHeight: new(big.Int).SetUint64(defaultTimeoutHeight.RevisionHeight),
 			},
-			TimeoutTimestamp: big.NewInt(time.Now().Unix() + 10000),
+			TimeoutTimestamp: big.NewInt(int64(disabledTimeoutTimestamp)),
 		},
-		[]byte{0x00},
+		acknowledgement.Acknowledgement(),
 		proof,
 		contractBind.Height{
 			RevisionNumber: big.NewInt(int64(proofHeight.RevisionNumber)),
@@ -611,12 +743,336 @@ func RunTestIbcAckPacket(t *testing.T) {
 		"",
 	)
 	require.NoError(t, err)
-	packetAckRe, err := waitForReceiptAndGet(ctx, ethClient, packetAckTx)
+	_, err = waitForReceiptAndGet(ctx, ethClient, packetAckTx)
 	require.NoError(t, err)
-	assert.True(t, len(packetAckRe.Logs) > 0, "must be `mint` log")
-	mintedBalance, err := ics20Bank.BalanceOf(nil, randomAddr, "transfer/channel-0/USDT")
+}
+
+// RunTestIbcAnotherAckPacket won't work
+func RunTestIbcAnotherAckPacket(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	mintFungibleTokenPacketData, err := json.Marshal(ics20.FungibleTokenPacketData{
+		Denom:    "USDT",
+		Amount:   "1000",
+		Sender:   common.Address{}.Hex(),
+		Receiver: auth.From.Hex(),
+		Memo:     "some memo",
+	})
 	require.NoError(t, err)
-	assert.Equal(t, amount, mintedBalance)
+
+	sequence, err := path.EndpointB.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, mintFungibleTokenPacketData)
+	require.NoError(t, err)
+	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.UpdateClient)
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, nil)
+
+	packetKey := host.PacketCommitmentKey(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
+	proof, proofHeight := path.EndpointB.QueryProof(packetKey)
+
+	bindTx, err := ics20Transferer.BindPort(auth, ibc.ContractAddress, testPort)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, bindTx)
+	require.NoError(t, err)
+
+	setEscrowAddrTx, err := ics20Transferer.SetChannelEscrowAddresses(auth, path.EndpointA.ChannelID, auth.From)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, setEscrowAddrTx)
+	require.NoError(t, err)
+
+	auth.GasLimit = 200000
+	recvTx, err := ibcContract.RecvPacket(auth, contractBind.IIBCMsgRecvPacket{
+		Packet: contractBind.Packet{
+			Sequence:           big.NewInt(int64(sequence)),
+			SourcePort:         path.EndpointA.ChannelConfig.PortID,
+			SourceChannel:      path.EndpointA.ChannelID,
+			DestinationPort:    testPort,
+			DestinationChannel: path.EndpointB.ChannelID,
+			Data:               mintFungibleTokenPacketData,
+			TimeoutHeight: contractBind.Height{
+				RevisionNumber: big.NewInt(int64(defaultTimeoutHeight.RevisionNumber)),
+				RevisionHeight: big.NewInt(int64(defaultTimeoutHeight.RevisionHeight)),
+			},
+			TimeoutTimestamp: big.NewInt(int64(disabledTimeoutTimestamp)),
+		},
+		ProofCommitment: proof,
+		ProofHeight: contractBind.Height{
+			RevisionNumber: new(big.Int).SetUint64(proofHeight.RevisionNumber),
+			RevisionHeight: new(big.Int).SetUint64(proofHeight.RevisionHeight),
+		},
+		Signer: "",
+	})
+	auth.GasLimit = 0
+	require.NoError(t, err)
+
+	re, err := waitForReceiptAndGet(ctx, ethClient, recvTx)
+	require.NoError(t, err)
+	require.Equal(t, len(re.Logs), 2)
+
+	transferlog, err := ics20Bank.Ics20bankFilterer.ParseTransfer(*re.Logs[1])
+	require.NoError(t, err)
+	assert.Equal(t, common.Address{}, transferlog.From)
+	assert.Equal(t, auth.From, transferlog.To)
+	assert.Equal(t, "transfer/channel-0/USDT", transferlog.Path)
+	assert.Equal(t, big.NewInt(1000), transferlog.Value)
+
+	acknowledgement := channeltypes.NewResultAcknowledgement([]byte{byte(1)})
+
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointA.UpdateClient)
+
+	cs := queryAvaClientStateFromContract(t, path.EndpointB.ClientID)
+	consensusState := queryConsensusStateFromContract(t, path.EndpointB.ClientID)
+
+	chainID, err := strconv.Atoi(cs.ChainId)
+	require.NoError(t, err)
+
+	unsignedMsg, _ := warp.NewUnsignedMessage(
+		uint32(chainID),
+		ids.Empty,
+		consensusState.ValidatorSet,
+	)
+
+	vdrs, totalWeigth, err := ValidateValidatorSet(t, consensusState.Vdrs)
+	require.NoError(t, err)
+
+	// check ValidatorSet by SignedValidatorSet signature, and check signers and vdrs ratio by cs.TrustLevel ratio
+	err = ibcava.VerifyBls(consensusState.SignersInput, ibcava.SetSignature(consensusState.SignedValidatorSet), unsignedMsg.Bytes(), vdrs, totalWeigth, cs.TrustLevel.Numerator, cs.TrustLevel.Denominator)
+	require.NoError(t, err)
+
+	unsignedMsg, _ = warp.NewUnsignedMessage(
+		uint32(chainID),
+		ids.Empty,
+		consensusState.StorageRoot,
+	)
+
+	// check StorageRoot by SignedStorageRoot signature, and check signers and vdrs ratio by cs.TrustLevel ratio
+	err = ibcava.VerifyBls(consensusState.SignersInput, ibcava.SetSignature(consensusState.SignedStorageRoot), unsignedMsg.Bytes(), vdrs, totalWeigth, cs.TrustLevel.Numerator, cs.TrustLevel.Denominator)
+	require.NoError(t, err)
+
+	connection := queryConnectionFromContract(t, connectionId0)
+
+	merklePath := commitmenttypes.NewMerklePath(host.PacketAcknowledgementPath(testPort, path.EndpointB.ChannelID, sequence))
+	merklePath, err = commitmenttypes.ApplyPrefix(connection.GetCounterparty().GetPrefix(), merklePath)
+	require.NoError(t, err)
+
+	key := MakePath(merklePath).(*ibcava.MerkleKey)
+
+	ibcava.VerifyMembership(cs.Proof, consensusState.StorageRoot, channeltypes.CommitAcknowledgement(acknowledgement.Acknowledgement()), key)
+}
+
+func MakePath(merklePath commitmenttypes.MerklePath) exported.Path {
+	return merklePath
+}
+
+func ValidateValidatorSet(
+	t *testing.T,
+	vdrSet []*ibcava.Validator,
+) ([]*warp.Validator, uint64, error) {
+	var (
+		vdrs        = make([]*warp.Validator, len(vdrSet))
+		totalWeight uint64
+		err         error
+	)
+	for i, vdr := range vdrSet {
+
+		totalWeight, err = math.Add64(totalWeight, vdr.Weight)
+		if err != nil {
+			return nil, 0, fmt.Errorf("%w: %v", warp.ErrWeightOverflow, err)
+		}
+
+		if vdr.PublicKeyByte == nil {
+			continue
+		}
+
+		publicKey, err := bls.PublicKeyFromBytes(vdr.PublicKeyByte)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		warpVdr := &warp.Validator{
+			PublicKey:      publicKey,
+			PublicKeyBytes: vdr.PublicKeyByte,
+			Weight:         vdr.Weight,
+			NodeIDs:        ibcava.SetNodeIDs(vdr.NodeIDs),
+		}
+		vdrs[i] = warpVdr
+	}
+
+	utils.Sort(vdrs)
+	return vdrs, totalWeight, nil
+}
+
+func RunTestIbcTimeoutPacket(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	addr, err := cosmostypes.Bech32ifyAddressBytes("cosmos", auth.From.Bytes())
+	require.NoError(t, err)
+	amount := 1000
+
+	mintFungibleTokenPacket := transfertypes.FungibleTokenPacketData{
+		Denom:    "USDT",
+		Amount:   strconv.Itoa(amount),
+		Sender:   auth.From.Hex(),
+		Receiver: addr,
+		Memo:     "some memo",
+	}
+
+	mintFungibleTokenPacketData, err := transfertypes.ModuleCdc.MarshalJSON(&mintFungibleTokenPacket)
+	require.NoError(t, err)
+
+	sequence, err := path.EndpointA.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, mintFungibleTokenPacketData)
+	require.NoError(t, err)
+	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, nil)
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.UpdateClient)
+
+	bindTx, err := ics20Transferer.BindPort(auth, ibc.ContractAddress, testPort)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, bindTx)
+	require.NoError(t, err)
+
+	setEscrowAddrTx, err := ics20Transferer.SetChannelEscrowAddresses(auth, path.EndpointB.ChannelID, auth.From)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, setEscrowAddrTx)
+	require.NoError(t, err)
+
+	auth.GasLimit = 200000
+
+	recvTx, err := ibcContract.SendPacket(auth,
+		big.NewInt(int64(0)),
+		path.EndpointA.ChannelConfig.PortID,
+		path.EndpointA.ChannelID,
+		contractBind.Height{
+			RevisionNumber: new(big.Int).SetUint64(defaultTimeoutHeight.RevisionNumber),
+			RevisionHeight: new(big.Int).SetUint64(defaultTimeoutHeight.RevisionHeight),
+		},
+		big.NewInt(int64(disabledTimeoutTimestamp)),
+		mintFungibleTokenPacketData)
+
+	auth.GasLimit = 0
+	require.NoError(t, err)
+
+	re, err := waitForReceiptAndGet(ctx, ethClient, recvTx)
+	require.NoError(t, err)
+	require.Equal(t, len(re.Logs), 1)
+
+	event, err := ibcContract.ContractFilterer.ParsePacketSent(*re.Logs[0])
+	require.NoError(t, err)
+	require.Equal(t, sequence, event.Sequence.Uint64())
+
+	packetKey := host.PacketAcknowledgementKey(testPort, path.EndpointB.ChannelID, sequence)
+	proofUnreceived, proofHeight := path.EndpointB.QueryProof(packetKey)
+
+	ibcContract.Timeout(auth, contractBind.Packet{
+		Sequence:           big.NewInt(int64(sequence)),
+		SourcePort:         testPort,
+		SourceChannel:      path.EndpointA.ChannelID,
+		DestinationPort:    testPort,
+		DestinationChannel: path.EndpointB.ChannelID,
+		Data:               mintFungibleTokenPacketData,
+		TimeoutHeight: contractBind.Height{
+			RevisionNumber: new(big.Int).SetUint64(defaultTimeoutHeight.RevisionNumber),
+			RevisionHeight: new(big.Int).SetUint64(defaultTimeoutHeight.RevisionHeight),
+		},
+		TimeoutTimestamp: big.NewInt(int64(disabledTimeoutTimestamp)),
+	},
+		proofUnreceived,
+		contractBind.Height{
+			RevisionNumber: big.NewInt(int64(proofHeight.RevisionNumber)),
+			RevisionHeight: big.NewInt(int64(proofHeight.RevisionHeight)),
+		},
+		big.NewInt(int64(sequence)),
+		"",
+	)
+}
+
+func RunTestIbcTimeoutOnClosePacket(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	addr, err := cosmostypes.Bech32ifyAddressBytes("cosmos", auth.From.Bytes())
+	require.NoError(t, err)
+	amount := 1000
+
+	mintFungibleTokenPacket := transfertypes.FungibleTokenPacketData{
+		Denom:    "USDT",
+		Amount:   strconv.Itoa(amount),
+		Sender:   auth.From.Hex(),
+		Receiver: addr,
+		Memo:     "some memo",
+	}
+
+	mintFungibleTokenPacketData, err := transfertypes.ModuleCdc.MarshalJSON(&mintFungibleTokenPacket)
+	require.NoError(t, err)
+
+	sequence, err := path.EndpointA.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, mintFungibleTokenPacketData)
+	require.NoError(t, err)
+	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, nil)
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.UpdateClient)
+
+	bindTx, err := ics20Transferer.BindPort(auth, ibc.ContractAddress, testPort)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, bindTx)
+	require.NoError(t, err)
+
+	setEscrowAddrTx, err := ics20Transferer.SetChannelEscrowAddresses(auth, path.EndpointB.ChannelID, auth.From)
+	require.NoError(t, err)
+	_, err = waitForReceiptAndGet(ctx, ethClient, setEscrowAddrTx)
+	require.NoError(t, err)
+
+	auth.GasLimit = 200000
+
+	recvTx, err := ibcContract.SendPacket(auth,
+		big.NewInt(int64(0)),
+		path.EndpointA.ChannelConfig.PortID,
+		path.EndpointA.ChannelID,
+		contractBind.Height{
+			RevisionNumber: new(big.Int).SetUint64(defaultTimeoutHeight.RevisionNumber),
+			RevisionHeight: new(big.Int).SetUint64(defaultTimeoutHeight.RevisionHeight),
+		},
+		big.NewInt(int64(disabledTimeoutTimestamp)),
+		mintFungibleTokenPacketData)
+
+	auth.GasLimit = 0
+	require.NoError(t, err)
+
+	err = path.EndpointB.SetChannelState(channeltypes.CLOSED)
+	require.NoError(t, err)
+
+	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.UpdateClient)
+
+	re, err := waitForReceiptAndGet(ctx, ethClient, recvTx)
+	require.NoError(t, err)
+	require.Equal(t, len(re.Logs), 1)
+
+	event, err := ibcContract.ContractFilterer.ParsePacketSent(*re.Logs[0])
+	require.NoError(t, err)
+	require.Equal(t, sequence, event.Sequence.Uint64())
+
+	channelKey := host.ChannelKey(testPort, path.EndpointB.ChannelID)
+	orderedPacketKey := host.NextSequenceRecvKey(testPort, path.EndpointB.ChannelID)
+	proofClosed, proofHeight := path.EndpointB.QueryProof(channelKey)
+	proof, _ := path.EndpointB.QueryProof(orderedPacketKey)
+
+	ibcContract.TimeoutOnClose(auth, contractBind.Packet{
+		Sequence:           big.NewInt(int64(sequence)),
+		SourcePort:         testPort,
+		SourceChannel:      path.EndpointA.ChannelID,
+		DestinationPort:    testPort,
+		DestinationChannel: path.EndpointB.ChannelID,
+		Data:               mintFungibleTokenPacketData,
+		TimeoutHeight: contractBind.Height{
+			RevisionNumber: new(big.Int).SetUint64(defaultTimeoutHeight.RevisionNumber),
+			RevisionHeight: new(big.Int).SetUint64(defaultTimeoutHeight.RevisionHeight),
+		},
+		TimeoutTimestamp: big.NewInt(int64(disabledTimeoutTimestamp)),
+	},
+		proof,
+		proofClosed,
+		contractBind.Height{
+			RevisionNumber: big.NewInt(int64(proofHeight.RevisionNumber)),
+			RevisionHeight: big.NewInt(int64(proofHeight.RevisionHeight)),
+		},
+		big.NewInt(int64(sequence)),
+		"",
+	)
 }
 
 func QueryProofs(t *testing.T) {
@@ -658,6 +1114,36 @@ func createIbcClient(t *testing.T, ctx context.Context, enpoint *ibctesting.Endp
 	require.NoError(t, err)
 
 	assert.Equal(t, clientId, event.ClientId)
+}
+
+func queryConsensusStateFromContract(t *testing.T, cliendId string) *ibcava.ConsensusState {
+	consensusStateByte, err := ibcContract.QueryConsensusState(nil, cliendId)
+	require.NoError(t, err)
+
+	var consensusState ibcava.ConsensusState
+
+	require.NoError(t, consensusState.Unmarshal(consensusStateByte))
+
+	return &consensusState
+}
+
+func queryAvaClientStateFromContract(t *testing.T, cliendId string) *ibcava.ClientState {
+	clientStateByte, err := ibcContract.QueryClientState(nil, cliendId)
+	require.NoError(t, err)
+
+	var clientState ibcava.ClientState
+	require.NoError(t, clientState.Unmarshal(clientStateByte))
+
+	return &clientState
+}
+
+func queryConnectionFromContract(t *testing.T, connectionID string) *connectiontypes.ConnectionEnd {
+	connectionByte, err := ibcContract.QueryConnection(nil, connectionID)
+	require.NoError(t, err)
+
+	var connection connectiontypes.ConnectionEnd
+	require.NoError(t, connection.Unmarshal(connectionByte))
+	return &connection
 }
 
 func queryClientStateFromContract(t *testing.T, cliendId string) *ibctm.ClientState {

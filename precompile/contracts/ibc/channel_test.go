@@ -3,6 +3,7 @@ package ibc
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	cosmostypes "github.com/cosmos/cosmos-sdk/codec/types"
@@ -92,9 +93,10 @@ func TestChanOpenInit(t *testing.T) {
 				clientState := cs.(*ibctm.ClientState)
 				bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 				consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
-
+				consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+				consensusStateIbctm.Timestamp = time.Now()
 				SetClientState(statedb, connection.GetClientID(), clientState)
-				SetConsensusState(statedb, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+				SetConsensusState(statedb, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 			}
 
 			test.Input = input
@@ -235,8 +237,10 @@ func TestChanOpenTry(t *testing.T) {
 				clientState := cs.(*ibctm.ClientState)
 				bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 				consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
+				consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+				consensusStateIbctm.Timestamp = time.Now()
 				SetClientState(statedb, connection.GetClientID(), clientState)
-				SetConsensusState(statedb, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+				SetConsensusState(statedb, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 			}
 
 			test.Input = input
@@ -405,8 +409,10 @@ func TestChanOpenAck(t *testing.T) {
 				clientState := cs.(*ibctm.ClientState)
 				bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 				consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
+				consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+				consensusStateIbctm.Timestamp = time.Now()
 				SetClientState(statedb, connection.GetClientID(), clientState)
-				SetConsensusState(statedb, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+				SetConsensusState(statedb, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 			}
 
 			test.Input = input
@@ -549,8 +555,10 @@ func TestChanOpenConfirm(t *testing.T) {
 				clientState := cs.(*ibctm.ClientState)
 				bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 				consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
+				consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+				consensusStateIbctm.Timestamp = time.Now()
 				SetClientState(statedb, connection.GetClientID(), clientState)
-				SetConsensusState(statedb, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+				SetConsensusState(statedb, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 			}
 
 			test.Input = input
@@ -667,8 +675,10 @@ func TestChanCloseInit(t *testing.T) {
 				clientState := cs.(*ibctm.ClientState)
 				bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 				consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
+				consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+				consensusStateIbctm.Timestamp = time.Now()
 				SetClientState(statedb, connection.GetClientID(), clientState)
-				SetConsensusState(statedb, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+				SetConsensusState(statedb, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 			}
 
 			test.Input = input
@@ -799,8 +809,10 @@ func TestChanCloseConfirm(t *testing.T) {
 				clientState := cs.(*ibctm.ClientState)
 				bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 				consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
+				consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+				consensusStateIbctm.Timestamp = time.Now()
 				SetClientState(statedb, connection.GetClientID(), clientState)
-				SetConsensusState(statedb, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+				SetConsensusState(statedb, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 			}
 
 			test.Input = input

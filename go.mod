@@ -266,3 +266,5 @@ require (
 	rsc.io/tmplfunc v0.0.3 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
+
+replace github.com/cosmos/ibc-go/v7 => github.com/ConsiderItDone/ibc-go-strangelove/v7 v7.0.0-20231114150047-42d9c3727dc1

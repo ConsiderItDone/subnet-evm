@@ -465,7 +465,3 @@ func Status(
 
 	return exported.Active
 }
-func IsExpired(latestTimestamp time.Time, cs ibctm.ClientState, now time.Time) bool {
-	expirationTime := latestTimestamp.Add(cs.TrustingPeriod)
-	return !expirationTime.After(now)
-}

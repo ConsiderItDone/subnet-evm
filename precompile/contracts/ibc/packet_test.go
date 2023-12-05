@@ -113,7 +113,9 @@ func TestRecvPacket(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 			},
 			SuppliedGas: BindPortGasCost,
@@ -178,7 +180,9 @@ func TestRecvPacket(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 			},
 			SuppliedGas: BindPortGasCost,
@@ -240,7 +244,9 @@ func TestRecvPacket(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 			},
 			SuppliedGas: BindPortGasCost,
@@ -306,7 +312,9 @@ func TestRecvPacket(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 			},
 			SuppliedGas: BindPortGasCost,
@@ -366,7 +374,9 @@ func TestRecvPacket(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 			},
 			SuppliedGas: BindPortGasCost,
@@ -484,7 +494,9 @@ func TestRecvPacket(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 			},
 			SuppliedGas: BindPortGasCost,
@@ -550,12 +562,15 @@ func TestRecvPacket(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 			},
 			SuppliedGas: BindPortGasCost,
 			ReadOnly:    false,
-			ExpectedErr: "length of specs: 0 not equal to length of proof: 2: invalid merkle proof [cosmos/ibc-go/v7@v7.2.0/modules/core/23-commitment/types/merkle.go:304], failed packet commitment verification for client (07-tendermint-0), couldn't verify counterparty packet commitment",
+			ExpectedErr: "length of specs: 0 not equal to length of proof: 2: invalid merkle proof [!consider!it!done/ibc-go-strangelove/v7@v7.0.0-20231114150047-42d9c3727dc1/modules/core/23-commitment/types/merkle.go:301], failed packet commitment verification for client (07-tendermint-0), couldn't verify counterparty packet commitment",
 		},
 	}
 	// Run tests.
@@ -1343,7 +1358,9 @@ func TestTimeoutPacket(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 				commitment := chainA.App.GetIBCKeeper().ChannelKeeper.GetPacketCommitment(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				setPacketCommitment(state, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence, commitment)
@@ -1430,7 +1447,9 @@ func TestTimeoutPacket(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 				commitment := chainA.App.GetIBCKeeper().ChannelKeeper.GetPacketCommitment(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				setPacketCommitment(state, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence, commitment)
@@ -1516,7 +1535,9 @@ func TestTimeoutPacket(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 				commitment := chainA.App.GetIBCKeeper().ChannelKeeper.GetPacketCommitment(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				setPacketCommitment(state, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence, commitment)
@@ -1606,7 +1627,9 @@ func TestTimeoutPacket(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 				commitment := chainA.App.GetIBCKeeper().ChannelKeeper.GetPacketCommitment(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				setPacketCommitment(state, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence, commitment)
@@ -1691,7 +1714,9 @@ func TestTimeoutPacket(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 				commitment := chainA.App.GetIBCKeeper().ChannelKeeper.GetPacketCommitment(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				setPacketCommitment(state, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence, commitment)
@@ -1855,7 +1880,9 @@ func TestTimeoutPacket(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 				commitment := chainA.App.GetIBCKeeper().ChannelKeeper.GetPacketCommitment(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				setPacketCommitment(state, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence, commitment)
@@ -1986,7 +2013,9 @@ func TestTimeoutOnClosePacket(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 				commitment := chainA.App.GetIBCKeeper().ChannelKeeper.GetPacketCommitment(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				setPacketCommitment(state, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence, commitment)
@@ -2076,7 +2105,9 @@ func TestTimeoutOnClosePacket(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 				commitment := chainA.App.GetIBCKeeper().ChannelKeeper.GetPacketCommitment(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				setPacketCommitment(state, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence, commitment)
@@ -2166,7 +2197,9 @@ func TestTimeoutOnClosePacket(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 				commitment := chainA.App.GetIBCKeeper().ChannelKeeper.GetPacketCommitment(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				setPacketCommitment(state, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence, commitment)
@@ -2254,7 +2287,9 @@ func TestTimeoutOnClosePacket(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 				commitment := chainA.App.GetIBCKeeper().ChannelKeeper.GetPacketCommitment(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				setPacketCommitment(state, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence, commitment)
@@ -2423,7 +2458,9 @@ func TestTimeoutOnClosePacket(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 				commitment := chainA.App.GetIBCKeeper().ChannelKeeper.GetPacketCommitment(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				setPacketCommitment(state, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence, commitment)
@@ -2547,7 +2584,9 @@ func TestAcknowledgement(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 				commitment := chainA.App.GetIBCKeeper().ChannelKeeper.GetPacketCommitment(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				setPacketCommitment(state, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence, commitment)
@@ -2636,7 +2675,9 @@ func TestAcknowledgement(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 				commitment := chainA.App.GetIBCKeeper().ChannelKeeper.GetPacketCommitment(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				setPacketCommitment(state, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence, commitment)
@@ -2724,7 +2765,9 @@ func TestAcknowledgement(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 				commitment := chainA.App.GetIBCKeeper().ChannelKeeper.GetPacketCommitment(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				setPacketCommitment(state, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence, commitment)
@@ -2815,7 +2858,9 @@ func TestAcknowledgement(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 				commitment := chainA.App.GetIBCKeeper().ChannelKeeper.GetPacketCommitment(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				setPacketCommitment(state, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence, commitment)
@@ -2899,7 +2944,9 @@ func TestAcknowledgement(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 				commitment := chainA.App.GetIBCKeeper().ChannelKeeper.GetPacketCommitment(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				setPacketCommitment(state, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence, commitment)
@@ -3069,7 +3116,10 @@ func TestAcknowledgement(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
+
 				}
 				commitment := chainA.App.GetIBCKeeper().ChannelKeeper.GetPacketCommitment(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				setPacketCommitment(state, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence, commitment)
@@ -3159,7 +3209,9 @@ func TestAcknowledgement(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 			},
 			SuppliedGas: BindPortGasCost,
@@ -3242,7 +3294,9 @@ func TestAcknowledgement(t *testing.T) {
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
 					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
 					SetClientState(state, connection.GetClientID(), clientState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState))
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 				commitment := chainA.App.GetIBCKeeper().ChannelKeeper.GetPacketCommitment(chainA.GetContext(), path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
 				setPacketCommitment(state, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence, commitment)

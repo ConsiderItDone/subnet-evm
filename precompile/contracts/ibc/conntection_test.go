@@ -106,7 +106,10 @@ func TestConnOpenInit(t *testing.T) {
 			require.NoError(t, SetClientState(statedb, path.EndpointA.ClientID, clientState.(*ibctm.ClientState)))
 
 			consensusState := path.EndpointA.GetConsensusState(clientState.GetLatestHeight())
-			require.NoError(t, SetConsensusState(statedb, path.EndpointA.ClientID, clientState.GetLatestHeight(), consensusState.(*ibctm.ConsensusState)))
+
+			consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+			consensusStateIbctm.Timestamp = time.Now()
+			require.NoError(t, SetConsensusState(statedb, path.EndpointA.ClientID, clientState.GetLatestHeight(), consensusStateIbctm))
 			test.Config = NewConfig(utils.NewUint64(0))
 			test.Caller = common.Address{1}
 			test.SuppliedGas = ConnOpenInitGasCost
@@ -280,35 +283,35 @@ func TestConnOpenTry(t *testing.T) {
 
 			connectionKey := host.ConnectionKey(path.EndpointA.ConnectionID)
 			proofInit, proofHeight := chainA.QueryProof(connectionKey)
-			fmt.Printf("proofInit %#v\n", proofInit)
-			fmt.Printf("proofHeight %#v\n", proofHeight)
+			//fmt.Printf("proofInit %#v\n", proofInit)
+			//fmt.Printf("proofHeight %#v\n", proofHeight)
 			if consensusHeight.IsZero() {
 				// retrieve consensus state height to provide proof for
 				consensusHeight = counterpartyClient.GetLatestHeight().(clienttypes.Height)
 			}
 			consensusKey := host.FullConsensusStateKey(path.EndpointA.ClientID, consensusHeight)
 			proofConsensus, _ := chainA.QueryProof(consensusKey)
-			fmt.Printf("proofConsensus %#v\n", proofConsensus)
+			//fmt.Printf("proofConsensus %#v\n", proofConsensus)
 
 			// retrieve proof of counterparty clientstate on chainA
 			clientKey := host.FullClientStateKey(path.EndpointA.ClientID)
 			proofClient, _ := chainA.QueryProof(clientKey)
-			fmt.Printf("proofClient %#v\n", proofClient)
+			//fmt.Printf("proofClient %#v\n", proofClient)
 
 			counterpartyByte, _ := counterparty.Marshal()
-			fmt.Printf("counterparty %#v\n", counterpartyByte)
+			//fmt.Printf("counterparty %#v\n", counterpartyByte)
 
 			clientStateByte, _ := clienttypes.MarshalClientState(marshaler, counterpartyClient)
-			fmt.Printf("clientState %#v\n", clientStateByte)
+			//fmt.Printf("clientState %#v\n", clientStateByte)
 
 			versionsByte, _ := json.Marshal(connectiontypes.ExportedVersionsToProto(versions))
-			fmt.Printf("versions %#v\n", versionsByte)
+			//fmt.Printf("versions %#v\n", versionsByte)
 
 			proofHeightByte, _ := marshaler.MarshalInterface(&proofHeight)
-			fmt.Printf("proofHeightByte %#v\n", proofHeightByte)
+			//fmt.Printf("proofHeightByte %#v\n", proofHeightByte)
 
 			consensusHeightByte, _ := marshaler.MarshalInterface(&consensusHeight)
-			fmt.Printf("consensusHeightByte %#v\n", consensusHeightByte)
+			//fmt.Printf("consensusHeightByte %#v\n", consensusHeightByte)
 
 			input, err := PackConnOpenTry(ConnOpenTryInput{
 				Counterparty:         counterpartyByte,
@@ -334,9 +337,11 @@ func TestConnOpenTry(t *testing.T) {
 				require.NoError(t, SetClientState(statedb, path.EndpointB.ClientID, clientState))
 
 				bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
-				exConsensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
-				consensusState := exConsensusState.(*ibctm.ConsensusState)
-				require.NoError(t, SetConsensusState(statedb, path.EndpointB.ClientID, clientState.GetLatestHeight(), consensusState))
+				consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
+				consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+				consensusStateIbctm.Timestamp = time.Now()
+
+				require.NoError(t, SetConsensusState(statedb, path.EndpointB.ClientID, clientState.GetLatestHeight(), consensusStateIbctm))
 			}
 
 			test.Caller = common.Address{1}
@@ -612,9 +617,11 @@ func TestConnOpenAck(t *testing.T) {
 					SetClientState(state, connection.GetClientID(), clientState)
 
 					bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
-					rawConsensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
-					consensusState := rawConsensusState.(*ibctm.ConsensusState)
-					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusState)
+					consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
+					consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+					consensusStateIbctm.Timestamp = time.Now()
+
+					SetConsensusState(state, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 				}
 			}
 			test.InputFn = func(t testing.TB) []byte {
@@ -718,9 +725,10 @@ func TestConnOpenConfirm(t *testing.T) {
 				SetClientState(statedb, connection.GetClientID(), clientState)
 
 				bz := cStore.Get([]byte(fmt.Sprintf("consensusStates/%s", cs.GetLatestHeight())))
-				exConsensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
-				consensusState := exConsensusState.(*ibctm.ConsensusState)
-				SetConsensusState(statedb, connection.GetClientID(), clientState.GetLatestHeight(), consensusState)
+				consensusState := clienttypes.MustUnmarshalConsensusState(marshaler, bz)
+				consensusStateIbctm := consensusState.(*ibctm.ConsensusState)
+				consensusStateIbctm.Timestamp = time.Now()
+				SetConsensusState(statedb, connection.GetClientID(), clientState.GetLatestHeight(), consensusStateIbctm)
 			}
 
 			test.Caller = common.Address{1}
