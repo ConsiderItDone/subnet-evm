@@ -747,6 +747,7 @@ func RunTestIbcAckPacket(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// RunTestIbcAnotherAckPacket won't work
 func RunTestIbcAnotherAckPacket(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
