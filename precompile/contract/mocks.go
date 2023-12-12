@@ -85,6 +85,10 @@ type MockAccessibleState struct {
 	recorder *MockAccessibleStateMockRecorder
 }
 
+func (m *MockAccessibleState) CallFromPrecompile(caller common.Address, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+	return nil, 0, nil
+}
+
 // MockAccessibleStateMockRecorder is the mock recorder for MockAccessibleState.
 type MockAccessibleStateMockRecorder struct {
 	mock *MockAccessibleState

@@ -30,6 +30,7 @@ import (
 	"github.com/ava-labs/subnet-evm/core/types"
 	"github.com/ava-labs/subnet-evm/eth"
 	"github.com/ava-labs/subnet-evm/eth/ethconfig"
+	"github.com/ava-labs/subnet-evm/ibc"
 	"github.com/ava-labs/subnet-evm/metrics"
 	subnetEVMPrometheus "github.com/ava-labs/subnet-evm/metrics/prometheus"
 	"github.com/ava-labs/subnet-evm/miner"
@@ -97,6 +98,7 @@ const (
 	unverifiedCacheSize    = 5 * units.MiB
 	bytesToIDCacheSize     = 5 * units.MiB
 	warpSignatureCacheSize = 500
+	ibcProofCacheSize      = 500
 
 	// Prefixes for metrics gatherers
 	ethMetricsPrefix        = "eth"
@@ -140,6 +142,7 @@ var (
 	acceptedPrefix  = []byte("snowman_accepted")
 	metadataPrefix  = []byte("metadata")
 	warpPrefix      = []byte("warp")
+	ibcPrefix       = []byte("ibc")
 	ethDBPrefix     = []byte("ethdb")
 )
 
@@ -249,6 +252,9 @@ type VM struct {
 	// Avalanche Warp Messaging backend
 	// Used to serve BLS signatures of warp messages over RPC
 	warpBackend warp.Backend
+
+	ibcBackend ibc.IbcBackend
+	ibcDB      database.Database
 }
 
 // Initialize implements the snowman.ChainVM interface
@@ -308,6 +314,7 @@ func (vm *VM) Initialize(
 	// that warp signatures are committed to the database atomically with
 	// the last accepted block.
 	vm.warpDB = prefixdb.New(warpPrefix, db)
+	vm.ibcDB = prefixdb.New(ibcPrefix, vm.db)
 
 	if vm.config.InspectDatabase {
 		start := time.Now()
@@ -475,6 +482,9 @@ func (vm *VM) Initialize(
 			return fmt.Errorf("failed to prune warpDB: %w", err)
 		}
 	}
+
+	// initialize ibc backend
+	vm.ibcBackend = ibc.NewBackend(vm.ctx.NetworkID, vm.ctx.ChainID, vm.ctx.WarpSigner, vm.ibcDB, ibcProofCacheSize)
 
 	if err := vm.initializeChain(lastAcceptedHash, vm.ethConfig); err != nil {
 		return err
@@ -931,6 +941,13 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 			return nil, err
 		}
 		enabledAPIs = append(enabledAPIs, "warp")
+	}
+
+	if vm.config.IbcAPIEnabled {
+		if err := handler.RegisterName("ibc", &ibc.IbcAPI{Backend: vm.ibcBackend}); err != nil {
+			return nil, err
+		}
+		enabledAPIs = append(enabledAPIs, "ibc")
 	}
 
 	log.Info(fmt.Sprintf("Enabled APIs: %s", strings.Join(enabledAPIs, ", ")))

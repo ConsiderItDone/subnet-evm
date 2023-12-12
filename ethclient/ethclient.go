@@ -35,12 +35,13 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+
 	"github.com/ava-labs/subnet-evm/accounts/abi/bind"
 	"github.com/ava-labs/subnet-evm/core/types"
 	"github.com/ava-labs/subnet-evm/interfaces"
 	"github.com/ava-labs/subnet-evm/rpc"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 // Verify that Client implements required interfaces
@@ -466,6 +467,14 @@ func (ec *client) StorageAt(ctx context.Context, account common.Address, key com
 	err := ec.c.CallContext(ctx, &result, "eth_getStorageAt", account, key, ToBlockNumArg(blockNumber))
 	return result, err
 }
+
+// StorageAt returns the value of key in the contract storage of the given account.
+// The block number can be nil, in which case the value is taken from the latest known block.
+//func (ec *client) StorageAt(ctx context.Context, account common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error) {
+//	var result hexutil.Bytes
+//	err := ec.c.CallContext(ctx, &result, "eth_getProof", account, key, ToBlockNumArg(blockNumber))
+//	return result, err
+//}
 
 // CodeAt returns the contract code of the given account.
 // The block number can be nil, in which case the code is taken from the latest known block.

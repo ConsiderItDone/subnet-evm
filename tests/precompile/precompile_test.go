@@ -4,21 +4,79 @@
 package precompile
 
 import (
+	"context"
 	"os"
 	"testing"
+	"time"
 
 	ginkgo "github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
+	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/avalanchego/api/health"
 
 	// Import the solidity package, so that ginkgo maps out the tests declared within the package
 	"github.com/ava-labs/subnet-evm/tests/precompile/solidity"
+	"github.com/ava-labs/subnet-evm/tests/utils"
 )
 
 func TestE2E(t *testing.T) {
 	if basePath := os.Getenv("TEST_SOURCE_ROOT"); basePath != "" {
 		os.Chdir(basePath)
 	}
+	utils.RegisterNodeRun()
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	solidity.RegisterAsyncTests()
 	ginkgo.RunSpecs(t, "subnet-evm precompile ginkgo test suite")
+}
+
+func TestIBC(t *testing.T) {
+	t.Log("starting avalanche node")
+	cmd, err := utils.RunCommand("../../scripts/run.sh")
+	require.NoError(t, err)
+	defer cmd.Stop()
+
+	healthClient := health.NewClient(utils.DefaultLocalNodeURI)
+	healthy, err := health.AwaitReady(context.Background(), healthClient, 5*time.Second, nil)
+	require.NoError(t, err)
+	require.True(t, healthy)
+	t.Log("avalanche node started")
+
+	t.Run("part a", func(t *testing.T) {
+		t.Run("create chain", utils.RunTestIbcInit)
+		t.Run("create clients", utils.RunTestIbcCreateClient)
+		t.Run("connection open init", utils.RunTestIbcConnectionOpenInit)
+		t.Run("connection open ack", utils.RunTestIbcConnectionOpenAck)
+		t.Run("channel open init", utils.RunTestIbcChannelOpenInit)
+		t.Run("channel open ack", utils.RunTestIbcChannelOpenAck)
+		t.Run("send packet", utils.RunTestIbcSendPacket)
+		t.Run("recv packet", utils.RunTestIbcRecvPacket)
+		t.Run("timeout packet", utils.RunTestIbcTimeoutPacket)
+		t.Run("timeout on close packet", utils.RunTestIbcTimeoutOnClosePacket)
+
+	})
+	t.Run("part a. packet ack", func(t *testing.T) {
+		t.Run("create chain", utils.RunTestIbcInit)
+		t.Run("create clients", utils.RunTestIbcCreateClient)
+		t.Run("connection open init", utils.RunTestIbcConnectionOpenInit)
+		t.Run("connection open ack", utils.RunTestIbcConnectionOpenAck)
+		t.Run("channel open init", utils.RunTestIbcChannelOpenInit)
+		t.Run("channel open ack", utils.RunTestIbcChannelOpenAck)
+		t.Run("ack packet", utils.RunTestIbcAckPacket)
+	})
+
+	//t.Run("part b", func(t *testing.T) {
+	//	t.Run("create chain", utils.RunTestIbcInit)
+	//	t.Run("create clients", utils.RunTestIbcCreateClient)
+	//	t.Run("connection open try", utils.RunTestIbcConnectionOpenTry)
+	//	t.Run("connection open confirm", utils.RunTestIbcConnectionOpenConfirm)
+	//	t.Run("channel open try", utils.RunTestIbcChannelOpenTry)
+	//	t.Run("channel open confirm", utils.RunTestIbcChannelOpenConfirm)
+	//})
+
+	//t.Run("proof generation", func(t *testing.T) {
+	//	t.Run("create chain", utils.RunTestIbcInit)
+	//	t.Run("create clients", utils.RunTestIbcCreateClient)
+	//	t.Run("query proofs", utils.QueryProofs)
+	//})
 }

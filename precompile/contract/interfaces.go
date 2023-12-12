@@ -8,8 +8,9 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/subnet-evm/precompile/precompileconfig"
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/ava-labs/subnet-evm/precompile/precompileconfig"
 )
 
 // StatefulPrecompiledContract is the interface for executing a precompiled contract
@@ -28,6 +29,9 @@ type StateDB interface {
 
 	GetBalance(common.Address) *big.Int
 	AddBalance(common.Address, *big.Int)
+
+	SetCode(addr common.Address, code []byte)
+	GetCode(addr common.Address) []byte
 
 	CreateAccount(common.Address)
 	Exist(common.Address) bool
@@ -52,6 +56,7 @@ type AccessibleState interface {
 	GetBlockContext() BlockContext
 	GetSnowContext() *snow.Context
 	GetChainConfig() precompileconfig.ChainConfig
+	CallFromPrecompile(caller common.Address, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error)
 }
 
 // ConfigurationBlockContext defines the interface required to configure a precompile.
