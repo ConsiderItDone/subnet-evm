@@ -107,7 +107,6 @@ func _connOpenTry(opts *callOpts[ConnOpenTryInput]) (string, error) {
 		return "", fmt.Errorf("error unmarshalling consensusHeight: %w", err)
 	}
 
-	connectionID := makeConnectionID(statedb)
 	expectedCounterparty := connectiontypes.NewCounterparty(opts.args.ClientID, "", commitmenttypes.NewMerklePrefix([]byte("ibc")))
 	expectedConnection := connectiontypes.NewConnectionEnd(connectiontypes.INIT, counterparty.ClientId, expectedCounterparty, counterpartyVersions, uint64(opts.args.DelayPeriod))
 
@@ -126,10 +125,16 @@ func _connOpenTry(opts *callOpts[ConnOpenTryInput]) (string, error) {
 		return "", fmt.Errorf("error clientVerification: %w", err)
 	}
 
-	if err = verifyConnection(connection, expectedConnection, *proofHeight, opts.accessibleState, marshaler, connectionID, opts.args.ProofInit); err != nil {
+	if err = verifyConnection(connection, expectedConnection, *proofHeight, opts.accessibleState, marshaler, counterparty.ConnectionId, opts.args.ProofInit); err != nil {
 		return "", fmt.Errorf("error connectionVerification: %w", err)
 	}
 
+	// TO DO
+	// if err = VerifyClientConsensusState(connection, *proofHeight, opts.accessibleState, marshaler, counterparty.ConnectionId, opts.args.ProofInit); err != nil {
+	// 	return "", fmt.Errorf("error consensusStateVerification: %w", err)
+	// }
+
+	connectionID := makeConnectionID(statedb)
 	if err := SetConnection(statedb, connectionID, &connection); err != nil {
 		return "", fmt.Errorf("can't save connection: %w", err)
 	}

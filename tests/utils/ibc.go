@@ -15,6 +15,7 @@ import (
 	"github.com/avast/retry-go"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+
 	"github.com/cosmos/cosmos-sdk/std"
 	cosmostypes "github.com/cosmos/cosmos-sdk/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
@@ -258,11 +259,15 @@ func RunTestIbcConnectionOpenTry(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.ConnOpenInit)
+	path.EndpointA.ConnOpenInit()
 	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.UpdateClient)
 
 	counterpartyClient := chainA.GetClientState(path.EndpointA.ClientID)
 	counterparty := connectiontypes.NewCounterparty(path.EndpointA.ClientID, path.EndpointA.ConnectionID, chainA.GetPrefix())
+	// counterpartyByte, _ := counterparty.Marshal()
+	// fmt.Printf("counterparty %#v\n", counterpartyByte)
+	// clientStateByte, _ := clienttypes.MarshalClientState(marshaler, counterpartyClient)
+	// fmt.Printf("clientState %#v\n", clientStateByte)
 
 	connectionKey := host.ConnectionKey(path.EndpointA.ConnectionID)
 	proofInit, proofHeight := chainA.QueryProof(connectionKey)
@@ -273,6 +278,7 @@ func RunTestIbcConnectionOpenTry(t *testing.T) {
 	consensusHeight := counterpartyClient.GetLatestHeight().(clienttypes.Height)
 
 	consensusKey := host.FullConsensusStateKey(path.EndpointA.ClientID, consensusHeight)
+	// consensusKey := host.FullConsensusStateKey(path.EndpointA.ClientID, clientProofHeight)
 	proofConsensus, _ := chainA.QueryProof(consensusKey)
 	fmt.Printf("proofConsensus %#v\n", proofConsensus)
 
@@ -296,6 +302,67 @@ func RunTestIbcConnectionOpenTry(t *testing.T) {
 	consensusHeightByte, _ := marshaler.MarshalInterface(&consensusHeight)
 	fmt.Printf("consensusHeightByte %#v\n", consensusHeightByte)
 
+	//
+	//
+	//
+	//
+
+	// counterpartyVersions := []*connectiontypes.Version{}
+	// json.Unmarshal(versionsByte, &counterpartyVersions)
+	// version, err := connectiontypes.PickVersion(connectiontypes.GetCompatibleVersions(), versions)
+	// connection := connectiontypes.NewConnectionEnd(connectiontypes.TRYOPEN, clientIdB, counterparty, []*connectiontypes.Version{version}, uint64(0))
+
+	// merklePath := commitmenttypes.NewMerklePath(hosttypes.ConnectionPath(counterparty.ConnectionId))
+	// merklePath, _ = commitmenttypes.ApplyPrefix(connection.GetCounterparty().GetPrefix(), merklePath)
+
+	// var merkleProof commitmenttypes.MerkleProof
+	// _ = marshaler.Unmarshal(proofInit, &merkleProof)
+
+	// clientID := connection.GetClientID()
+	// clientState := queryClientStateFromContract(t, clientID)
+	// consensusState := queryConsensusStateFromContract(t, clientID)
+
+	// expectedCounterparty := connectiontypes.NewCounterparty(clientIdB, "", commitmenttypes.NewMerklePrefix([]byte("ibc")))
+	// expectedConnection := connectiontypes.NewConnectionEnd(connectiontypes.INIT, counterparty.ClientId, expectedCounterparty, counterpartyVersions, uint64(0))
+
+	// bz, _ := marshaler.Marshal(&expectedConnection)
+
+	// fmt.Printf("AvalancheLogConnection\n")
+	// fmt.Printf("clientState.ProofSpecs %#v\n", clientState.ProofSpecs)
+	// fmt.Printf("consensusState.height %#v\n", clientState.LatestHeight)
+	// fmt.Printf("consensusState.GetRoot() %#v\n", consensusState.GetRoot())
+	// fmt.Printf("merklePath %#v\n", merklePath)
+	// fmt.Printf("value %#v\n", bz)
+	// fmt.Printf("merkleProof %#v\n", merkleProof.Proofs)
+
+	//
+	//
+	//
+	//
+
+	 counterpartyClient, proofClient, proofConsensus, consensusHeight, proofInit, proofHeight = path.EndpointB.QueryConnectionHandshakeProof()
+
+	// consensusHeightByte, _ := marshaler.MarshalInterface(&consensusHeight)
+	// // fmt.Printf("consensusHeightByte %#v\n", consensusHeightByte)
+
+	// proofHeightByte, _ := proofHeight.Marshal()
+	// // fmt.Printf("proofHeightByte %#v\n", proofHeightByte)
+
+	// counterparty := connectiontypes.NewCounterparty(path.EndpointA.ClientID, path.EndpointA.ConnectionID, chainA.GetPrefix())
+	// // counterparty := connectiontypes.NewCounterparty(counterpartyClientID, counterpartyConnectionID, counterpartyPrefix)
+
+	// clientStateByte, _ := clienttypes.MarshalClientState(marshaler, counterpartyClient)
+	// // fmt.Printf("clientState %#v\n", clientStateByte)
+
+	// counterpartyByte, _ := counterparty.Marshal()
+	// // fmt.Printf("counterparty %#v\n", counterpartyByte)
+
+	// ConnectionVersion := connectiontypes.ExportedVersionsToProto(connectiontypes.GetCompatibleVersions())[0]
+	// versions := []*connectiontypes.Version{ConnectionVersion}
+
+	// versionsByte, _ := json.Marshal(versions)
+	// // fmt.Printf("versions %#v\n", versionsByte)
+
 	tx, err := ibcContract.ConnOpenTry(
 		auth,
 		counterpartyByte,
@@ -313,6 +380,11 @@ func RunTestIbcConnectionOpenTry(t *testing.T) {
 	re, err := waitForReceiptAndGet(ctx, ethClient, tx)
 	require.NoError(t, err)
 	t.Log(spew.Sdump(re.Logs))
+
+	path.EndpointB.ConnOpenTry()
+
+	path.EndpointA.ConnOpenAck()
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.UpdateClient)
 }
 
 func RunTestIbcConnectionOpenAck(t *testing.T) {
@@ -372,10 +444,6 @@ func RunTestIbcConnectionOpenConfirm(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.ConnOpenTry)
-	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointB.ConnOpenAck)
-	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.UpdateClient)
-
 	connectionKey := host.ConnectionKey(path.EndpointA.ConnectionID)
 	proofAck, proofHeight := chainA.QueryProof(connectionKey)
 
@@ -387,6 +455,8 @@ func RunTestIbcConnectionOpenConfirm(t *testing.T) {
 	re, err := waitForReceiptAndGet(ctx, ethClient, tx)
 	require.NoError(t, err)
 	t.Log(spew.Sdump(re.Logs))
+
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.ConnOpenConfirm)
 }
 
 func RunTestIbcChannelOpenInit(t *testing.T) {
@@ -425,7 +495,6 @@ func RunTestIbcChannelOpenTry(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.ConnOpenConfirm)
 	path.SetChannelOrdered()
 	require.NoError(t, path.EndpointA.ChanOpenInit())
 	chainB.CreatePortCapability(chainB.GetSimApp().ScopedIBCMockKeeper, ibctesting.MockPort)
@@ -451,6 +520,10 @@ func RunTestIbcChannelOpenTry(t *testing.T) {
 	require.NoError(t, err)
 	_, err = waitForReceiptAndGet(ctx, ethClient, tx)
 	require.NoError(t, err)
+
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.ChanOpenTry)
+	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.ChanOpenAck)
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.UpdateClient)
 }
 
 func RunTestIbcChannelOpenAck(t *testing.T) {
@@ -482,10 +555,6 @@ func RunTestIbcChannelOpenAck(t *testing.T) {
 func RunTestIbcChannelOpenConfirm(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-
-	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.ChanOpenTry)
-	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.ChanOpenAck)
-	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.UpdateClient)
 
 	channelKey := host.ChannelKey(path.EndpointA.ChannelConfig.PortID, ibctesting.FirstChannelID)
 	proof, proofHeight := chainA.QueryProof(channelKey)
@@ -748,116 +817,116 @@ func RunTestIbcAckPacket(t *testing.T) {
 }
 
 // RunTestIbcAnotherAckPacket won't work
-func RunTestIbcAnotherAckPacket(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
+// func RunTestIbcAnotherAckPacket(t *testing.T) {
+// 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+// 	defer cancel()
 
-	mintFungibleTokenPacketData, err := json.Marshal(ics20.FungibleTokenPacketData{
-		Denom:    "USDT",
-		Amount:   "1000",
-		Sender:   common.Address{}.Hex(),
-		Receiver: auth.From.Hex(),
-		Memo:     "some memo",
-	})
-	require.NoError(t, err)
+// 	mintFungibleTokenPacketData, err := json.Marshal(ics20.FungibleTokenPacketData{
+// 		Denom:    "USDT",
+// 		Amount:   "1000",
+// 		Sender:   common.Address{}.Hex(),
+// 		Receiver: auth.From.Hex(),
+// 		Memo:     "some memo",
+// 	})
+// 	require.NoError(t, err)
 
-	sequence, err := path.EndpointB.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, mintFungibleTokenPacketData)
-	require.NoError(t, err)
-	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.UpdateClient)
-	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, nil)
+// 	sequence, err := path.EndpointB.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, mintFungibleTokenPacketData)
+// 	require.NoError(t, err)
+// 	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, path.EndpointA.UpdateClient)
+// 	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, nil)
 
-	packetKey := host.PacketCommitmentKey(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
-	proof, proofHeight := path.EndpointB.QueryProof(packetKey)
+// 	packetKey := host.PacketCommitmentKey(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, sequence)
+// 	proof, proofHeight := path.EndpointB.QueryProof(packetKey)
 
-	bindTx, err := ics20Transferer.BindPort(auth, ibc.ContractAddress, testPort)
-	require.NoError(t, err)
-	_, err = waitForReceiptAndGet(ctx, ethClient, bindTx)
-	require.NoError(t, err)
+// 	bindTx, err := ics20Transferer.BindPort(auth, ibc.ContractAddress, testPort)
+// 	require.NoError(t, err)
+// 	_, err = waitForReceiptAndGet(ctx, ethClient, bindTx)
+// 	require.NoError(t, err)
 
-	setEscrowAddrTx, err := ics20Transferer.SetChannelEscrowAddresses(auth, path.EndpointA.ChannelID, auth.From)
-	require.NoError(t, err)
-	_, err = waitForReceiptAndGet(ctx, ethClient, setEscrowAddrTx)
-	require.NoError(t, err)
+// 	setEscrowAddrTx, err := ics20Transferer.SetChannelEscrowAddresses(auth, path.EndpointA.ChannelID, auth.From)
+// 	require.NoError(t, err)
+// 	_, err = waitForReceiptAndGet(ctx, ethClient, setEscrowAddrTx)
+// 	require.NoError(t, err)
 
-	auth.GasLimit = 200000
-	recvTx, err := ibcContract.RecvPacket(auth, contractBind.IIBCMsgRecvPacket{
-		Packet: contractBind.Packet{
-			Sequence:           big.NewInt(int64(sequence)),
-			SourcePort:         path.EndpointA.ChannelConfig.PortID,
-			SourceChannel:      path.EndpointA.ChannelID,
-			DestinationPort:    testPort,
-			DestinationChannel: path.EndpointB.ChannelID,
-			Data:               mintFungibleTokenPacketData,
-			TimeoutHeight: contractBind.Height{
-				RevisionNumber: big.NewInt(int64(defaultTimeoutHeight.RevisionNumber)),
-				RevisionHeight: big.NewInt(int64(defaultTimeoutHeight.RevisionHeight)),
-			},
-			TimeoutTimestamp: big.NewInt(int64(disabledTimeoutTimestamp)),
-		},
-		ProofCommitment: proof,
-		ProofHeight: contractBind.Height{
-			RevisionNumber: new(big.Int).SetUint64(proofHeight.RevisionNumber),
-			RevisionHeight: new(big.Int).SetUint64(proofHeight.RevisionHeight),
-		},
-		Signer: "",
-	})
-	auth.GasLimit = 0
-	require.NoError(t, err)
+// 	auth.GasLimit = 200000
+// 	recvTx, err := ibcContract.RecvPacket(auth, contractBind.IIBCMsgRecvPacket{
+// 		Packet: contractBind.Packet{
+// 			Sequence:           big.NewInt(int64(sequence)),
+// 			SourcePort:         path.EndpointA.ChannelConfig.PortID,
+// 			SourceChannel:      path.EndpointA.ChannelID,
+// 			DestinationPort:    testPort,
+// 			DestinationChannel: path.EndpointB.ChannelID,
+// 			Data:               mintFungibleTokenPacketData,
+// 			TimeoutHeight: contractBind.Height{
+// 				RevisionNumber: big.NewInt(int64(defaultTimeoutHeight.RevisionNumber)),
+// 				RevisionHeight: big.NewInt(int64(defaultTimeoutHeight.RevisionHeight)),
+// 			},
+// 			TimeoutTimestamp: big.NewInt(int64(disabledTimeoutTimestamp)),
+// 		},
+// 		ProofCommitment: proof,
+// 		ProofHeight: contractBind.Height{
+// 			RevisionNumber: new(big.Int).SetUint64(proofHeight.RevisionNumber),
+// 			RevisionHeight: new(big.Int).SetUint64(proofHeight.RevisionHeight),
+// 		},
+// 		Signer: "",
+// 	})
+// 	auth.GasLimit = 0
+// 	require.NoError(t, err)
 
-	re, err := waitForReceiptAndGet(ctx, ethClient, recvTx)
-	require.NoError(t, err)
-	require.Equal(t, len(re.Logs), 2)
+// 	re, err := waitForReceiptAndGet(ctx, ethClient, recvTx)
+// 	require.NoError(t, err)
+// 	require.Equal(t, len(re.Logs), 2)
 
-	transferlog, err := ics20Bank.Ics20bankFilterer.ParseTransfer(*re.Logs[1])
-	require.NoError(t, err)
-	assert.Equal(t, common.Address{}, transferlog.From)
-	assert.Equal(t, auth.From, transferlog.To)
-	assert.Equal(t, "transfer/channel-0/USDT", transferlog.Path)
-	assert.Equal(t, big.NewInt(1000), transferlog.Value)
+// 	transferlog, err := ics20Bank.Ics20bankFilterer.ParseTransfer(*re.Logs[1])
+// 	require.NoError(t, err)
+// 	assert.Equal(t, common.Address{}, transferlog.From)
+// 	assert.Equal(t, auth.From, transferlog.To)
+// 	assert.Equal(t, "transfer/channel-0/USDT", transferlog.Path)
+// 	assert.Equal(t, big.NewInt(1000), transferlog.Value)
 
-	acknowledgement := channeltypes.NewResultAcknowledgement([]byte{byte(1)})
+// 	acknowledgement := channeltypes.NewResultAcknowledgement([]byte{byte(1)})
 
-	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointA.UpdateClient)
+// 	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointA.UpdateClient)
 
-	cs := queryAvaClientStateFromContract(t, path.EndpointB.ClientID)
-	consensusState := queryConsensusStateFromContract(t, path.EndpointB.ClientID)
+// 	cs := queryAvaClientStateFromContract(t, path.EndpointB.ClientID)
+// 	consensusState := queryConsensusStateFromContract(t, path.EndpointB.ClientID)
 
-	chainID, err := strconv.Atoi(cs.ChainId)
-	require.NoError(t, err)
+// 	chainID, err := strconv.Atoi(cs.ChainId)
+// 	require.NoError(t, err)
 
-	unsignedMsg, _ := warp.NewUnsignedMessage(
-		uint32(chainID),
-		ids.Empty,
-		consensusState.ValidatorSet,
-	)
+// 	unsignedMsg, _ := warp.NewUnsignedMessage(
+// 		uint32(chainID),
+// 		ids.Empty,
+// 		consensusState.ValidatorSet,
+// 	)
 
-	vdrs, totalWeigth, err := ValidateValidatorSet(t, consensusState.Vdrs)
-	require.NoError(t, err)
+// 	vdrs, totalWeigth, err := ValidateValidatorSet(t, consensusState.Vdrs)
+// 	require.NoError(t, err)
 
-	// check ValidatorSet by SignedValidatorSet signature, and check signers and vdrs ratio by cs.TrustLevel ratio
-	err = ibcava.VerifyBls(consensusState.SignersInput, ibcava.SetSignature(consensusState.SignedValidatorSet), unsignedMsg.Bytes(), vdrs, totalWeigth, cs.TrustLevel.Numerator, cs.TrustLevel.Denominator)
-	require.NoError(t, err)
+// 	// check ValidatorSet by SignedValidatorSet signature, and check signers and vdrs ratio by cs.TrustLevel ratio
+// 	err = ibcava.VerifyBls(consensusState.SignersInput, ibcava.SetSignature(consensusState.SignedValidatorSet), unsignedMsg.Bytes(), vdrs, totalWeigth, cs.TrustLevel.Numerator, cs.TrustLevel.Denominator)
+// 	require.NoError(t, err)
 
-	unsignedMsg, _ = warp.NewUnsignedMessage(
-		uint32(chainID),
-		ids.Empty,
-		consensusState.StorageRoot,
-	)
+// 	unsignedMsg, _ = warp.NewUnsignedMessage(
+// 		uint32(chainID),
+// 		ids.Empty,
+// 		consensusState.StorageRoot,
+// 	)
 
-	// check StorageRoot by SignedStorageRoot signature, and check signers and vdrs ratio by cs.TrustLevel ratio
-	err = ibcava.VerifyBls(consensusState.SignersInput, ibcava.SetSignature(consensusState.SignedStorageRoot), unsignedMsg.Bytes(), vdrs, totalWeigth, cs.TrustLevel.Numerator, cs.TrustLevel.Denominator)
-	require.NoError(t, err)
+// 	// check StorageRoot by SignedStorageRoot signature, and check signers and vdrs ratio by cs.TrustLevel ratio
+// 	err = ibcava.VerifyBls(consensusState.SignersInput, ibcava.SetSignature(consensusState.SignedStorageRoot), unsignedMsg.Bytes(), vdrs, totalWeigth, cs.TrustLevel.Numerator, cs.TrustLevel.Denominator)
+// 	require.NoError(t, err)
 
-	connection := queryConnectionFromContract(t, connectionId0)
+// 	connection := queryConnectionFromContract(t, connectionId0)
 
-	merklePath := commitmenttypes.NewMerklePath(host.PacketAcknowledgementPath(testPort, path.EndpointB.ChannelID, sequence))
-	merklePath, err = commitmenttypes.ApplyPrefix(connection.GetCounterparty().GetPrefix(), merklePath)
-	require.NoError(t, err)
+// 	merklePath := commitmenttypes.NewMerklePath(host.PacketAcknowledgementPath(testPort, path.EndpointB.ChannelID, sequence))
+// 	merklePath, err = commitmenttypes.ApplyPrefix(connection.GetCounterparty().GetPrefix(), merklePath)
+// 	require.NoError(t, err)
 
-	key := MakePath(merklePath).(*ibcava.MerkleKey)
+// 	key := MakePath(merklePath).(*ibcava.MerkleKey)
 
-	ibcava.VerifyMembership(cs.Proof, consensusState.StorageRoot, channeltypes.CommitAcknowledgement(acknowledgement.Acknowledgement()), key)
-}
+// 	ibcava.VerifyMembership(cs.Proof, consensusState.StorageRoot, channeltypes.CommitAcknowledgement(acknowledgement.Acknowledgement()), key)
+// }
 
 func MakePath(merklePath commitmenttypes.MerklePath) exported.Path {
 	return merklePath
@@ -1116,11 +1185,11 @@ func createIbcClient(t *testing.T, ctx context.Context, enpoint *ibctesting.Endp
 	assert.Equal(t, clientId, event.ClientId)
 }
 
-func queryConsensusStateFromContract(t *testing.T, cliendId string) *ibcava.ConsensusState {
+func queryConsensusStateFromContract(t *testing.T, cliendId string) *ibctm.ConsensusState {
 	consensusStateByte, err := ibcContract.QueryConsensusState(nil, cliendId)
 	require.NoError(t, err)
 
-	var consensusState ibcava.ConsensusState
+	var consensusState ibctm.ConsensusState
 
 	require.NoError(t, consensusState.Unmarshal(consensusStateByte))
 

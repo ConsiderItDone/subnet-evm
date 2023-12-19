@@ -354,6 +354,54 @@ func verifyDelayPeriodPassed(
 	return nil
 }
 
+// VerifyClientConsensusState verifies a proof of the consensus state of the
+// specified client stored on the target machine.
+func VerifyClientConsensusState(
+	connection exported.ConnectionI,
+	height exported.Height,
+	accessibleState contract.AccessibleState,
+	marshaler *codec.ProtoCodec,
+	consensusHeight exported.Height,
+	proof []byte,
+) error {
+	clientID := connection.GetClientID()
+	clientState, err := GetClientState(accessibleState.GetStateDB(), clientID)
+	if err != nil {
+		return fmt.Errorf("error loading client state, err: %w", err)
+	}
+
+	if Status(accessibleState, *clientState, clientID) != exported.Active {
+		return fmt.Errorf("client is not active")
+	}
+
+	merklePath := commitmenttypes.NewMerklePath(hosttypes.FullConsensusStatePath(connection.GetCounterparty().GetClientID(), consensusHeight))
+	merklePath, err = commitmenttypes.ApplyPrefix(connection.GetCounterparty().GetPrefix(), merklePath)
+	if err != nil {
+		return err
+	}
+
+	consensusState, err := GetConsensusState(accessibleState.GetStateDB(), clientID, clientState.GetLatestHeight())
+	if err != nil {
+		return fmt.Errorf("error loading consensus state, err: %w", err)
+	}
+
+	bz, err := marshaler.MarshalInterface(consensusState)
+	if err != nil {
+		return err
+	}
+
+	var merkleProof commitmenttypes.MerkleProof
+	if err := marshaler.Unmarshal(proof, &merkleProof); err != nil {
+		return fmt.Errorf("failed to unmarshal proof into ICS 23 commitment merkle proof")
+	}
+	err = merkleProof.VerifyMembership(clientState.ProofSpecs, consensusState.GetRoot(), merklePath, bz)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func verifyConnection(
 	connection connectiontypes.ConnectionEnd,
 	connectionEnd connectiontypes.ConnectionEnd,
@@ -398,6 +446,12 @@ func verifyConnection(
 	if err := marshaler.Unmarshal(proof, &merkleProof); err != nil {
 		return fmt.Errorf("failed to unmarshal proof into ICS 23 commitment merkle proof")
 	}
+
+	fmt.Printf("AvalancheLogConnection")
+	fmt.Printf("clientState.ProofSpecs %#v\n", clientState.ProofSpecs)
+	fmt.Printf("consensusState.GetRoot() %#v\n", consensusState.GetRoot())
+	fmt.Printf("merklePath %#v\n", merklePath)
+	fmt.Printf("value %#v\n", bz)
 	err = merkleProof.VerifyMembership(clientState.ProofSpecs, consensusState.GetRoot(), merklePath, bz)
 	if err != nil {
 		return err

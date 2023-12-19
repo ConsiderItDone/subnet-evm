@@ -350,7 +350,7 @@ func _chanOpenTry(opts *callOpts[ChanOpenTryInput]) (string, error) {
 	// connection hop length checked on msg.ValidateBasic()
 	connectionEnd, err := GetConnection(statedb, channel.ConnectionHops[0])
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("can't read connection: %w", err)
 	}
 
 	if connectionEnd.GetState() != int32(connectiontypes.OPEN) {
@@ -386,7 +386,7 @@ func _chanOpenTry(opts *callOpts[ChanOpenTryInput]) (string, error) {
 		opts.args.ProofInit,
 		opts.args.PortID,
 	); err != nil {
-		return "", err
+		return "", fmt.Errorf("channel state verification: %w", err)
 	}
 
 	setNextSequenceSend(opts.accessibleState.GetStateDB(), opts.args.PortID, channelID, 1)
