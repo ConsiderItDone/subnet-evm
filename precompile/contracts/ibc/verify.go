@@ -447,11 +447,6 @@ func verifyConnection(
 		return fmt.Errorf("failed to unmarshal proof into ICS 23 commitment merkle proof")
 	}
 
-	fmt.Printf("AvalancheLogConnection")
-	fmt.Printf("clientState.ProofSpecs %#v\n", clientState.ProofSpecs)
-	fmt.Printf("consensusState.GetRoot() %#v\n", consensusState.GetRoot())
-	fmt.Printf("merklePath %#v\n", merklePath)
-	fmt.Printf("value %#v\n", bz)
 	err = merkleProof.VerifyMembership(clientState.ProofSpecs, consensusState.GetRoot(), merklePath, bz)
 	if err != nil {
 		return err
@@ -478,7 +473,7 @@ func verifyClient(
 		return fmt.Errorf("client is not active")
 	}
 
-	consensusState, err := GetConsensusState(accessibleState.GetStateDB(), clientID, targetClientState.GetLatestHeight())
+	consensusState, err := GetConsensusState(accessibleState.GetStateDB(), clientID, proofHeight)
 	if err != nil {
 		return fmt.Errorf("error loading consensus state, err: %w", err)
 	}

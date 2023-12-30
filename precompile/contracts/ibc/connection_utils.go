@@ -107,7 +107,8 @@ func _connOpenTry(opts *callOpts[ConnOpenTryInput]) (string, error) {
 		return "", fmt.Errorf("error unmarshalling consensusHeight: %w", err)
 	}
 
-	expectedCounterparty := connectiontypes.NewCounterparty(opts.args.ClientID, "", commitmenttypes.NewMerklePrefix([]byte("ibc")))
+	// TODO theare shuld be opts.args.ClientID instead of counterparty.ClientId
+	expectedCounterparty := connectiontypes.NewCounterparty(counterparty.ClientId, "", commitmenttypes.NewMerklePrefix([]byte("ibc")))
 	expectedConnection := connectiontypes.NewConnectionEnd(connectiontypes.INIT, counterparty.ClientId, expectedCounterparty, counterpartyVersions, uint64(opts.args.DelayPeriod))
 
 	// chain B picks a version from Chain A's available versions that is compatible

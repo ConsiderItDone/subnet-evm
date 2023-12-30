@@ -260,47 +260,48 @@ func RunTestIbcConnectionOpenTry(t *testing.T) {
 	defer cancel()
 
 	path.EndpointA.ConnOpenInit()
-	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.UpdateClient)
+	path.EndpointB.UpdateClient()
+	updateIbcClientAfterFunc(t, clientIdA, path.EndpointA, nil)
+	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, nil)
 
-	counterpartyClient := chainA.GetClientState(path.EndpointA.ClientID)
-	counterparty := connectiontypes.NewCounterparty(path.EndpointA.ClientID, path.EndpointA.ConnectionID, chainA.GetPrefix())
+	// counterpartyClient := chainA.GetClientState(path.EndpointA.ClientID)
+	// counterparty := connectiontypes.NewCounterparty(path.EndpointA.ClientID, path.EndpointA.ConnectionID, chainA.GetPrefix())
+	// // counterpartyByte, _ := counterparty.Marshal()
+	// // fmt.Printf("counterparty %#v\n", counterpartyByte)
+	// // clientStateByte, _ := clienttypes.MarshalClientState(marshaler, counterpartyClient)
+	// // fmt.Printf("clientState %#v\n", clientStateByte)
+
+	// connectionKey := host.ConnectionKey(path.EndpointA.ConnectionID)
+	// proofInit, proofHeight := chainA.QueryProof(connectionKey)
+	// fmt.Printf("proofInit %#v\n", proofInit)
+	// fmt.Printf("proofHeight %#v\n", proofHeight)
+
+	// versions := connectiontypes.GetCompatibleVersions()
+	// consensusHeight := counterpartyClient.GetLatestHeight().(clienttypes.Height)
+
+	// consensusKey := host.FullConsensusStateKey(path.EndpointA.ClientID, consensusHeight)
+	// proofConsensus, _ := chainA.QueryProof(consensusKey)
+	// fmt.Printf("proofConsensus %#v\n", proofConsensus)
+
+	// // retrieve proof of counterparty clientstate on chainA
+	// clientKey := host.FullClientStateKey(path.EndpointA.ClientID)
+	// proofClient, _ := chainA.QueryProof(clientKey)
+	// fmt.Printf("proofClient %#v\n", proofClient)
+
 	// counterpartyByte, _ := counterparty.Marshal()
 	// fmt.Printf("counterparty %#v\n", counterpartyByte)
+
 	// clientStateByte, _ := clienttypes.MarshalClientState(marshaler, counterpartyClient)
 	// fmt.Printf("clientState %#v\n", clientStateByte)
 
-	connectionKey := host.ConnectionKey(path.EndpointA.ConnectionID)
-	proofInit, proofHeight := chainA.QueryProof(connectionKey)
-	fmt.Printf("proofInit %#v\n", proofInit)
-	fmt.Printf("proofHeight %#v\n", proofHeight)
+	// versionsByte, _ := json.Marshal(connectiontypes.ExportedVersionsToProto(versions))
+	// fmt.Printf("versions %#v\n", versionsByte)
 
-	versions := connectiontypes.GetCompatibleVersions()
-	consensusHeight := counterpartyClient.GetLatestHeight().(clienttypes.Height)
+	// proofHeightByte, _ := proofHeight.Marshal()
+	// fmt.Printf("proofHeightByte %#v\n", proofHeightByte)
 
-	consensusKey := host.FullConsensusStateKey(path.EndpointA.ClientID, consensusHeight)
-	// consensusKey := host.FullConsensusStateKey(path.EndpointA.ClientID, clientProofHeight)
-	proofConsensus, _ := chainA.QueryProof(consensusKey)
-	fmt.Printf("proofConsensus %#v\n", proofConsensus)
-
-	// retrieve proof of counterparty clientstate on chainA
-	clientKey := host.FullClientStateKey(path.EndpointA.ClientID)
-	proofClient, _ := chainA.QueryProof(clientKey)
-	fmt.Printf("proofClient %#v\n", proofClient)
-
-	counterpartyByte, _ := counterparty.Marshal()
-	fmt.Printf("counterparty %#v\n", counterpartyByte)
-
-	clientStateByte, _ := clienttypes.MarshalClientState(marshaler, counterpartyClient)
-	fmt.Printf("clientState %#v\n", clientStateByte)
-
-	versionsByte, _ := json.Marshal(connectiontypes.ExportedVersionsToProto(versions))
-	fmt.Printf("versions %#v\n", versionsByte)
-
-	proofHeightByte, _ := proofHeight.Marshal()
-	fmt.Printf("proofHeightByte %#v\n", proofHeightByte)
-
-	consensusHeightByte, _ := marshaler.MarshalInterface(&consensusHeight)
-	fmt.Printf("consensusHeightByte %#v\n", consensusHeightByte)
+	// consensusHeightByte, _ := marshaler.MarshalInterface(&consensusHeight)
+	// fmt.Printf("consensusHeightByte %#v\n", consensusHeightByte)
 
 	//
 	//
@@ -340,33 +341,36 @@ func RunTestIbcConnectionOpenTry(t *testing.T) {
 	//
 	//
 
-	 counterpartyClient, proofClient, proofConsensus, consensusHeight, proofInit, proofHeight = path.EndpointB.QueryConnectionHandshakeProof()
+	counterpartyClient, proofClient, proofConsensus, consensusHeight, proofInit, proofHeight := path.EndpointB.QueryConnectionHandshakeProof()
 
-	// consensusHeightByte, _ := marshaler.MarshalInterface(&consensusHeight)
-	// // fmt.Printf("consensusHeightByte %#v\n", consensusHeightByte)
+	consensusHeightByte, _ := marshaler.MarshalInterface(&consensusHeight)
+	// fmt.Printf("consensusHeightByte %#v\n", consensusHeightByte)
 
-	// proofHeightByte, _ := proofHeight.Marshal()
-	// // fmt.Printf("proofHeightByte %#v\n", proofHeightByte)
+	proofHeightByte, _ := proofHeight.Marshal()
+	// fmt.Printf("proofHeightByte %#v\n", proofHeightByte)
 
-	// counterparty := connectiontypes.NewCounterparty(path.EndpointA.ClientID, path.EndpointA.ConnectionID, chainA.GetPrefix())
-	// // counterparty := connectiontypes.NewCounterparty(counterpartyClientID, counterpartyConnectionID, counterpartyPrefix)
+	counterparty := connectiontypes.NewCounterparty(path.EndpointA.ClientID, path.EndpointA.ConnectionID, chainA.GetPrefix())
+	// counterparty := connectiontypes.NewCounterparty(counterpartyClientID, counterpartyConnectionID, counterpartyPrefix)
 
-	// clientStateByte, _ := clienttypes.MarshalClientState(marshaler, counterpartyClient)
-	// // fmt.Printf("clientState %#v\n", clientStateByte)
+	clientStateByte, _ := clienttypes.MarshalClientState(marshaler, counterpartyClient)
+	// fmt.Printf("clientState %#v\n", clientStateByte)
 
-	// counterpartyByte, _ := counterparty.Marshal()
-	// // fmt.Printf("counterparty %#v\n", counterpartyByte)
+	counterpartyByte, _ := counterparty.Marshal()
+	// fmt.Printf("counterparty %#v\n", counterpartyByte)
 
-	// ConnectionVersion := connectiontypes.ExportedVersionsToProto(connectiontypes.GetCompatibleVersions())[0]
-	// versions := []*connectiontypes.Version{ConnectionVersion}
+	ConnectionVersion := connectiontypes.ExportedVersionsToProto(connectiontypes.GetCompatibleVersions())[0]
+	versions := []*connectiontypes.Version{ConnectionVersion}
 
-	// versionsByte, _ := json.Marshal(versions)
-	// // fmt.Printf("versions %#v\n", versionsByte)
+	versionsByte, _ := json.Marshal(versions)
+	// fmt.Printf("versions %#v\n", versionsByte)
+
+	err1 := path.EndpointB.ConnOpenTry()
+	require.NoError(t, err1)
 
 	tx, err := ibcContract.ConnOpenTry(
 		auth,
 		counterpartyByte,
-		0,
+		uint32(path.EndpointB.ConnectionConfig.DelayPeriod),
 		clientIdB,
 		clientStateByte,
 		versionsByte,
@@ -380,8 +384,6 @@ func RunTestIbcConnectionOpenTry(t *testing.T) {
 	re, err := waitForReceiptAndGet(ctx, ethClient, tx)
 	require.NoError(t, err)
 	t.Log(spew.Sdump(re.Logs))
-
-	path.EndpointB.ConnOpenTry()
 
 	path.EndpointA.ConnOpenAck()
 	updateIbcClientAfterFunc(t, clientIdB, path.EndpointB, path.EndpointB.UpdateClient)
@@ -1162,7 +1164,7 @@ func QueryProofs(t *testing.T) {
 
 func createIbcClient(t *testing.T, ctx context.Context, enpoint *ibctesting.Endpoint, clientId string) {
 	clientState, ok1 := enpoint.GetClientState().(*ibctm.ClientState)
-	clientState.MaxClockDrift = 5 * time.Minute
+	// clientState.MaxClockDrift = 5 * time.Minute
 	require.True(t, ok1)
 	clientStateByte, err := clientState.Marshal()
 	require.NoError(t, err)
