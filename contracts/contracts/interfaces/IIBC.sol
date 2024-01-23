@@ -270,12 +270,12 @@ interface IIBC {
   ) external;
 
   function OnAcknowledgementPacket(
-    Packet memory packet, 
-    bytes memory ack, 
+    Packet memory packet,
+    bytes memory ack,
     bytes memory
   ) external;
 
-    // query methods
+  // query methods
   function queryClientState(string memory clientId) external view returns (bytes memory);
 
   function queryConsensusState(string memory clientId) external view returns (bytes memory);
